@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.aegisos.guardian.contracts.GuardianRemediationV1;
+import org.aegisos.guardian.platform.PlatformSnapshot;
 
 public final class RemediationCatalog {
     private final Map<RemediationActionId, CataloguedRemediation> remediations;
@@ -69,6 +70,12 @@ public final class RemediationCatalog {
             throw new IllegalArgumentException("Unknown remediation action: " + actionId);
         }
         return remediation;
+    }
+
+    public boolean preconditionsMet(
+        CataloguedRemediation remediation, PlatformSnapshot snapshot) {
+        return remediation.remediation().preconditions().stream()
+            .allMatch(precondition -> Boolean.parseBoolean(snapshot.state().get(precondition)));
     }
 
     private static CataloguedRemediation remediation(
