@@ -1,0 +1,26 @@
+package org.aegisos.guardian.application;
+
+import org.aegisos.guardian.contracts.GuardianIncidentV1;
+import org.aegisos.guardian.detection.GuardianDetectionResult;
+import org.aegisos.guardian.remediation.RemediationOutcome;
+
+public sealed interface GuardianApplicationResult permits
+    GuardianApplicationResult.InvalidEvent,
+    GuardianApplicationResult.NoIncident,
+    GuardianApplicationResult.DetectedIncident,
+    GuardianApplicationResult.DetectionFailed,
+    GuardianApplicationResult.RemediationCompleted,
+    GuardianApplicationResult.UndoCompleted {
+    record InvalidEvent(String detail) implements GuardianApplicationResult { }
+
+    record NoIncident(String eventId) implements GuardianApplicationResult { }
+
+    record DetectedIncident(GuardianIncidentV1 incident) implements GuardianApplicationResult { }
+
+    record DetectionFailed(String eventId, GuardianDetectionResult.FailureCode code)
+        implements GuardianApplicationResult { }
+
+    record RemediationCompleted(RemediationOutcome outcome) implements GuardianApplicationResult { }
+
+    record UndoCompleted(RemediationOutcome outcome) implements GuardianApplicationResult { }
+}
