@@ -20,7 +20,8 @@ import org.junit.jupiter.api.Test;
 class GuardianRemediationServiceTest {
     private static final GuardianIncidentV1 INCIDENT = new GuardianIncidentV1(
         1, "incident-1", List.of("event-1"), "HIGH", 90, List.of("fact"),
-        "org.example.app", RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(), Instant.EPOCH, "OPEN");
+        RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(), Instant.EPOCH, "OPEN");
+    private static final String PACKAGE_NAME = "org.example.app";
     private static final PlatformSnapshot BEFORE = new PlatformSnapshot(
         "org.example.app", Map.of("BACKGROUND_LOCATION_GRANTED", "true"));
 
@@ -28,12 +29,18 @@ class GuardianRemediationServiceTest {
     void preconditionFailureChangesNothing() {
         FakeGateway gateway = new FakeGateway(new PlatformSnapshot(
             BEFORE.packageName(), Map.of("BACKGROUND_LOCATION_GRANTED", "false")));
-        GuardianRemediationService service = service(gateway, new InMemoryGuardianAuditStore());
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        GuardianRemediationService service = service(gateway, auditStore);
 
-        RemediationOutcome outcome = service.approve(INCIDENT,
+        RemediationOutcome outcome = service.approve(INCIDENT.incidentId(),
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
 
         assertEquals(RemediationOutcome.Status.PRECONDITION_FAILED, outcome.status());
+        assertNotNull(outcome.auditId());
+        assertFalse(auditStore.find(outcome.auditId()).orElseThrow().verifiedSuccess());
+        assertEquals(
+            RemediationOutcome.Status.PRECONDITION_FAILED,
+            auditStore.find(outcome.auditId()).orElseThrow().outcome());
         assertEquals(gateway.snapshot, gateway.currentState);
         assertEquals(0, gateway.applyCalls);
         assertEquals(0, gateway.verifyCalls);
@@ -46,7 +53,7 @@ class GuardianRemediationServiceTest {
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
         GuardianRemediationService service = service(gateway, auditStore);
 
-        RemediationOutcome outcome = service.approve(INCIDENT,
+        RemediationOutcome outcome = service.approve(INCIDENT.incidentId(),
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
 
         assertEquals(RemediationOutcome.Status.VERIFIED_SUCCESS, outcome.status());
@@ -61,7 +68,7 @@ class GuardianRemediationServiceTest {
         gateway.verification = new VerificationResult(false, "simulated mismatch");
         GuardianRemediationService service = service(gateway, new InMemoryGuardianAuditStore());
 
-        RemediationOutcome outcome = service.approve(INCIDENT,
+        RemediationOutcome outcome = service.approve(INCIDENT.incidentId(),
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
 
         assertEquals(RemediationOutcome.Status.VERIFICATION_FAILED_ROLLED_BACK, outcome.status());
@@ -78,7 +85,7 @@ class GuardianRemediationServiceTest {
         gateway.rollbackExecution = new GatewayExecution(false, "rollback refused");
         GuardianRemediationService service = service(gateway, new InMemoryGuardianAuditStore());
 
-        RemediationOutcome outcome = service.approve(INCIDENT,
+        RemediationOutcome outcome = service.approve(INCIDENT.incidentId(),
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
 
         assertEquals(RemediationOutcome.Status.VERIFICATION_FAILED_ROLLBACK_FAILED, outcome.status());
@@ -90,8 +97,9 @@ class GuardianRemediationServiceTest {
     @Test
     void explicitUndoRestoresRecordedSnapshot() {
         FakeGateway gateway = new FakeGateway(BEFORE);
-        GuardianRemediationService service = service(gateway, new InMemoryGuardianAuditStore());
-        RemediationOutcome success = service.approve(INCIDENT,
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        GuardianRemediationService service = service(gateway, auditStore);
+        RemediationOutcome success = service.approve(INCIDENT.incidentId(),
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
         gateway.currentState = new PlatformSnapshot(BEFORE.packageName(),
             Map.of("BACKGROUND_LOCATION_GRANTED", "false"));
@@ -99,13 +107,42 @@ class GuardianRemediationServiceTest {
         RemediationOutcome undo = service.undo(success.auditId());
 
         assertEquals(RemediationOutcome.Status.UNDONE, undo.status());
+        assertNotNull(undo.auditId());
+        assertFalse(undo.auditId().equals(success.auditId()));
+        assertFalse(auditStore.find(undo.auditId()).orElseThrow().verifiedSuccess());
+        assertEquals(
+            RemediationOutcome.Status.UNDONE,
+            auditStore.find(undo.auditId()).orElseThrow().outcome());
         assertSame(BEFORE, gateway.undoSnapshot);
+        assertEquals(1, gateway.undoCalls);
+    }
+
+    @Test
+    void failedUndoIsAuditedAndNeverReportedAsUndone() {
+        FakeGateway gateway = new FakeGateway(BEFORE);
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        GuardianRemediationService service = service(gateway, auditStore);
+        RemediationOutcome success = service.approve(INCIDENT.incidentId(),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
+        gateway.undoExecution = new GatewayExecution(false, "undo refused");
+
+        RemediationOutcome undo = service.undo(success.auditId());
+
+        assertEquals(RemediationOutcome.Status.UNDO_FAILED, undo.status());
+        assertNotNull(undo.auditId());
+        assertFalse(undo.auditId().equals(success.auditId()));
+        assertFalse(auditStore.find(undo.auditId()).orElseThrow().verifiedSuccess());
+        assertEquals(
+            RemediationOutcome.Status.UNDO_FAILED,
+            auditStore.find(undo.auditId()).orElseThrow().outcome());
         assertEquals(1, gateway.undoCalls);
     }
 
     private GuardianRemediationService service(
         FakeGateway gateway, InMemoryGuardianAuditStore auditStore) {
-        return new GuardianRemediationService(new RemediationCatalog(), gateway, auditStore);
+        InMemoryGuardianIncidentStore incidentStore = new InMemoryGuardianIncidentStore();
+        incidentStore.record(new StoredGuardianIncident(INCIDENT, PACKAGE_NAME));
+        return new GuardianRemediationService(new RemediationCatalog(), gateway, auditStore, incidentStore);
     }
 
     private static final class FakeGateway implements GuardianPlatformGateway {
@@ -113,6 +150,7 @@ class GuardianRemediationServiceTest {
         private PlatformSnapshot currentState;
         private VerificationResult verification = new VerificationResult(true, "verified");
         private GatewayExecution rollbackExecution = new GatewayExecution(true, "rolled back");
+        private GatewayExecution undoExecution = new GatewayExecution(true, "undone");
         private PlatformSnapshot rollbackSnapshot;
         private PlatformSnapshot undoSnapshot;
         private int applyCalls;
@@ -149,8 +187,10 @@ class GuardianRemediationServiceTest {
             RemediationActionId actionId, String packageName, PlatformSnapshot previous) {
             undoCalls++;
             undoSnapshot = previous;
-            currentState = previous;
-            return new GatewayExecution(true, "undone");
+            if (undoExecution.completed()) {
+                currentState = previous;
+            }
+            return undoExecution;
         }
     }
 }

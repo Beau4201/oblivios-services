@@ -13,6 +13,7 @@ public record RemediationOutcome(
         VERIFICATION_FAILED_ROLLED_BACK,
         VERIFICATION_FAILED_ROLLBACK_FAILED,
         UNDONE,
+        UNDO_FAILED,
         UNDO_NOT_AVAILABLE
     }
 

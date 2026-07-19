@@ -10,31 +10,7 @@ public record GuardianIncidentV1(
     String severity,
     int confidence,
     List<String> explanationFacts,
-    String packageName,
     String recommendedActionId,
     Instant createdAt,
     String state) {
-
-    public GuardianIncidentV1(
-        int schemaVersion,
-        String incidentId,
-        List<String> eventIds,
-        String severity,
-        int confidence,
-        List<String> explanationFacts,
-        String recommendedActionId,
-        Instant createdAt,
-        String state) {
-        this(
-            schemaVersion,
-            incidentId,
-            eventIds,
-            severity,
-            confidence,
-            explanationFacts,
-            "",
-            recommendedActionId,
-            createdAt,
-            state);
-    }
 }

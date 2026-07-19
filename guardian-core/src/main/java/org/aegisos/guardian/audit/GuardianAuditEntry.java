@@ -6,6 +6,7 @@ import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.PlatformSnapshot;
 import org.aegisos.guardian.platform.VerificationResult;
 import org.aegisos.guardian.remediation.RemediationActionId;
+import org.aegisos.guardian.remediation.RemediationOutcome;
 
 public record GuardianAuditEntry(
     String auditId,
@@ -16,5 +17,6 @@ public record GuardianAuditEntry(
     GatewayExecution execution,
     VerificationResult verification,
     GatewayExecution rollback,
-    boolean verifiedSuccess) {
+    boolean verifiedSuccess,
+    RemediationOutcome.Status outcome) {
 }

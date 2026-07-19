@@ -14,34 +14,46 @@ public final class GuardianRemediationService {
     private final RemediationCatalog catalog;
     private final GuardianPlatformGateway gateway;
     private final InMemoryGuardianAuditStore auditStore;
+    private final InMemoryGuardianIncidentStore incidentStore;
 
     public GuardianRemediationService(
         RemediationCatalog catalog,
         GuardianPlatformGateway gateway,
-        InMemoryGuardianAuditStore auditStore) {
+        InMemoryGuardianAuditStore auditStore,
+        InMemoryGuardianIncidentStore incidentStore) {
         this.catalog = catalog;
         this.gateway = gateway;
         this.auditStore = auditStore;
+        this.incidentStore = incidentStore;
     }
 
-    public RemediationOutcome approve(GuardianIncidentV1 incident, String actionId) {
+    public RemediationOutcome approve(String incidentId, String actionId) {
+        StoredGuardianIncident stored = incidentStore.require(incidentId);
+        GuardianIncidentV1 incident = stored.incident();
+        String packageName = stored.packageName();
         requireOpenIncident(incident);
         RemediationActionId typedAction = RemediationActionId.valueOf(actionId);
         CataloguedRemediation action = catalog.require(typedAction);
-        PlatformSnapshot before = gateway.snapshot(incident.packageName());
+        PlatformSnapshot before = gateway.snapshot(packageName);
         if (!catalog.preconditionsMet(action, before)) {
+            GuardianAuditEntry entry = record(
+                incident, typedAction, before, null, null, null, false,
+                RemediationOutcome.Status.PRECONDITION_FAILED);
             return new RemediationOutcome(
                 RemediationOutcome.Status.PRECONDITION_FAILED,
-                null,
+                entry.auditId(),
                 "Registered preconditions are not met.",
                 before);
         }
 
-        GatewayExecution execution = gateway.apply(typedAction, incident.packageName());
-        VerificationResult verification = gateway.verify(typedAction, incident.packageName());
+        GatewayExecution execution = gateway.apply(typedAction, packageName);
+        VerificationResult verification = gateway.verify(typedAction, packageName);
         if (!verification.verified()) {
-            GatewayExecution rollback = gateway.rollback(typedAction, incident.packageName(), before);
-            GuardianAuditEntry entry = record(incident, typedAction, before, execution, verification, rollback, false);
+            GatewayExecution rollback = gateway.rollback(typedAction, packageName, before);
+            RemediationOutcome.Status outcome = rollback.completed()
+                ? RemediationOutcome.Status.VERIFICATION_FAILED_ROLLED_BACK
+                : RemediationOutcome.Status.VERIFICATION_FAILED_ROLLBACK_FAILED;
+            GuardianAuditEntry entry = record(incident, typedAction, before, execution, verification, rollback, false, outcome);
             if (!rollback.completed()) {
                 return new RemediationOutcome(
                     RemediationOutcome.Status.VERIFICATION_FAILED_ROLLBACK_FAILED,
@@ -56,7 +68,9 @@ public final class GuardianRemediationService {
                 before);
         }
 
-        GuardianAuditEntry entry = record(incident, typedAction, before, execution, verification, null, true);
+        GuardianAuditEntry entry = record(
+            incident, typedAction, before, execution, verification, null, true,
+            RemediationOutcome.Status.VERIFIED_SUCCESS);
         return new RemediationOutcome(
             RemediationOutcome.Status.VERIFIED_SUCCESS,
             entry.auditId(),
@@ -73,10 +87,16 @@ public final class GuardianRemediationService {
                 "Undo is unavailable for this audit entry.",
                 null);
         }
-        GatewayExecution undo = gateway.undo(entry.actionId(), entry.incident().packageName(), entry.before());
+        String packageName = incidentStore.require(entry.incident().incidentId()).packageName();
+        GatewayExecution undo = gateway.undo(entry.actionId(), packageName, entry.before());
+        RemediationOutcome.Status outcome = undo.completed()
+            ? RemediationOutcome.Status.UNDONE
+            : RemediationOutcome.Status.UNDO_FAILED;
+        GuardianAuditEntry undoEntry = record(
+            entry.incident(), entry.actionId(), entry.before(), undo, null, null, false, outcome);
         return new RemediationOutcome(
-            RemediationOutcome.Status.UNDONE,
-            entry.auditId(),
+            outcome,
+            undoEntry.auditId(),
             undo.detail(),
             entry.before());
     }
@@ -88,7 +108,8 @@ public final class GuardianRemediationService {
         GatewayExecution execution,
         VerificationResult verification,
         GatewayExecution rollback,
-        boolean verifiedSuccess) {
+        boolean verifiedSuccess,
+        RemediationOutcome.Status outcome) {
         return auditStore.record(new GuardianAuditEntry(
             UUID.randomUUID().toString(),
             Instant.now(),
@@ -98,15 +119,13 @@ public final class GuardianRemediationService {
             execution,
             verification,
             rollback,
-            verifiedSuccess));
+            verifiedSuccess,
+            outcome));
     }
 
     private void requireOpenIncident(GuardianIncidentV1 incident) {
         if (!"OPEN".equals(incident.state())) {
             throw new IllegalArgumentException("Remediation requires an open incident.");
-        }
-        if (incident.packageName().isBlank()) {
-            throw new IllegalArgumentException("Remediation requires an incident package name.");
         }
     }
 }
