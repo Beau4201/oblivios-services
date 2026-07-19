@@ -15,5 +15,9 @@ public sealed interface GuardianDetectionResult permits
     record DetectionFailed(String eventId, FailureCode failureCode)
         implements GuardianDetectionResult { }
 
-    enum FailureCode { INCIDENT_STORE_FAILURE, DETECTION_AUDIT_FAILURE }
+    enum FailureCode {
+        INCIDENT_STORE_FAILURE,
+        DETECTION_AUDIT_FAILURE,
+        DETECTION_COMMIT_FAILURE
+    }
 }
