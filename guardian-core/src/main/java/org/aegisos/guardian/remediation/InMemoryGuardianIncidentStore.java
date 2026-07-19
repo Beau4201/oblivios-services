@@ -2,6 +2,7 @@ package org.aegisos.guardian.remediation;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 public final class InMemoryGuardianIncidentStore {
     private final Map<String, StoredGuardianIncident> incidents = new LinkedHashMap<>();
@@ -12,10 +13,11 @@ public final class InMemoryGuardianIncidentStore {
     }
 
     public StoredGuardianIncident require(String incidentId) {
-        StoredGuardianIncident incident = incidents.get(incidentId);
-        if (incident == null) {
-            throw new IllegalArgumentException("Unknown incident: " + incidentId);
-        }
-        return incident;
+        return find(incidentId).orElseThrow(
+            () -> new IllegalArgumentException("Unknown incident: " + incidentId));
+    }
+
+    public Optional<StoredGuardianIncident> find(String incidentId) {
+        return Optional.ofNullable(incidents.get(incidentId));
     }
 }

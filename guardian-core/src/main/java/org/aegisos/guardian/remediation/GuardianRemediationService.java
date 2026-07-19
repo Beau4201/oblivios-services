@@ -28,12 +28,30 @@ public final class GuardianRemediationService {
     }
 
     public RemediationOutcome approve(String incidentId, String actionId) {
-        StoredGuardianIncident stored = incidentStore.require(incidentId);
+        StoredGuardianIncident stored = incidentStore.find(incidentId).orElse(null);
+        if (stored == null) {
+            return deny(null, null, null, RemediationOutcome.Status.INCIDENT_NOT_FOUND,
+                "The requested incident is unavailable.");
+        }
         GuardianIncidentV1 incident = stored.incident();
         String packageName = stored.packageName();
-        requireOpenIncident(incident);
-        RemediationActionId typedAction = RemediationActionId.valueOf(actionId);
-        CataloguedRemediation action = catalog.require(typedAction);
+        RemediationActionId typedAction;
+        CataloguedRemediation action;
+        try {
+            typedAction = RemediationActionId.valueOf(actionId);
+            action = catalog.require(typedAction);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            return deny(incident, null, null, RemediationOutcome.Status.UNKNOWN_ACTION,
+                "The requested remediation action is not registered.");
+        }
+        if (!"OPEN".equals(incident.state())) {
+            return deny(incident, typedAction, null, RemediationOutcome.Status.INCIDENT_NOT_OPEN,
+                "Remediation requires an open incident.");
+        }
+        if (!typedAction.name().equals(incident.recommendedActionId())) {
+            return deny(incident, typedAction, null, RemediationOutcome.Status.ACTION_MISMATCH,
+                "The requested action does not match the incident recommendation.");
+        }
         PlatformSnapshot before = gateway.snapshot(packageName);
         if (!catalog.preconditionsMet(action, before)) {
             GuardianAuditEntry entry = record(
@@ -80,14 +98,27 @@ public final class GuardianRemediationService {
 
     public RemediationOutcome undo(String auditId) {
         GuardianAuditEntry entry = auditStore.find(auditId).orElse(null);
-        if (entry == null || !entry.verifiedSuccess() || !catalog.require(entry.actionId()).undoSupported()) {
-            return new RemediationOutcome(
+        if (entry == null || !entry.verifiedSuccess() || entry.actionId() == null) {
+            return deny(
+                entry == null ? null : entry.incident(),
+                entry == null ? null : entry.actionId(),
+                entry == null ? null : entry.before(),
                 RemediationOutcome.Status.UNDO_NOT_AVAILABLE,
-                auditId,
-                "Undo is unavailable for this audit entry.",
-                null);
+                "Undo is unavailable for this audit entry.");
         }
-        String packageName = incidentStore.require(entry.incident().incidentId()).packageName();
+        CataloguedRemediation action = catalog.require(entry.actionId());
+        if (!action.undoSupported()) {
+            return deny(entry.incident(), entry.actionId(), entry.before(),
+                RemediationOutcome.Status.UNDO_NOT_AVAILABLE,
+                "Undo is unavailable for this remediation action.");
+        }
+        StoredGuardianIncident stored = incidentStore.find(entry.incident().incidentId()).orElse(null);
+        if (stored == null) {
+            return deny(entry.incident(), entry.actionId(), entry.before(),
+                RemediationOutcome.Status.UNDO_NOT_AVAILABLE,
+                "Undo is unavailable because the incident is no longer stored.");
+        }
+        String packageName = stored.packageName();
         GatewayExecution undo = gateway.undo(entry.actionId(), packageName, entry.before());
         RemediationOutcome.Status outcome = undo.completed()
             ? RemediationOutcome.Status.UNDONE
@@ -98,7 +129,7 @@ public final class GuardianRemediationService {
             outcome,
             undoEntry.auditId(),
             undo.detail(),
-            entry.before());
+            undo.completed() ? entry.before() : null);
     }
 
     private GuardianAuditEntry record(
@@ -123,9 +154,14 @@ public final class GuardianRemediationService {
             outcome));
     }
 
-    private void requireOpenIncident(GuardianIncidentV1 incident) {
-        if (!"OPEN".equals(incident.state())) {
-            throw new IllegalArgumentException("Remediation requires an open incident.");
-        }
+    private RemediationOutcome deny(
+        GuardianIncidentV1 incident,
+        RemediationActionId actionId,
+        PlatformSnapshot before,
+        RemediationOutcome.Status outcome,
+        String detail) {
+        GuardianAuditEntry entry = record(
+            incident, actionId, before, null, null, null, false, outcome);
+        return new RemediationOutcome(outcome, entry.auditId(), detail, before);
     }
 }

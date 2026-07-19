@@ -8,6 +8,10 @@ public record RemediationOutcome(
     String detail,
     PlatformSnapshot finalState) {
     public enum Status {
+        INCIDENT_NOT_FOUND,
+        INCIDENT_NOT_OPEN,
+        UNKNOWN_ACTION,
+        ACTION_MISMATCH,
         PRECONDITION_FAILED,
         VERIFIED_SUCCESS,
         VERIFICATION_FAILED_ROLLED_BACK,
