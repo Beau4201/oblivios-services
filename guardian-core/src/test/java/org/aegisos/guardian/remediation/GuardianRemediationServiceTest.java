@@ -2,6 +2,7 @@ package org.aegisos.guardian.remediation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -10,13 +11,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.aegisos.guardian.audit.InMemoryGuardianAuditStore;
 import org.aegisos.guardian.contracts.GuardianIncidentV1;
+import org.aegisos.guardian.contracts.GuardianEventV1;
+import org.aegisos.guardian.detection.GuardianDetectionResult;
+import org.aegisos.guardian.detection.GuardianDetectionService;
+import org.aegisos.guardian.audit.InMemoryGuardianDetectionAuditStore;
 import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
 import org.aegisos.guardian.platform.PlatformSnapshot;
 import org.aegisos.guardian.platform.VerificationResult;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class GuardianRemediationServiceTest {
     private static final GuardianIncidentV1 INCIDENT = new GuardianIncidentV1(
@@ -165,6 +174,29 @@ class GuardianRemediationServiceTest {
         assertEquals(0, gateway.applyCalls);
     }
 
+    @ParameterizedTest
+    @MethodSource("detectedIncidentActions")
+    void detectedIncidentsRejectDifferentRegisteredActions(
+        GuardianEventV1 event, RemediationActionId differentAction) {
+        InMemoryGuardianIncidentStore incidentStore = new InMemoryGuardianIncidentStore();
+        GuardianDetectionService detectionService = new GuardianDetectionService(
+            incidentStore, new InMemoryGuardianDetectionAuditStore());
+        GuardianDetectionResult.DetectedIncident detected = assertInstanceOf(
+            GuardianDetectionResult.DetectedIncident.class, detectionService.evaluate(event));
+        FakeGateway gateway = new FakeGateway(BEFORE);
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        GuardianRemediationService service = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore);
+
+        RemediationOutcome outcome = service.approve(
+            detected.incident().incidentId(), differentAction.name());
+
+        assertEquals(RemediationOutcome.Status.ACTION_MISMATCH, outcome.status());
+        assertEquals(RemediationOutcome.Status.ACTION_MISMATCH,
+            auditStore.find(outcome.auditId()).orElseThrow().outcome());
+        assertEquals(0, gateway.applyCalls);
+    }
+
     @Test
     void unknownIncidentReturnsAnAuditedDenial() {
         FakeGateway gateway = new FakeGateway(BEFORE);
@@ -238,6 +270,25 @@ class GuardianRemediationServiceTest {
         InMemoryGuardianIncidentStore incidentStore = new InMemoryGuardianIncidentStore();
         incidentStore.record(new StoredGuardianIncident(incident, PACKAGE_NAME));
         return new GuardianRemediationService(new RemediationCatalog(), gateway, auditStore, incidentStore);
+    }
+
+    private static Stream<Arguments> detectedIncidentActions() {
+        return Stream.of(
+            Arguments.of(event("event-location", "BACKGROUND_LOCATION", "LOCATION_PRECISE", "BACKGROUND",
+                "ALLOWED", "NONE", 0, 0), RemediationActionId.BLOCK_BACKGROUND_NETWORK),
+            Arguments.of(event("event-network", "BACKGROUND_NETWORK", "NETWORK", "BACKGROUND",
+                "ALLOWED", "WIFI", 10, 0), RemediationActionId.REMOVE_OVERLAY_PERMISSION),
+            Arguments.of(event("event-overlay", "OVERLAY_PERMISSION", "SYSTEM_ALERT_WINDOW", "FOREGROUND",
+                "ALLOWED", "NONE", 0, 0), RemediationActionId.FREEZE_APPLICATION),
+            Arguments.of(event("event-execution", "REPEATED_BACKGROUND_EXECUTION", "APPLICATION_EXECUTION",
+                "BACKGROUND", "ALLOWED", "NONE", 0, 0), RemediationActionId.REVOKE_BACKGROUND_LOCATION));
+    }
+
+    private static GuardianEventV1 event(String eventId, String eventType, String resource,
+                                         String foregroundState, String policyState, String networkCategory,
+                                         long bytesSent, long bytesReceived) {
+        return new GuardianEventV1(1, eventId, Instant.parse("2026-07-19T12:00:00Z"), "org.example.app",
+            10123, eventType, resource, foregroundState, policyState, networkCategory, bytesSent, bytesReceived);
     }
 
     private static final class FakeGateway implements GuardianPlatformGateway {

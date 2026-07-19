@@ -16,4 +16,14 @@ public final class InMemoryGuardianDetectionAuditStore implements GuardianDetect
     public Optional<GuardianDetectionAuditEntry> find(String auditId) {
         return Optional.ofNullable(entries.get(auditId));
     }
+
+    public Optional<GuardianDetectionAuditEntry> findByIncidentId(String incidentId) {
+        return entries.values().stream()
+            .filter(entry -> incidentId.equals(entry.incidentId()))
+            .findFirst();
+    }
+
+    public int entryCount() {
+        return entries.size();
+    }
 }
