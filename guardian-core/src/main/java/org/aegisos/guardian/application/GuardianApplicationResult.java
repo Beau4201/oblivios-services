@@ -20,7 +20,9 @@ public sealed interface GuardianApplicationResult permits
     record DetectionFailed(String eventId, GuardianDetectionResult.FailureCode code)
         implements GuardianApplicationResult { }
 
-    record RemediationCompleted(RemediationOutcome outcome) implements GuardianApplicationResult { }
+    record RemediationCompleted(RemediationOutcome.Status status, String auditId, String detail)
+        implements GuardianApplicationResult { }
 
-    record UndoCompleted(RemediationOutcome outcome) implements GuardianApplicationResult { }
+    record UndoCompleted(RemediationOutcome.Status status, String auditId, String detail)
+        implements GuardianApplicationResult { }
 }

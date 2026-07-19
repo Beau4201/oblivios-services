@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.aegisos.guardian.audit.InMemoryGuardianAuditStore;
 import org.aegisos.guardian.detection.GuardianDetectionCommitStore;
@@ -88,7 +90,7 @@ class GuardianApplicationServiceTest {
     }
 
     @Test
-    void mismatchedApproveReturnsExistingRemediationOutcome() {
+    void mismatchedApproveReturnsMinimizedRemediationResult() {
         GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
             GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
 
@@ -96,12 +98,12 @@ class GuardianApplicationServiceTest {
             GuardianApplicationResult.RemediationCompleted.class,
             service.approve(detected.incident().incidentId(), "BLOCK_BACKGROUND_NETWORK"));
 
-        assertEquals("ACTION_MISMATCH", completed.outcome().status().name());
+        assertEquals("ACTION_MISMATCH", completed.status().name());
         assertEquals(0, gateway.calls());
     }
 
     @Test
-    void approveReturnsExistingSuccessfulRemediationOutcome() {
+    void approveReturnsMinimizedSuccessfulRemediationResult() {
         GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
             GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
 
@@ -109,12 +111,12 @@ class GuardianApplicationServiceTest {
             GuardianApplicationResult.RemediationCompleted.class,
             service.approve(detected.incident().incidentId(), detected.incident().recommendedActionId()));
 
-        assertEquals("VERIFIED_SUCCESS", completed.outcome().status().name());
+        assertEquals("VERIFIED_SUCCESS", completed.status().name());
         assertEquals(3, gateway.calls());
     }
 
     @Test
-    void undoReturnsExistingSuccessfulRemediationOutcome() {
+    void undoReturnsMinimizedSuccessfulRemediationResult() {
         GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
             GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
         GuardianApplicationResult.RemediationCompleted completed = assertInstanceOf(
@@ -122,10 +124,33 @@ class GuardianApplicationServiceTest {
             service.approve(detected.incident().incidentId(), detected.incident().recommendedActionId()));
 
         GuardianApplicationResult.UndoCompleted undone = assertInstanceOf(
-            GuardianApplicationResult.UndoCompleted.class, service.undo(completed.outcome().auditId()));
+            GuardianApplicationResult.UndoCompleted.class, service.undo(completed.auditId()));
 
-        assertEquals("UNDONE", undone.outcome().status().name());
+        assertEquals("UNDONE", undone.status().name());
         assertEquals(4, gateway.calls());
+    }
+
+    @Test
+    void applicationRemediationResultsExposeOnlyMinimizedPublicFields() {
+        GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
+            GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
+
+        GuardianApplicationResult.RemediationCompleted approved = assertInstanceOf(
+            GuardianApplicationResult.RemediationCompleted.class,
+            service.approve(detected.incident().incidentId(), detected.incident().recommendedActionId()));
+        GuardianApplicationResult.UndoCompleted undone = assertInstanceOf(
+            GuardianApplicationResult.UndoCompleted.class, service.undo(approved.auditId()));
+
+        assertEquals(List.of("status", "auditId", "detail"), recordComponentNames(approved));
+        assertEquals(List.of("status", "auditId", "detail"), recordComponentNames(undone));
+        assertFalse(approved.toString().contains("org.example.app"));
+        assertFalse(undone.toString().contains("org.example.app"));
+    }
+
+    private static List<String> recordComponentNames(Object value) {
+        return Arrays.stream(value.getClass().getRecordComponents())
+            .map(component -> component.getName())
+            .toList();
     }
 
     private GuardianApplicationService applicationService(

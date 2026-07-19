@@ -41,10 +41,14 @@ public final class GuardianApplicationService {
     }
 
     public GuardianApplicationResult approve(String incidentId, String actionId) {
-        return new GuardianApplicationResult.RemediationCompleted(remediation.approve(incidentId, actionId));
+        var outcome = remediation.approve(incidentId, actionId);
+        return new GuardianApplicationResult.RemediationCompleted(
+            outcome.status(), outcome.auditId(), outcome.detail());
     }
 
     public GuardianApplicationResult undo(String auditId) {
-        return new GuardianApplicationResult.UndoCompleted(remediation.undo(auditId));
+        var outcome = remediation.undo(auditId);
+        return new GuardianApplicationResult.UndoCompleted(
+            outcome.status(), outcome.auditId(), outcome.detail());
     }
 }
