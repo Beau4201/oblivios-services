@@ -7,15 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Stream;
 import org.aegisos.guardian.audit.GuardianDetectionAuditEntry;
-import org.aegisos.guardian.audit.GuardianDetectionAuditStore;
-import org.aegisos.guardian.audit.InMemoryGuardianDetectionAuditStore;
 import org.aegisos.guardian.contracts.GuardianEventV1;
 import org.aegisos.guardian.contracts.GuardianIncidentV1;
-import org.aegisos.guardian.remediation.GuardianIncidentStore;
-import org.aegisos.guardian.remediation.InMemoryGuardianIncidentStore;
 import org.aegisos.guardian.remediation.RemediationActionId;
 import org.aegisos.guardian.remediation.StoredGuardianIncident;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,15 +20,13 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class GuardianDetectionServiceTest {
-    private InMemoryGuardianIncidentStore incidentStore;
-    private InMemoryGuardianDetectionAuditStore auditStore;
+    private InMemoryGuardianDetectionCommitStore commitStore;
     private GuardianDetectionService service;
 
     @BeforeEach
     void setUp() {
-        incidentStore = new InMemoryGuardianIncidentStore();
-        auditStore = new InMemoryGuardianDetectionAuditStore();
-        service = new GuardianDetectionService(incidentStore, auditStore);
+        commitStore = new InMemoryGuardianDetectionCommitStore();
+        service = new GuardianDetectionService(commitStore);
     }
 
     @Test
@@ -44,11 +37,7 @@ class GuardianDetectionServiceTest {
             GuardianDetectionResult.DetectedIncident.class, result);
         assertEquals("org.example.app", detected.storedIncident().packageName());
         assertFalse(detected.incident().toString().contains("org.example.app"));
-        GuardianDetectionAuditEntry audit = auditStore.findByIncidentId(detected.incident().incidentId())
-            .orElseThrow();
-        assertFalse(audit.toString().contains("org.example.app"));
-        assertEquals("BACKGROUND_LOCATION_V1", audit.ruleId());
-        assertEquals("INCIDENT_DETECTED", audit.auditType());
+        assertEquals(1, commitStore.auditCount());
     }
 
     @Test
@@ -57,37 +46,33 @@ class GuardianDetectionServiceTest {
 
         assertInstanceOf(GuardianDetectionResult.NoIncident.class,
             service.evaluate(backgroundLocationEvent("event-1", "org.example.app")));
-        assertEquals(1, auditStore.entryCount());
+        assertEquals(1, commitStore.auditCount());
     }
 
     @Test
-    void auditFailureRemovesNewIncidentAndReturnsFixedFailure() {
-        GuardianDetectionService failing = new GuardianDetectionService(incidentStore, entry -> {
-            throw new IllegalStateException("audit unavailable");
-        });
+    void atomicCommitFailureLeavesNoIncidentOrAudit() {
+        InMemoryGuardianDetectionCommitStore failing = new InMemoryGuardianDetectionCommitStore(
+            (incident, audit) -> { throw new IllegalStateException("commit unavailable"); });
+        GuardianDetectionService failingService = new GuardianDetectionService(failing);
 
-        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
+        GuardianDetectionResult result = failingService.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
 
-        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
+        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_COMMIT_FAILURE,
             assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
-        assertTrue(incidentStore.find("guardian-v1-background_location_v1-event-1").isEmpty());
+        assertTrue(failing.findIncident("guardian-v1-background_location_v1-event-1").isEmpty());
+        assertEquals(0, failing.auditCount());
     }
 
     @Test
-    void auditFailurePreservesPreexistingIncidentWithTheSameId() {
+    void existingDerivedIdIsNotReplacedOrAuditedAgain() {
         String incidentId = "guardian-v1-background_location_v1-event-1";
-        StoredGuardianIncident existing = new StoredGuardianIncident(new GuardianIncidentV1(
-            1, incidentId, List.of("earlier-event"), "SUSPICIOUS", 80, List.of("previous incident"),
-            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(), Instant.EPOCH, "OPEN"),
-            "org.example.existing");
-        incidentStore.record(existing);
-        GuardianDetectionService failing = new GuardianDetectionService(incidentStore, entry -> {
-            throw new IllegalStateException("audit unavailable");
-        });
+        commitStore.commit(existing(incidentId), existingAudit(incidentId));
 
-        failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
+        GuardianDetectionResult result = service.evaluate(backgroundLocationEvent("event-1", "org.example.new"));
 
-        assertEquals(existing, incidentStore.require(incidentId));
+        assertInstanceOf(GuardianDetectionResult.NoIncident.class, result);
+        assertEquals("org.example.existing", commitStore.findIncident(incidentId).orElseThrow().packageName());
+        assertEquals(1, commitStore.auditCount());
     }
 
     @Test
@@ -96,96 +81,31 @@ class GuardianDetectionServiceTest {
             "LOCATION_PRECISE", "BACKGROUND", "DENIED", "NONE", 0, 0);
 
         assertInstanceOf(GuardianDetectionResult.NoIncident.class, service.evaluate(unmatched));
-        assertTrue(incidentStore.find("guardian-v1-background_location_v1-event-1").isEmpty());
-        assertEquals(0, auditStore.entryCount());
-    }
-
-    @Test
-    void incidentStoreFailureWritesNoAudit() {
-        GuardianDetectionService failing = new GuardianDetectionService(new FailingIncidentStore(), auditStore);
-
-        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
-
-        assertEquals(GuardianDetectionResult.FailureCode.INCIDENT_STORE_FAILURE,
-            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
-        assertEquals(0, auditStore.entryCount());
+        assertTrue(commitStore.findIncident("guardian-v1-background_location_v1-event-1").isEmpty());
+        assertEquals(0, commitStore.auditCount());
     }
 
     @Test
     void incidentStoreFindFailureReturnsTypedFailureAndWritesNoAudit() {
-        GuardianDetectionService failing = new GuardianDetectionService(new FindFailingIncidentStore(), auditStore);
+        FindFailingCommitStore failingStore = new FindFailingCommitStore();
+        GuardianDetectionService failing = new GuardianDetectionService(failingStore);
 
         GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
 
         assertEquals(GuardianDetectionResult.FailureCode.INCIDENT_STORE_FAILURE,
             assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
-        assertEquals(0, auditStore.entryCount());
-    }
-
-    @Test
-    void auditFailureRetriesRemovalAfterTransientCompensationWriteFailure() {
-        TransientlyFailingIncidentStore failingStore = new TransientlyFailingIncidentStore();
-        GuardianDetectionService failing = new GuardianDetectionService(failingStore, entry -> {
-            failingStore.failNextRemove();
-            throw new IllegalStateException("audit unavailable");
-        });
-
-        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
-
-        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
-            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
-        assertTrue(failingStore.find("guardian-v1-background_location_v1-event-1").isEmpty());
-    }
-
-    @Test
-    void auditFailureRetriesRemovalAfterCompensationMiss() {
-        TransientlyFailingIncidentStore failingStore = new TransientlyFailingIncidentStore();
-        GuardianDetectionService failing = new GuardianDetectionService(failingStore, entry -> {
-            failingStore.returnFalseNextRemove();
-            throw new IllegalStateException("audit unavailable");
-        });
-
-        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
-
-        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
-            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
-        assertEquals(2, failingStore.removeAttempts());
-        assertTrue(failingStore.find("guardian-v1-background_location_v1-event-1").isEmpty());
-    }
-
-    @Test
-    void auditFailureRetriesRestorationAfterTransientCompensationWriteFailure() {
-        String incidentId = "guardian-v1-background_location_v1-event-1";
-        StoredGuardianIncident existing = new StoredGuardianIncident(new GuardianIncidentV1(
-            1, incidentId, List.of("earlier-event"), "SUSPICIOUS", 80, List.of("previous incident"),
-            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(), Instant.EPOCH, "OPEN"),
-            "org.example.existing");
-        TransientlyFailingIncidentStore failingStore = new TransientlyFailingIncidentStore();
-        failingStore.record(existing);
-        GuardianDetectionService failing = new GuardianDetectionService(failingStore, entry -> {
-            failingStore.failNextRecord();
-            throw new IllegalStateException("audit unavailable");
-        });
-
-        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
-
-        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
-            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
-        assertEquals(existing, failingStore.require(incidentId));
+        assertFalse(failingStore.commitCalled);
     }
 
     @ParameterizedTest
     @MethodSource("matchingEvents")
     void allApprovedRulesCreateIncidentsWithTheirRegisteredRecommendation(
-        GuardianEventV1 event, String ruleId, RemediationActionId expectedAction) {
+        GuardianEventV1 event, String ignoredRuleId, RemediationActionId expectedAction) {
         GuardianDetectionResult.DetectedIncident detected = assertInstanceOf(
             GuardianDetectionResult.DetectedIncident.class, service.evaluate(event));
-        GuardianDetectionAuditEntry audit = auditStore.findByIncidentId(detected.incident().incidentId())
-            .orElseThrow();
 
         assertEquals(expectedAction.name(), detected.incident().recommendedActionId());
-        assertEquals(expectedAction.name(), audit.recommendedActionId());
-        assertEquals(ruleId, audit.ruleId());
+        assertEquals(1, commitStore.auditCount());
     }
 
     private static Stream<Arguments> matchingEvents() {
@@ -203,6 +123,19 @@ class GuardianDetectionServiceTest {
                 "REPEATED_BACKGROUND_EXECUTION_V1", RemediationActionId.FREEZE_APPLICATION));
     }
 
+    private static StoredGuardianIncident existing(String incidentId) {
+        return new StoredGuardianIncident(new GuardianIncidentV1(
+            1, incidentId, List.of("earlier-event"), "SUSPICIOUS", 80, List.of("previous incident"),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(), Instant.EPOCH, "OPEN"),
+            "org.example.existing");
+    }
+
+    private static GuardianDetectionAuditEntry existingAudit(String incidentId) {
+        return new GuardianDetectionAuditEntry("audit-existing", Instant.EPOCH, "INCIDENT_DETECTED", incidentId,
+            "earlier-event", "BACKGROUND_LOCATION_V1", RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(),
+            "SUSPICIOUS", 80);
+    }
+
     private static GuardianEventV1 backgroundLocationEvent(String eventId, String packageName) {
         return event(eventId, packageName, "BACKGROUND_LOCATION", "LOCATION_PRECISE", "BACKGROUND",
             "ALLOWED", "NONE", 0, 0);
@@ -215,104 +148,17 @@ class GuardianDetectionServiceTest {
             eventType, resource, foregroundState, policyState, networkCategory, bytesSent, bytesReceived);
     }
 
-    private static final class FailingIncidentStore implements GuardianIncidentStore {
-        @Override
-        public StoredGuardianIncident record(StoredGuardianIncident incident) {
-            throw new IllegalStateException("incident store unavailable");
-        }
+    private static final class FindFailingCommitStore implements GuardianDetectionCommitStore {
+        private boolean commitCalled;
 
         @Override
-        public Optional<StoredGuardianIncident> find(String incidentId) {
-            return Optional.empty();
+        public java.util.Optional<StoredGuardianIncident> findIncident(String incidentId) {
+            throw new IllegalStateException("incident lookup unavailable");
         }
 
         @Override
-        public StoredGuardianIncident require(String incidentId) {
-            throw new IllegalArgumentException("Unknown incident: " + incidentId);
-        }
-
-        @Override
-        public boolean remove(String incidentId) {
-            return false;
-        }
-    }
-
-    private static final class FindFailingIncidentStore implements GuardianIncidentStore {
-        @Override
-        public StoredGuardianIncident record(StoredGuardianIncident incident) {
-            throw new AssertionError("record must not be called after find failure");
-        }
-
-        @Override
-        public Optional<StoredGuardianIncident> find(String incidentId) {
-            throw new IllegalStateException("incident store unavailable");
-        }
-
-        @Override
-        public StoredGuardianIncident require(String incidentId) {
-            throw new AssertionError("require must not be called after find failure");
-        }
-
-        @Override
-        public boolean remove(String incidentId) {
-            throw new AssertionError("remove must not be called after find failure");
-        }
-    }
-
-    private static final class TransientlyFailingIncidentStore implements GuardianIncidentStore {
-        private final InMemoryGuardianIncidentStore delegate = new InMemoryGuardianIncidentStore();
-        private boolean failNextRecord;
-        private boolean failNextRemove;
-        private boolean returnFalseNextRemove;
-        private int removeAttempts;
-
-        @Override
-        public StoredGuardianIncident record(StoredGuardianIncident incident) {
-            if (failNextRecord) {
-                failNextRecord = false;
-                throw new IllegalStateException("incident store unavailable");
-            }
-            return delegate.record(incident);
-        }
-
-        @Override
-        public Optional<StoredGuardianIncident> find(String incidentId) {
-            return delegate.find(incidentId);
-        }
-
-        @Override
-        public StoredGuardianIncident require(String incidentId) {
-            return delegate.require(incidentId);
-        }
-
-        @Override
-        public boolean remove(String incidentId) {
-            removeAttempts++;
-            if (failNextRemove) {
-                failNextRemove = false;
-                throw new IllegalStateException("incident store unavailable");
-            }
-            if (returnFalseNextRemove) {
-                returnFalseNextRemove = false;
-                return false;
-            }
-            return delegate.remove(incidentId);
-        }
-
-        void failNextRecord() {
-            failNextRecord = true;
-        }
-
-        void failNextRemove() {
-            failNextRemove = true;
-        }
-
-        void returnFalseNextRemove() {
-            returnFalseNextRemove = true;
-        }
-
-        int removeAttempts() {
-            return removeAttempts;
+        public void commit(StoredGuardianIncident incident, GuardianDetectionAuditEntry audit) {
+            commitCalled = true;
         }
     }
 }

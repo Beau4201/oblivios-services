@@ -17,7 +17,7 @@ import org.aegisos.guardian.contracts.GuardianIncidentV1;
 import org.aegisos.guardian.contracts.GuardianEventV1;
 import org.aegisos.guardian.detection.GuardianDetectionResult;
 import org.aegisos.guardian.detection.GuardianDetectionService;
-import org.aegisos.guardian.audit.InMemoryGuardianDetectionAuditStore;
+import org.aegisos.guardian.detection.InMemoryGuardianDetectionCommitStore;
 import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
 import org.aegisos.guardian.platform.PlatformSnapshot;
@@ -178,9 +178,8 @@ class GuardianRemediationServiceTest {
     @MethodSource("detectedIncidentActions")
     void detectedIncidentsRejectDifferentRegisteredActions(
         GuardianEventV1 event, RemediationActionId differentAction) {
-        InMemoryGuardianIncidentStore incidentStore = new InMemoryGuardianIncidentStore();
-        GuardianDetectionService detectionService = new GuardianDetectionService(
-            incidentStore, new InMemoryGuardianDetectionAuditStore());
+        InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
+        GuardianDetectionService detectionService = new GuardianDetectionService(incidentStore);
         GuardianDetectionResult.DetectedIncident detected = assertInstanceOf(
             GuardianDetectionResult.DetectedIncident.class, detectionService.evaluate(event));
         FakeGateway gateway = new FakeGateway(BEFORE);
