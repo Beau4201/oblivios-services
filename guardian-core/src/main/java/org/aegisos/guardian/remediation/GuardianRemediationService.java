@@ -14,13 +14,13 @@ public final class GuardianRemediationService {
     private final RemediationCatalog catalog;
     private final GuardianPlatformGateway gateway;
     private final InMemoryGuardianAuditStore auditStore;
-    private final InMemoryGuardianIncidentStore incidentStore;
+    private final GuardianIncidentStore incidentStore;
 
     public GuardianRemediationService(
         RemediationCatalog catalog,
         GuardianPlatformGateway gateway,
         InMemoryGuardianAuditStore auditStore,
-        InMemoryGuardianIncidentStore incidentStore) {
+        GuardianIncidentStore incidentStore) {
         this.catalog = catalog;
         this.gateway = gateway;
         this.auditStore = auditStore;
