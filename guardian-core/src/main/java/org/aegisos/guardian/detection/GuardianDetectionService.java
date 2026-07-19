@@ -36,26 +36,49 @@ public final class GuardianDetectionService {
         GuardianDetectionRule rule = match.orElseThrow();
         GuardianIncidentV1 incident = rule.toIncident(event);
         StoredGuardianIncident stored = new StoredGuardianIncident(incident, event.packageName());
-        StoredGuardianIncident previous = incidentStore.find(incident.incidentId()).orElse(null);
+        StoredGuardianIncident previous;
+        try {
+            previous = incidentStore.find(incident.incidentId()).orElse(null);
+        } catch (RuntimeException failure) {
+            return incidentStoreFailure(event.eventId());
+        }
         try {
             incidentStore.record(stored);
         } catch (RuntimeException failure) {
-            return new GuardianDetectionResult.DetectionFailed(
-                event.eventId(), GuardianDetectionResult.FailureCode.INCIDENT_STORE_FAILURE);
+            return incidentStoreFailure(event.eventId());
         }
         try {
             auditStore.record(detectionAudit(event, rule, incident));
         } catch (RuntimeException failure) {
-            if (previous == null) {
-                incidentStore.remove(incident.incidentId());
-            } else {
-                incidentStore.record(previous);
+            if (!restorePreviousIncident(incident.incidentId(), previous)) {
+                return incidentStoreFailure(event.eventId());
             }
             return new GuardianDetectionResult.DetectionFailed(
                 event.eventId(), GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE);
         }
         processedEventIds.add(event.eventId());
         return new GuardianDetectionResult.DetectedIncident(incident, stored);
+    }
+
+    private GuardianDetectionResult.DetectionFailed incidentStoreFailure(String eventId) {
+        return new GuardianDetectionResult.DetectionFailed(
+            eventId, GuardianDetectionResult.FailureCode.INCIDENT_STORE_FAILURE);
+    }
+
+    private boolean restorePreviousIncident(String incidentId, StoredGuardianIncident previous) {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                if (previous == null) {
+                    incidentStore.remove(incidentId);
+                } else {
+                    incidentStore.record(previous);
+                }
+                return true;
+            } catch (RuntimeException failure) {
+                // Retry once so a transient store failure cannot expose or replace the incident.
+            }
+        }
+        return false;
     }
 
     private GuardianDetectionAuditEntry detectionAudit(

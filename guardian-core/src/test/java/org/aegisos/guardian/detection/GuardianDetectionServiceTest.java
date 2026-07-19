@@ -111,6 +111,53 @@ class GuardianDetectionServiceTest {
         assertEquals(0, auditStore.entryCount());
     }
 
+    @Test
+    void incidentStoreFindFailureReturnsTypedFailureAndWritesNoAudit() {
+        GuardianDetectionService failing = new GuardianDetectionService(new FindFailingIncidentStore(), auditStore);
+
+        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
+
+        assertEquals(GuardianDetectionResult.FailureCode.INCIDENT_STORE_FAILURE,
+            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
+        assertEquals(0, auditStore.entryCount());
+    }
+
+    @Test
+    void auditFailureRetriesRemovalAfterTransientCompensationWriteFailure() {
+        TransientlyFailingIncidentStore failingStore = new TransientlyFailingIncidentStore();
+        GuardianDetectionService failing = new GuardianDetectionService(failingStore, entry -> {
+            failingStore.failNextRemove();
+            throw new IllegalStateException("audit unavailable");
+        });
+
+        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
+
+        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
+            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
+        assertTrue(failingStore.find("guardian-v1-background_location_v1-event-1").isEmpty());
+    }
+
+    @Test
+    void auditFailureRetriesRestorationAfterTransientCompensationWriteFailure() {
+        String incidentId = "guardian-v1-background_location_v1-event-1";
+        StoredGuardianIncident existing = new StoredGuardianIncident(new GuardianIncidentV1(
+            1, incidentId, List.of("earlier-event"), "SUSPICIOUS", 80, List.of("previous incident"),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(), Instant.EPOCH, "OPEN"),
+            "org.example.existing");
+        TransientlyFailingIncidentStore failingStore = new TransientlyFailingIncidentStore();
+        failingStore.record(existing);
+        GuardianDetectionService failing = new GuardianDetectionService(failingStore, entry -> {
+            failingStore.failNextRecord();
+            throw new IllegalStateException("audit unavailable");
+        });
+
+        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
+
+        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
+            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
+        assertEquals(existing, failingStore.require(incidentId));
+    }
+
     @ParameterizedTest
     @MethodSource("matchingEvents")
     void allApprovedRulesCreateIncidentsWithTheirRegisteredRecommendation(
@@ -171,6 +218,70 @@ class GuardianDetectionServiceTest {
         @Override
         public boolean remove(String incidentId) {
             return false;
+        }
+    }
+
+    private static final class FindFailingIncidentStore implements GuardianIncidentStore {
+        @Override
+        public StoredGuardianIncident record(StoredGuardianIncident incident) {
+            throw new AssertionError("record must not be called after find failure");
+        }
+
+        @Override
+        public Optional<StoredGuardianIncident> find(String incidentId) {
+            throw new IllegalStateException("incident store unavailable");
+        }
+
+        @Override
+        public StoredGuardianIncident require(String incidentId) {
+            throw new AssertionError("require must not be called after find failure");
+        }
+
+        @Override
+        public boolean remove(String incidentId) {
+            throw new AssertionError("remove must not be called after find failure");
+        }
+    }
+
+    private static final class TransientlyFailingIncidentStore implements GuardianIncidentStore {
+        private final InMemoryGuardianIncidentStore delegate = new InMemoryGuardianIncidentStore();
+        private boolean failNextRecord;
+        private boolean failNextRemove;
+
+        @Override
+        public StoredGuardianIncident record(StoredGuardianIncident incident) {
+            if (failNextRecord) {
+                failNextRecord = false;
+                throw new IllegalStateException("incident store unavailable");
+            }
+            return delegate.record(incident);
+        }
+
+        @Override
+        public Optional<StoredGuardianIncident> find(String incidentId) {
+            return delegate.find(incidentId);
+        }
+
+        @Override
+        public StoredGuardianIncident require(String incidentId) {
+            return delegate.require(incidentId);
+        }
+
+        @Override
+        public boolean remove(String incidentId) {
+            if (failNextRemove) {
+                failNextRemove = false;
+                throw new IllegalStateException("incident store unavailable");
+            }
+            return delegate.remove(incidentId);
+        }
+
+        void failNextRecord() {
+            failNextRecord = true;
+        }
+
+        void failNextRemove() {
+            failNextRemove = true;
         }
     }
 }
