@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.aegisos.guardian.audit.GuardianDetectionAuditEntry;
 import org.aegisos.guardian.audit.GuardianDetectionAuditStore;
 import org.aegisos.guardian.audit.InMemoryGuardianDetectionAuditStore;
 import org.aegisos.guardian.contracts.GuardianEventV1;
+import org.aegisos.guardian.contracts.GuardianIncidentV1;
 import org.aegisos.guardian.remediation.GuardianIncidentStore;
 import org.aegisos.guardian.remediation.InMemoryGuardianIncidentStore;
 import org.aegisos.guardian.remediation.RemediationActionId;
@@ -69,6 +71,23 @@ class GuardianDetectionServiceTest {
         assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
             assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
         assertTrue(incidentStore.find("guardian-v1-background_location_v1-event-1").isEmpty());
+    }
+
+    @Test
+    void auditFailurePreservesPreexistingIncidentWithTheSameId() {
+        String incidentId = "guardian-v1-background_location_v1-event-1";
+        StoredGuardianIncident existing = new StoredGuardianIncident(new GuardianIncidentV1(
+            1, incidentId, List.of("earlier-event"), "SUSPICIOUS", 80, List.of("previous incident"),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name(), Instant.EPOCH, "OPEN"),
+            "org.example.existing");
+        incidentStore.record(existing);
+        GuardianDetectionService failing = new GuardianDetectionService(incidentStore, entry -> {
+            throw new IllegalStateException("audit unavailable");
+        });
+
+        failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
+
+        assertEquals(existing, incidentStore.require(incidentId));
     }
 
     @Test

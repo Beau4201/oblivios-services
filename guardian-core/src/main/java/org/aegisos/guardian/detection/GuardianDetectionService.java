@@ -36,6 +36,7 @@ public final class GuardianDetectionService {
         GuardianDetectionRule rule = match.orElseThrow();
         GuardianIncidentV1 incident = rule.toIncident(event);
         StoredGuardianIncident stored = new StoredGuardianIncident(incident, event.packageName());
+        StoredGuardianIncident previous = incidentStore.find(incident.incidentId()).orElse(null);
         try {
             incidentStore.record(stored);
         } catch (RuntimeException failure) {
@@ -45,7 +46,11 @@ public final class GuardianDetectionService {
         try {
             auditStore.record(detectionAudit(event, rule, incident));
         } catch (RuntimeException failure) {
-            incidentStore.remove(incident.incidentId());
+            if (previous == null) {
+                incidentStore.remove(incident.incidentId());
+            } else {
+                incidentStore.record(previous);
+            }
             return new GuardianDetectionResult.DetectionFailed(
                 event.eventId(), GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE);
         }
