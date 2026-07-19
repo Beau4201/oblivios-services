@@ -138,6 +138,22 @@ class GuardianDetectionServiceTest {
     }
 
     @Test
+    void auditFailureRetriesRemovalAfterCompensationMiss() {
+        TransientlyFailingIncidentStore failingStore = new TransientlyFailingIncidentStore();
+        GuardianDetectionService failing = new GuardianDetectionService(failingStore, entry -> {
+            failingStore.returnFalseNextRemove();
+            throw new IllegalStateException("audit unavailable");
+        });
+
+        GuardianDetectionResult result = failing.evaluate(backgroundLocationEvent("event-1", "org.example.app"));
+
+        assertEquals(GuardianDetectionResult.FailureCode.DETECTION_AUDIT_FAILURE,
+            assertInstanceOf(GuardianDetectionResult.DetectionFailed.class, result).failureCode());
+        assertEquals(2, failingStore.removeAttempts());
+        assertTrue(failingStore.find("guardian-v1-background_location_v1-event-1").isEmpty());
+    }
+
+    @Test
     void auditFailureRetriesRestorationAfterTransientCompensationWriteFailure() {
         String incidentId = "guardian-v1-background_location_v1-event-1";
         StoredGuardianIncident existing = new StoredGuardianIncident(new GuardianIncidentV1(
@@ -247,6 +263,8 @@ class GuardianDetectionServiceTest {
         private final InMemoryGuardianIncidentStore delegate = new InMemoryGuardianIncidentStore();
         private boolean failNextRecord;
         private boolean failNextRemove;
+        private boolean returnFalseNextRemove;
+        private int removeAttempts;
 
         @Override
         public StoredGuardianIncident record(StoredGuardianIncident incident) {
@@ -269,9 +287,14 @@ class GuardianDetectionServiceTest {
 
         @Override
         public boolean remove(String incidentId) {
+            removeAttempts++;
             if (failNextRemove) {
                 failNextRemove = false;
                 throw new IllegalStateException("incident store unavailable");
+            }
+            if (returnFalseNextRemove) {
+                returnFalseNextRemove = false;
+                return false;
             }
             return delegate.remove(incidentId);
         }
@@ -282,6 +305,14 @@ class GuardianDetectionServiceTest {
 
         void failNextRemove() {
             failNextRemove = true;
+        }
+
+        void returnFalseNextRemove() {
+            returnFalseNextRemove = true;
+        }
+
+        int removeAttempts() {
+            return removeAttempts;
         }
     }
 }

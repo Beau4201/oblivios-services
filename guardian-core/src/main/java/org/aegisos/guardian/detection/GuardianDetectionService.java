@@ -69,11 +69,13 @@ public final class GuardianDetectionService {
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
                 if (previous == null) {
-                    incidentStore.remove(incidentId);
+                    if (incidentStore.remove(incidentId)) {
+                        return true;
+                    }
                 } else {
                     incidentStore.record(previous);
+                    return true;
                 }
-                return true;
             } catch (RuntimeException failure) {
                 // Retry once so a transient store failure cannot expose or replace the incident.
             }
