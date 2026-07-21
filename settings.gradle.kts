@@ -1,2 +1,2 @@
 rootProject.name = "aegisos-services"
-include("guardian-core", "guardian-reference")
+include("guardian-core", "guardian-reference", "guardian-ui-reference")
