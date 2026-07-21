@@ -1,21 +1,10 @@
 package org.aegisos.guardian.reference;
 
 import java.io.PrintWriter;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import org.aegisos.guardian.application.GuardianApplicationResult;
-import org.aegisos.guardian.application.GuardianApplicationService;
-import org.aegisos.guardian.audit.InMemoryGuardianAuditStore;
-import org.aegisos.guardian.detection.GuardianDetectionService;
-import org.aegisos.guardian.detection.InMemoryGuardianDetectionCommitStore;
-import org.aegisos.guardian.remediation.GuardianRemediationService;
-import org.aegisos.guardian.remediation.RemediationCatalog;
 import org.aegisos.guardian.remediation.RemediationOutcome;
-import org.aegisos.guardian.validation.GuardianEventParser;
 
 public final class GuardianReferenceApplication {
-    private static final String REFERENCE_PACKAGE = "org.aegisos.reference.target";
-
     private GuardianReferenceApplication() { }
 
     public static void main(String[] args) {
@@ -30,13 +19,13 @@ public final class GuardianReferenceApplication {
 
         out.println("LOCAL REFERENCE SIMULATION — NOT ANDROID ENFORCEMENT");
         try {
-            GuardianApplicationService service = createService();
+            GuardianReferenceScenario scenario = GuardianReferenceScenario.create();
             GuardianApplicationResult.DetectedIncident detected = requireDetected(
-                service.ingest(backgroundLocationRawEvent()));
+                scenario.detectBackgroundLocation());
             GuardianApplicationResult.RemediationCompleted approved = requireRemediation(
-                service.approve(
+                scenario.approve(
                     detected.incident().incidentId(), detected.incident().recommendedActionId()));
-            GuardianApplicationResult.UndoCompleted undone = requireUndo(service.undo(approved.auditId()));
+            GuardianApplicationResult.UndoCompleted undone = requireUndo(scenario.undo(approved.auditId()));
             out.println("DETECTED " + detected.incident().severity());
             out.println(detected.incident().recommendedActionId());
             out.println(approved.status());
@@ -47,17 +36,6 @@ public final class GuardianReferenceApplication {
             out.println(failure.getMessage());
             return 1;
         }
-    }
-
-    private static GuardianApplicationService createService() {
-        InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
-        GuardianRemediationService remediation = new GuardianRemediationService(
-            new RemediationCatalog(),
-            new SimulatedGuardianPlatformGateway(),
-            new InMemoryGuardianAuditStore(),
-            incidentStore);
-        return new GuardianApplicationService(
-            new GuardianEventParser(), new GuardianDetectionService(incidentStore), remediation);
     }
 
     private static GuardianApplicationResult.DetectedIncident requireDetected(GuardianApplicationResult result) {
@@ -80,23 +58,6 @@ public final class GuardianReferenceApplication {
             return undo;
         }
         throw new ReferenceScenarioFailure("UNDO_FAILED");
-    }
-
-    private static Map<String, Object> backgroundLocationRawEvent() {
-        Map<String, Object> raw = new LinkedHashMap<>();
-        raw.put("schemaVersion", 1);
-        raw.put("eventId", "reference-background-location");
-        raw.put("occurredAt", "2026-07-19T12:00:00Z");
-        raw.put("packageName", REFERENCE_PACKAGE);
-        raw.put("uid", 10123);
-        raw.put("eventType", "BACKGROUND_LOCATION");
-        raw.put("resource", "LOCATION_PRECISE");
-        raw.put("foregroundState", "BACKGROUND");
-        raw.put("policyState", "ALLOWED");
-        raw.put("networkCategory", "NONE");
-        raw.put("bytesSent", 0L);
-        raw.put("bytesReceived", 0L);
-        return raw;
     }
 
     private static final class ReferenceScenarioFailure extends RuntimeException {
