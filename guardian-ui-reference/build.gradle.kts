@@ -13,7 +13,10 @@ kotlin {
     jvmToolchain(21)
 }
 
-repositories { mavenCentral() }
+repositories {
+    google()
+    mavenCentral()
+}
 
 dependencies {
     implementation(project(":guardian-reference"))
