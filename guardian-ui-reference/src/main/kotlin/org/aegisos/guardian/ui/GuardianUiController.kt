@@ -4,49 +4,81 @@ import org.aegisos.guardian.application.GuardianApplicationResult
 import org.aegisos.guardian.reference.GuardianReferenceScenario
 import org.aegisos.guardian.remediation.RemediationOutcome
 
-class GuardianUiController(private val scenario: GuardianReferenceScenario) {
+internal interface GuardianUiScenario {
+    fun detectBackgroundLocation(): GuardianApplicationResult
+
+    fun approve(incidentId: String, actionId: String): GuardianApplicationResult
+
+    fun undo(auditId: String): GuardianApplicationResult
+}
+
+class GuardianUiController internal constructor(private val scenario: GuardianUiScenario) {
+    constructor(scenario: GuardianReferenceScenario) : this(
+        object : GuardianUiScenario {
+            override fun detectBackgroundLocation() = scenario.detectBackgroundLocation()
+
+            override fun approve(incidentId: String, actionId: String) = scenario.approve(incidentId, actionId)
+
+            override fun undo(auditId: String) = scenario.undo(auditId)
+        },
+    )
+
     private var incidentId: String? = null
     private var actionId: String? = null
     private var auditId: String? = null
 
-    fun start(): GuardianUiState = when (val result = scenario.detectBackgroundLocation()) {
-        is GuardianApplicationResult.DetectedIncident -> {
-            incidentId = result.incident().incidentId()
-            actionId = result.incident().recommendedActionId()
-            GuardianUiState.Detected(
-                severity = result.incident().severity(),
-                actionId = result.incident().recommendedActionId(),
-                title = "Background location detected",
-                summary = "Protect app",
-                compatibilityImpact = "Undo",
-            )
+    fun start(): GuardianUiState = try {
+        when (val result = scenario.detectBackgroundLocation()) {
+            is GuardianApplicationResult.DetectedIncident -> {
+                incidentId = result.incident().incidentId()
+                actionId = result.incident().recommendedActionId()
+                GuardianUiState.Detected(
+                    severity = result.incident().severity(),
+                    actionId = result.incident().recommendedActionId(),
+                    title = "Background location detected",
+                    summary = "Protect app",
+                    compatibilityImpact = "Undo",
+                )
+            }
+            else -> failure()
         }
-        else -> failure()
+    } catch (_: RuntimeException) {
+        failure()
     }
 
     fun protect(): GuardianUiState {
         val storedIncidentId = incidentId ?: return failure()
         val storedActionId = actionId ?: return failure()
-        return when (val result = scenario.approve(storedIncidentId, storedActionId)) {
-            is GuardianApplicationResult.RemediationCompleted -> {
-                if (result.status() != RemediationOutcome.Status.VERIFIED_SUCCESS) return failure()
-                auditId = result.auditId()
-                GuardianUiState.Verified(result.auditId(), "Protect app")
+        return try {
+            when (val result = scenario.approve(storedIncidentId, storedActionId)) {
+                is GuardianApplicationResult.RemediationCompleted -> {
+                    if (result.status() != RemediationOutcome.Status.VERIFIED_SUCCESS) return failure()
+                    auditId = result.auditId()
+                    GuardianUiState.Verified(result.auditId(), "Protect app")
+                }
+                else -> failure()
             }
-            else -> failure()
+        } catch (_: RuntimeException) {
+            failure()
         }
     }
 
     fun undo(): GuardianUiState {
         val storedAuditId = auditId ?: return failure()
-        return when (val result = scenario.undo(storedAuditId)) {
-            is GuardianApplicationResult.UndoCompleted -> {
-                if (result.status() != RemediationOutcome.Status.UNDONE) return failure()
-                GuardianUiState.Undone(result.auditId(), "Undo")
+        return try {
+            when (val result = scenario.undo(storedAuditId)) {
+                is GuardianApplicationResult.UndoCompleted -> {
+                    if (result.status() != RemediationOutcome.Status.UNDONE) return undoFailure()
+                    GuardianUiState.Undone(result.auditId(), "Undo")
+                }
+                else -> undoFailure()
             }
-            else -> failure()
+        } catch (_: RuntimeException) {
+            undoFailure()
         }
     }
 
     private fun failure() = GuardianUiState.Failure("No successful change was applied")
+
+    private fun undoFailure() = GuardianUiState.Failure("Protection remains active; Undo was not completed")
 }
