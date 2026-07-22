@@ -89,6 +89,6 @@ class GuardianUiControllerTest {
         assertEquals(expectedDetail, failure.detail)
         assertFalse(failure.detail.contains("private-package"))
         assertFalse(failure.detail.contains("IllegalStateException"))
-        assertFalse(failure.detail.contains("\\n"))
+        assertFalse(failure.detail.contains("\n"))
     }
 }
