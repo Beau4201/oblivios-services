@@ -19,6 +19,7 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":guardian-core"))
     implementation(project(":guardian-reference"))
     implementation(compose.desktop.currentOs)
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
