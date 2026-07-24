@@ -8,9 +8,11 @@ public interface GuardianOverviewStore {
 
     void recordVerificationFailure(GuardianAuditEntry audit, StoredGuardianIncident incident);
 
-    void recordUndoCompleted(GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit);
+    GuardianOverviewTransitionStatus recordUndoCompleted(
+        GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit);
 
-    void recordUndoFailed(GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit);
+    GuardianOverviewTransitionStatus recordUndoFailed(
+        GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit);
 
     GuardianOverviewSnapshot snapshot();
 }

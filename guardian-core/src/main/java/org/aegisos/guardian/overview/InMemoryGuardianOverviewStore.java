@@ -58,21 +58,33 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
     }
 
     @Override
-    public void recordUndoCompleted(GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit) {
+    public GuardianOverviewTransitionStatus recordUndoCompleted(
+        GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit) {
         requireOutcome(undoAudit, RemediationOutcome.Status.UNDONE);
-        GuardianActiveProtectionV1 protection = removeProtection(protectedAudit);
+        requireProtectedAudit(protectedAudit);
+        GuardianActiveProtectionV1 protection = protectionsByAuditId.remove(protectedAudit.auditId());
+        if (protection == null) {
+            return GuardianOverviewTransitionStatus.SOURCE_PROJECTION_MISSING;
+        }
         retainSummary(changeFor(protection, GuardianMeaningfulChangeType.UNDO_COMPLETED,
             undoAudit.recordedAt(), "The temporary protection was undone.",
             protection.compatibilityImpact(), protection.detailDestination()));
+        return GuardianOverviewTransitionStatus.RECORDED;
     }
 
     @Override
-    public void recordUndoFailed(GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit) {
+    public GuardianOverviewTransitionStatus recordUndoFailed(
+        GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit) {
         requireOutcome(undoAudit, RemediationOutcome.Status.UNDO_FAILED);
-        GuardianActiveProtectionV1 protection = protectionFor(protectedAudit);
+        requireProtectedAudit(protectedAudit);
+        GuardianActiveProtectionV1 protection = protectionsByAuditId.get(protectedAudit.auditId());
+        if (protection == null) {
+            return GuardianOverviewTransitionStatus.SOURCE_PROJECTION_MISSING;
+        }
         retainSummary(changeFor(protection, GuardianMeaningfulChangeType.UNDO_FAILED,
             undoAudit.recordedAt(), "Guardian could not undo the temporary protection.",
             null, protection.detailDestination()));
+        return GuardianOverviewTransitionStatus.RECORDED;
     }
 
     @Override
@@ -111,22 +123,9 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
             change.detailDestination());
     }
 
-    private GuardianActiveProtectionV1 removeProtection(GuardianAuditEntry protectedAudit) {
+    private void requireProtectedAudit(GuardianAuditEntry protectedAudit) {
         Objects.requireNonNull(protectedAudit, "protectedAudit");
-        GuardianActiveProtectionV1 protection = protectionsByAuditId.remove(protectedAudit.auditId());
-        if (protection == null) {
-            throw new IllegalStateException("Protected audit has no verified active protection.");
-        }
-        return protection;
-    }
-
-    private GuardianActiveProtectionV1 protectionFor(GuardianAuditEntry protectedAudit) {
-        Objects.requireNonNull(protectedAudit, "protectedAudit");
-        GuardianActiveProtectionV1 protection = protectionsByAuditId.get(protectedAudit.auditId());
-        if (protection == null) {
-            throw new IllegalStateException("Protected audit has no verified active protection.");
-        }
-        return protection;
+        requireAuditFields(protectedAudit);
     }
 
     private GuardianMeaningfulChangeV1 changeFor(

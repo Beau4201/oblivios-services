@@ -7,6 +7,7 @@ import org.aegisos.guardian.audit.GuardianAuditEntry;
 import org.aegisos.guardian.audit.InMemoryGuardianAuditStore;
 import org.aegisos.guardian.contracts.GuardianIncidentV1;
 import org.aegisos.guardian.overview.GuardianOverviewStore;
+import org.aegisos.guardian.overview.GuardianOverviewTransitionStatus;
 import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
 import org.aegisos.guardian.platform.PlatformSnapshot;
@@ -164,14 +165,11 @@ public final class GuardianRemediationService {
 
     private void recordUndoOverviewTransition(
         GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit, boolean completed) {
-        try {
-            if (completed) {
-                overviewStore.recordUndoCompleted(undoAudit, protectedAudit);
-            } else {
-                overviewStore.recordUndoFailed(undoAudit, protectedAudit);
-            }
-        } catch (IllegalStateException ignored) {
-            // A fresh local Overview projection has no verified-protection source to mutate.
+        GuardianOverviewTransitionStatus status = completed
+            ? overviewStore.recordUndoCompleted(undoAudit, protectedAudit)
+            : overviewStore.recordUndoFailed(undoAudit, protectedAudit);
+        if (status == GuardianOverviewTransitionStatus.SOURCE_PROJECTION_MISSING) {
+            return;
         }
     }
 

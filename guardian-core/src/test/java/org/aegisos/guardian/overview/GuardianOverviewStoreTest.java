@@ -78,6 +78,20 @@ class GuardianOverviewStoreTest {
     }
 
     @Test
+    void failedUndoWithoutSourceProtectionReportsTheTypedMissingProjectionStatus() {
+        InMemoryGuardianOverviewStore store = new InMemoryGuardianOverviewStore();
+
+        GuardianOverviewTransitionStatus status = store.recordUndoFailed(
+            audit("undo-audit", "2026-07-24T12:02:00Z", RemediationOutcome.Status.UNDO_FAILED),
+            audit("protected-audit", "2026-07-24T12:01:00Z", RemediationOutcome.Status.VERIFIED_SUCCESS));
+
+        assertEquals(GuardianOverviewTransitionStatus.SOURCE_PROJECTION_MISSING, status);
+        assertTrue(store.snapshot().activeProtections().isEmpty());
+        assertTrue(store.snapshot().changes().isEmpty());
+        assertTrue(store.snapshot().protectionAttention().isEmpty());
+    }
+
+    @Test
     void verificationFailureCreatesAttentionWithoutActiveProtection() {
         InMemoryGuardianOverviewStore store = new InMemoryGuardianOverviewStore();
 
