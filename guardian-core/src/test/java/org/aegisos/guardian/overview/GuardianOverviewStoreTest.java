@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +91,34 @@ class GuardianOverviewStoreTest {
     }
 
     @Test
+    void verificationFailureLinksToTheStoredIncidentProtectionDiagnosis() {
+        InMemoryGuardianOverviewStore store = new InMemoryGuardianOverviewStore();
+
+        store.recordVerificationFailure(audit("failed-audit", "2026-07-24T12:01:00Z",
+            RemediationOutcome.Status.VERIFICATION_FAILED_ROLLED_BACK), INCIDENT);
+
+        String destination = store.snapshot().protectionAttention().getFirst().destination();
+        assertEquals("guardian://incidents/incident-1/protection-diagnosis", destination);
+        assertFalse(destination.contains(PACKAGE_NAME));
+        assertFalse(destination.contains("failed-audit"));
+    }
+
+    @Test
+    void replayingVerifiedAuditDoesNotDuplicateTheProtectionVerifiedChange() {
+        InMemoryGuardianOverviewStore store = new InMemoryGuardianOverviewStore();
+        GuardianAuditEntry protectedAudit = audit("protected-audit", "2026-07-24T12:01:00Z",
+            RemediationOutcome.Status.VERIFIED_SUCCESS);
+
+        store.recordVerifiedProtection(protectedAudit, INCIDENT);
+        store.recordVerifiedProtection(protectedAudit, INCIDENT);
+
+        GuardianOverviewSnapshot snapshot = store.snapshot();
+        assertEquals(1, snapshot.activeProtections().size());
+        assertEquals(List.of(GuardianMeaningfulChangeType.PROTECTION_VERIFIED),
+            snapshot.changes().stream().map(GuardianOverviewEntry.MeaningfulChange::changeType).toList());
+    }
+
+    @Test
     void snapshotCapsChangesAndSortsThemNewestFirst() {
         InMemoryGuardianOverviewStore store = new InMemoryGuardianOverviewStore();
 
@@ -108,6 +137,19 @@ class GuardianOverviewStoreTest {
         assertThrows(UnsupportedOperationException.class, snapshot.changes()::clear);
     }
 
+    @Test
+    void retainsOnlyTheBoundedLocalSummaryHistory() {
+        InMemoryGuardianOverviewStore store = new InMemoryGuardianOverviewStore();
+
+        for (int index = 0; index < 4; index++) {
+            store.recordVerifiedProtection(audit("protected-" + index,
+                "2026-07-24T12:0" + index + ":00Z",
+                RemediationOutcome.Status.VERIFIED_SUCCESS), INCIDENT);
+        }
+
+        assertEquals(3, retainedSummaryCount(store));
+    }
+
     private static GuardianAuditEntry audit(String auditId, String recordedAt,
                                              RemediationOutcome.Status outcome) {
         boolean verifiedSuccess = outcome == RemediationOutcome.Status.VERIFIED_SUCCESS;
@@ -116,5 +158,15 @@ class GuardianOverviewStoreTest {
             new PlatformSnapshot(PACKAGE_NAME, Map.of("BACKGROUND_LOCATION_GRANTED", "true")),
             new GatewayExecution(true, "completed"),
             new VerificationResult(verifiedSuccess, "verification"), null, verifiedSuccess, outcome);
+    }
+
+    private static int retainedSummaryCount(InMemoryGuardianOverviewStore store) {
+        try {
+            Field changes = InMemoryGuardianOverviewStore.class.getDeclaredField("changes");
+            changes.setAccessible(true);
+            return ((List<?>) changes.get(store)).size();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Could not inspect retained Guardian summaries.", exception);
+        }
     }
 }

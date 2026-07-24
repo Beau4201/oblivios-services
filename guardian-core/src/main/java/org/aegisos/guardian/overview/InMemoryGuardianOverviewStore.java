@@ -2,6 +2,7 @@ package org.aegisos.guardian.overview;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import org.aegisos.guardian.remediation.StoredGuardianIncident;
 public final class InMemoryGuardianOverviewStore implements GuardianOverviewStore {
     private static final String FALLBACK_APP_LABEL = "Application";
     private static final String FALLBACK_ICON_KEY = "guardian:application";
+    private static final int MAX_RETAINED_SUMMARY_ENTRIES = 3;
     private final Map<String, GuardianActiveProtectionV1> protectionsByAuditId = new LinkedHashMap<>();
     private final List<GuardianMeaningfulChangeV1> changes = new ArrayList<>();
 
@@ -22,6 +24,9 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
     public void recordVerifiedProtection(GuardianAuditEntry audit, StoredGuardianIncident incident) {
         requireOutcome(audit, RemediationOutcome.Status.VERIFIED_SUCCESS);
         requireIncident(audit, incident);
+        if (protectionsByAuditId.containsKey(audit.auditId())) {
+            return;
+        }
 
         String protectionId = nextId("protection");
         ActionDescription description = ActionDescription.forAction(audit.actionId());
@@ -31,7 +36,7 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
             audit.recordedAt(), audit.recordedAt(), description.effect(), description.compatibilityImpact(), true,
             protectionDestination(protectionId));
         protectionsByAuditId.put(audit.auditId(), protection);
-        changes.add(changeFor(protection, GuardianMeaningfulChangeType.PROTECTION_VERIFIED,
+        retainSummary(changeFor(protection, GuardianMeaningfulChangeType.PROTECTION_VERIFIED,
             audit.recordedAt(), "Guardian verified a temporary protection.",
             description.compatibilityImpact(), protection.detailDestination()));
     }
@@ -48,15 +53,15 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
             nextId("attention"), incident.packageName(), FALLBACK_APP_LABEL, FALLBACK_ICON_KEY,
             GuardianMeaningfulChangeType.VERIFICATION_FAILED, audit.recordedAt(),
             "Guardian could not verify a temporary protection.", null,
-            attentionDestination());
-        changes.add(failure);
+            attentionDestination(incident.incident().incidentId()));
+        retainSummary(failure);
     }
 
     @Override
     public void recordUndoCompleted(GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit) {
         requireOutcome(undoAudit, RemediationOutcome.Status.UNDONE);
         GuardianActiveProtectionV1 protection = removeProtection(protectedAudit);
-        changes.add(changeFor(protection, GuardianMeaningfulChangeType.UNDO_COMPLETED,
+        retainSummary(changeFor(protection, GuardianMeaningfulChangeType.UNDO_COMPLETED,
             undoAudit.recordedAt(), "The temporary protection was undone.",
             protection.compatibilityImpact(), protection.detailDestination()));
     }
@@ -65,7 +70,7 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
     public void recordUndoFailed(GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit) {
         requireOutcome(undoAudit, RemediationOutcome.Status.UNDO_FAILED);
         GuardianActiveProtectionV1 protection = protectionFor(protectedAudit);
-        changes.add(changeFor(protection, GuardianMeaningfulChangeType.UNDO_FAILED,
+        retainSummary(changeFor(protection, GuardianMeaningfulChangeType.UNDO_FAILED,
             undoAudit.recordedAt(), "Guardian could not undo the temporary protection.",
             null, protection.detailDestination()));
     }
@@ -136,6 +141,14 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
             compatibilityImpact, destination);
     }
 
+    private void retainSummary(GuardianMeaningfulChangeV1 summary) {
+        changes.add(summary);
+        if (changes.size() > MAX_RETAINED_SUMMARY_ENTRIES) {
+            changes.sort(Comparator.comparing(GuardianMeaningfulChangeV1::occurredAt));
+            changes.removeFirst();
+        }
+    }
+
     private static void requireOutcome(GuardianAuditEntry audit, RemediationOutcome.Status expected) {
         Objects.requireNonNull(audit, "audit");
         if (audit.outcome() != expected) {
@@ -178,8 +191,8 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
         return "guardian://protections/" + protectionId;
     }
 
-    private static String attentionDestination() {
-        return "guardian://overview/attention/" + UUID.randomUUID();
+    private static String attentionDestination(String incidentId) {
+        return "guardian://incidents/" + incidentId + "/protection-diagnosis";
     }
 
     private record ActionDescription(String effect, String compatibilityImpact) {
