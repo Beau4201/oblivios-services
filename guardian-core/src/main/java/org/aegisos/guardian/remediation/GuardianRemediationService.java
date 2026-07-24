@@ -132,11 +132,7 @@ public final class GuardianRemediationService {
             : RemediationOutcome.Status.UNDO_FAILED;
         GuardianAuditEntry undoEntry = record(
             entry.incident(), entry.actionId(), entry.before(), undo, null, null, false, outcome);
-        if (undo.completed()) {
-            overviewStore.recordUndoCompleted(undoEntry, entry);
-        } else {
-            overviewStore.recordUndoFailed(undoEntry, entry);
-        }
+        recordUndoOverviewTransition(undoEntry, entry, undo.completed());
         return new RemediationOutcome(
             outcome,
             undoEntry.auditId(),
@@ -164,6 +160,19 @@ public final class GuardianRemediationService {
             rollback,
             verifiedSuccess,
             outcome));
+    }
+
+    private void recordUndoOverviewTransition(
+        GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit, boolean completed) {
+        try {
+            if (completed) {
+                overviewStore.recordUndoCompleted(undoAudit, protectedAudit);
+            } else {
+                overviewStore.recordUndoFailed(undoAudit, protectedAudit);
+            }
+        } catch (IllegalStateException ignored) {
+            // A fresh local Overview projection has no verified-protection source to mutate.
+        }
     }
 
     private RemediationOutcome deny(

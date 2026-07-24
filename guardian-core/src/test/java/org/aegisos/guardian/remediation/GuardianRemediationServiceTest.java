@@ -160,6 +160,29 @@ class GuardianRemediationServiceTest {
     }
 
     @Test
+    void undoWithFreshOverviewProjectionReturnsTheAuditedOutcome() {
+        FakeGateway gateway = new FakeGateway(BEFORE);
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        InMemoryGuardianIncidentStore incidentStore = new InMemoryGuardianIncidentStore();
+        incidentStore.record(new StoredGuardianIncident(INCIDENT, PACKAGE_NAME));
+        GuardianRemediationService beforeRestart = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new InMemoryGuardianOverviewStore());
+        RemediationOutcome approved = beforeRestart.approve(INCIDENT.incidentId(),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
+        InMemoryGuardianOverviewStore freshOverviewStore = new InMemoryGuardianOverviewStore();
+        GuardianRemediationService afterRestart = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, freshOverviewStore);
+
+        RemediationOutcome undo = afterRestart.undo(approved.auditId());
+
+        assertEquals(RemediationOutcome.Status.UNDONE, undo.status());
+        assertEquals(RemediationOutcome.Status.UNDONE,
+            auditStore.find(undo.auditId()).orElseThrow().outcome());
+        assertTrue(freshOverviewStore.snapshot().activeProtections().isEmpty());
+        assertTrue(freshOverviewStore.snapshot().changes().isEmpty());
+    }
+
+    @Test
     void registeredActionMustMatchTheIncidentRecommendationAndIsAudited() {
         FakeGateway gateway = new FakeGateway(BEFORE);
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();

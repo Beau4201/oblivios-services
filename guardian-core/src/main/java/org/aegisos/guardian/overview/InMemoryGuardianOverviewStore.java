@@ -115,7 +115,7 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
         Objects.requireNonNull(protectedAudit, "protectedAudit");
         GuardianActiveProtectionV1 protection = protectionsByAuditId.remove(protectedAudit.auditId());
         if (protection == null) {
-            throw new IllegalArgumentException("Protected audit has no verified active protection.");
+            throw new IllegalStateException("Protected audit has no verified active protection.");
         }
         return protection;
     }
@@ -124,7 +124,7 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
         Objects.requireNonNull(protectedAudit, "protectedAudit");
         GuardianActiveProtectionV1 protection = protectionsByAuditId.get(protectedAudit.auditId());
         if (protection == null) {
-            throw new IllegalArgumentException("Protected audit has no verified active protection.");
+            throw new IllegalStateException("Protected audit has no verified active protection.");
         }
         return protection;
     }
