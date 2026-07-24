@@ -5,6 +5,7 @@ import java.util.Objects;
 import org.aegisos.guardian.contracts.GuardianEventV1;
 import org.aegisos.guardian.detection.GuardianDetectionResult;
 import org.aegisos.guardian.detection.GuardianDetectionService;
+import org.aegisos.guardian.overview.GuardianOverviewStore;
 import org.aegisos.guardian.remediation.GuardianRemediationService;
 import org.aegisos.guardian.validation.GuardianEventParser;
 import org.aegisos.guardian.validation.GuardianValidationException;
@@ -13,14 +14,17 @@ public final class GuardianApplicationService {
     private final GuardianEventParser parser;
     private final GuardianDetectionService detector;
     private final GuardianRemediationService remediation;
+    private final GuardianOverviewStore overviewStore;
 
     public GuardianApplicationService(
         GuardianEventParser parser,
         GuardianDetectionService detector,
-        GuardianRemediationService remediation) {
+        GuardianRemediationService remediation,
+        GuardianOverviewStore overviewStore) {
         this.parser = Objects.requireNonNull(parser, "parser");
         this.detector = Objects.requireNonNull(detector, "detector");
         this.remediation = Objects.requireNonNull(remediation, "remediation");
+        this.overviewStore = Objects.requireNonNull(overviewStore, "overviewStore");
     }
 
     public GuardianApplicationResult ingest(Map<String, Object> raw) {
@@ -50,5 +54,9 @@ public final class GuardianApplicationService {
         var outcome = remediation.undo(auditId);
         return new GuardianApplicationResult.UndoCompleted(
             outcome.status(), outcome.auditId(), outcome.detail());
+    }
+
+    public GuardianApplicationResult overview() {
+        return new GuardianApplicationResult.Overview(overviewStore.snapshot());
     }
 }

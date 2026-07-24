@@ -7,6 +7,7 @@ import org.aegisos.guardian.application.GuardianApplicationService;
 import org.aegisos.guardian.audit.InMemoryGuardianAuditStore;
 import org.aegisos.guardian.detection.GuardianDetectionService;
 import org.aegisos.guardian.detection.InMemoryGuardianDetectionCommitStore;
+import org.aegisos.guardian.overview.InMemoryGuardianOverviewStore;
 import org.aegisos.guardian.remediation.GuardianRemediationService;
 import org.aegisos.guardian.remediation.RemediationCatalog;
 import org.aegisos.guardian.validation.GuardianEventParser;
@@ -38,13 +39,15 @@ public final class GuardianReferenceScenario {
 
     private static GuardianApplicationService createService() {
         InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
+        InMemoryGuardianOverviewStore overviewStore = new InMemoryGuardianOverviewStore();
         GuardianRemediationService remediation = new GuardianRemediationService(
             new RemediationCatalog(),
             new SimulatedGuardianPlatformGateway(),
             new InMemoryGuardianAuditStore(),
-            incidentStore);
+            incidentStore,
+            overviewStore);
         return new GuardianApplicationService(
-            new GuardianEventParser(), new GuardianDetectionService(incidentStore), remediation);
+            new GuardianEventParser(), new GuardianDetectionService(incidentStore), remediation, overviewStore);
     }
 
     private static Map<String, Object> backgroundLocationRawEvent() {

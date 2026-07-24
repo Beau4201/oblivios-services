@@ -3,6 +3,7 @@ package org.aegisos.guardian.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -17,6 +18,7 @@ import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
 import org.aegisos.guardian.platform.PlatformSnapshot;
 import org.aegisos.guardian.platform.VerificationResult;
+import org.aegisos.guardian.overview.InMemoryGuardianOverviewStore;
 import org.aegisos.guardian.remediation.GuardianRemediationService;
 import org.aegisos.guardian.remediation.RemediationActionId;
 import org.aegisos.guardian.remediation.RemediationCatalog;
@@ -147,6 +149,70 @@ class GuardianApplicationServiceTest {
         assertFalse(undone.toString().contains("org.example.app"));
     }
 
+    @Test
+    void overviewShowsOnlyVerifiedProtectionAfterAuditedApproval() {
+        GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
+            GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
+
+        service.approve(detected.incident().incidentId(), detected.incident().recommendedActionId());
+
+        GuardianApplicationResult.Overview overview = assertInstanceOf(
+            GuardianApplicationResult.Overview.class, service.overview());
+        assertEquals(1, overview.snapshot().activeProtections().size());
+        assertEquals(1, overview.snapshot().changes().size());
+        assertEquals("PROTECTION_VERIFIED", overview.snapshot().changes().getFirst().changeType().name());
+        assertTrue(overview.snapshot().protectionAttention().isEmpty());
+        assertFalse(overview.toString().contains("org.example.app"));
+        assertFalse(overview.toString().contains("PlatformSnapshot"));
+    }
+
+    @Test
+    void overviewRemovesVerifiedProtectionAfterAuditedUndo() {
+        GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
+            GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
+        GuardianApplicationResult.RemediationCompleted approved = assertInstanceOf(
+            GuardianApplicationResult.RemediationCompleted.class,
+            service.approve(detected.incident().incidentId(), detected.incident().recommendedActionId()));
+
+        service.undo(approved.auditId());
+
+        GuardianApplicationResult.Overview overview = assertInstanceOf(
+            GuardianApplicationResult.Overview.class, service.overview());
+        assertTrue(overview.snapshot().activeProtections().isEmpty());
+        assertEquals("UNDO_COMPLETED", overview.snapshot().changes().getFirst().changeType().name());
+    }
+
+    @Test
+    void overviewDoesNotRetainVerifiedProtectionWhenVerificationFails() {
+        gateway.verification = new VerificationResult(false, "verification failed");
+        GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
+            GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
+
+        service.approve(detected.incident().incidentId(), detected.incident().recommendedActionId());
+
+        GuardianApplicationResult.Overview overview = assertInstanceOf(
+            GuardianApplicationResult.Overview.class, service.overview());
+        assertTrue(overview.snapshot().activeProtections().isEmpty());
+        assertEquals("VERIFICATION_FAILED", overview.snapshot().protectionAttention().getFirst().changeType().name());
+    }
+
+    @Test
+    void overviewRetainsProtectionAndShowsAttentionWhenUndoFails() {
+        GuardianApplicationResult.DetectedIncident detected = assertInstanceOf(
+            GuardianApplicationResult.DetectedIncident.class, service.ingest(backgroundLocationRawEvent()));
+        GuardianApplicationResult.RemediationCompleted approved = assertInstanceOf(
+            GuardianApplicationResult.RemediationCompleted.class,
+            service.approve(detected.incident().incidentId(), detected.incident().recommendedActionId()));
+        gateway.undoExecution = new GatewayExecution(false, "undo failed");
+
+        service.undo(approved.auditId());
+
+        GuardianApplicationResult.Overview overview = assertInstanceOf(
+            GuardianApplicationResult.Overview.class, service.overview());
+        assertEquals(1, overview.snapshot().activeProtections().size());
+        assertEquals("UNDO_FAILED", overview.snapshot().protectionAttention().getFirst().changeType().name());
+    }
+
     private static List<String> recordComponentNames(Object value) {
         return Arrays.stream(value.getClass().getRecordComponents())
             .map(component -> component.getName())
@@ -155,9 +221,10 @@ class GuardianApplicationServiceTest {
 
     private GuardianApplicationService applicationService(
         GuardianDetectionService detector, org.aegisos.guardian.remediation.GuardianIncidentStore incidentStore) {
+        InMemoryGuardianOverviewStore overviewStore = new InMemoryGuardianOverviewStore();
         GuardianRemediationService remediation = new GuardianRemediationService(
-            new RemediationCatalog(), gateway, new InMemoryGuardianAuditStore(), incidentStore);
-        return new GuardianApplicationService(new GuardianEventParser(), detector, remediation);
+            new RemediationCatalog(), gateway, new InMemoryGuardianAuditStore(), incidentStore, overviewStore);
+        return new GuardianApplicationService(new GuardianEventParser(), detector, remediation, overviewStore);
     }
 
     private static Map<String, Object> backgroundLocationRawEvent() {
@@ -185,6 +252,8 @@ class GuardianApplicationServiceTest {
 
     private static final class RecordingGateway implements GuardianPlatformGateway {
         private int calls;
+        private VerificationResult verification = new VerificationResult(true, "verified");
+        private GatewayExecution undoExecution = new GatewayExecution(true, "undone");
 
         @Override
         public PlatformSnapshot snapshot(String packageName) {
@@ -201,7 +270,7 @@ class GuardianApplicationServiceTest {
         @Override
         public VerificationResult verify(RemediationActionId actionId, String packageName) {
             calls++;
-            return new VerificationResult(true, "verified");
+            return verification;
         }
 
         @Override
@@ -214,7 +283,7 @@ class GuardianApplicationServiceTest {
         @Override
         public GatewayExecution undo(RemediationActionId actionId, String packageName, PlatformSnapshot previous) {
             calls++;
-            return new GatewayExecution(true, "undone");
+            return undoExecution;
         }
 
         private int calls() {

@@ -22,6 +22,7 @@ import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
 import org.aegisos.guardian.platform.PlatformSnapshot;
 import org.aegisos.guardian.platform.VerificationResult;
+import org.aegisos.guardian.overview.InMemoryGuardianOverviewStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -185,7 +186,7 @@ class GuardianRemediationServiceTest {
         FakeGateway gateway = new FakeGateway(BEFORE);
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
         GuardianRemediationService service = new GuardianRemediationService(
-            new RemediationCatalog(), gateway, auditStore, incidentStore);
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new InMemoryGuardianOverviewStore());
 
         RemediationOutcome outcome = service.approve(
             detected.incident().incidentId(), differentAction.name());
@@ -201,7 +202,8 @@ class GuardianRemediationServiceTest {
         FakeGateway gateway = new FakeGateway(BEFORE);
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
         GuardianRemediationService service = new GuardianRemediationService(
-            new RemediationCatalog(), gateway, auditStore, new InMemoryGuardianIncidentStore());
+            new RemediationCatalog(), gateway, auditStore, new InMemoryGuardianIncidentStore(),
+            new InMemoryGuardianOverviewStore());
 
         RemediationOutcome outcome = service.approve("unknown-incident",
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
@@ -268,7 +270,8 @@ class GuardianRemediationServiceTest {
         FakeGateway gateway, InMemoryGuardianAuditStore auditStore, GuardianIncidentV1 incident) {
         InMemoryGuardianIncidentStore incidentStore = new InMemoryGuardianIncidentStore();
         incidentStore.record(new StoredGuardianIncident(incident, PACKAGE_NAME));
-        return new GuardianRemediationService(new RemediationCatalog(), gateway, auditStore, incidentStore);
+        return new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new InMemoryGuardianOverviewStore());
     }
 
     private static Stream<Arguments> detectedIncidentActions() {
