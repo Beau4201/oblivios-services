@@ -201,7 +201,7 @@ class GuardianRemediationServiceTest {
         FakeGateway gateway = new FakeGateway(BEFORE);
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
         GuardianRemediationService service = new GuardianRemediationService(
-            new RemediationCatalog(), gateway, auditStore, new InMemoryGuardianIncidentStore());
+            new RemediationCatalog(), gateway, auditStore, new InMemoryGuardianDetectionCommitStore());
 
         RemediationOutcome outcome = service.approve("unknown-incident",
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
@@ -266,7 +266,7 @@ class GuardianRemediationServiceTest {
 
     private GuardianRemediationService service(
         FakeGateway gateway, InMemoryGuardianAuditStore auditStore, GuardianIncidentV1 incident) {
-        InMemoryGuardianIncidentStore incidentStore = new InMemoryGuardianIncidentStore();
+        InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
         incidentStore.record(new StoredGuardianIncident(incident, PACKAGE_NAME));
         return new GuardianRemediationService(new RemediationCatalog(), gateway, auditStore, incidentStore);
     }

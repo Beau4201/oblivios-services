@@ -9,7 +9,6 @@ import java.util.Arrays;
 import java.util.List;
 import org.aegisos.guardian.audit.GuardianDetectionAuditEntry;
 import org.aegisos.guardian.remediation.GuardianIncidentStore;
-import org.aegisos.guardian.remediation.InMemoryGuardianIncidentStore;
 import org.aegisos.guardian.remediation.StoredGuardianIncident;
 import org.aegisos.guardian.contracts.GuardianIncidentV1;
 import org.junit.jupiter.api.Test;
@@ -17,7 +16,7 @@ import org.junit.jupiter.api.Test;
 class GuardianDetectionStoreTest {
     @Test
     void removeDeletesOnlyTheRecordedIncident() {
-        GuardianIncidentStore store = new InMemoryGuardianIncidentStore();
+        GuardianIncidentStore store = new InMemoryGuardianDetectionCommitStore();
         store.record(stored("incident-a", "org.example.a"));
         store.record(stored("incident-b", "org.example.b"));
 
