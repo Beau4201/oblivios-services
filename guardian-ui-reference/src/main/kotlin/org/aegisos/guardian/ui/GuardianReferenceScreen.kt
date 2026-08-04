@@ -2,22 +2,17 @@ package org.aegisos.guardian.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Button
-import androidx.compose.material.ButtonDefaults
-import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Icon
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -27,9 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,196 +32,226 @@ const val simulationNotice = "Local reference simulation — not Android enforce
 const val protectLabel = "Protect app"
 const val undoLabel = "Undo"
 const val backToOverviewLabel = "← Back to overview"
+const val storyWhyLabel = "Why does this happen?"
 
+/** Drives GuardianUiController's Detected/Verified/Undone/Failure lifecycle through the
+ * exact "story" visual template (stage 03, "A bad day told honestly") from
+ * guardian-quiet-authority.html, adapted per state. */
 @Composable
 fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit = {}) {
     var state by remember(controller) { mutableStateOf(controller.start()) }
 
-    MaterialTheme {
-        Surface(color = graphite, modifier = Modifier.fillMaxSize()) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().padding(48.dp)) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
-                    modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(),
-                ) {
-                    BackToOverview(onDone)
-                    GuardianHeader()
-                    SimulationNotice()
-                    IncidentCard(
-                        state = state,
-                        onProtect = { state = controller.protect() },
-                        onUndo = { state = controller.undo() },
+    when (val current = state) {
+        is GuardianUiState.Detected -> StoryScreen(
+            onBack = onDone,
+            label = "Guardian noticed something",
+            dotColor = GuardianPalette.verified,
+            appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
+            appIconBg = GuardianPalette.verifiedSoft,
+            appIconTint = GuardianPalette.verified,
+            appLabel = "This app",
+            items = listOf(
+                "What it's doing" to "It's using your location in the background.",
+                "What Guardian wants to do" to "Turn that off, so it can't happen without you knowing.",
+            ),
+            secondaryAction = "Not now" to onDone,
+            primaryAction = protectLabel to { state = controller.protect() },
+        )
+        is GuardianUiState.Verified -> StoryScreen(
+            onBack = onDone,
+            label = "Protected",
+            dotColor = GuardianPalette.verified,
+            appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
+            appIconBg = GuardianPalette.verifiedSoft,
+            appIconTint = GuardianPalette.verified,
+            appLabel = "This app",
+            items = listOf("What changed" to "Background location access is now turned off for this app."),
+            safeLine = "Protected, and double-checked it worked.",
+            secondaryAction = undoLabel to { state = controller.undo() },
+        )
+        is GuardianUiState.Undone -> StoryScreen(
+            onBack = onDone,
+            label = "Undone",
+            dotColor = GuardianPalette.muted,
+            appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.muted),
+            appIconBg = GuardianPalette.border,
+            appIconTint = GuardianPalette.muted,
+            appLabel = "This app",
+            items = listOf("What changed" to "Guardian undid the protection. The app works like it did before."),
+        )
+        is GuardianUiState.Failure -> StoryScreen(
+            onBack = onDone,
+            label = "Needs a look",
+            dotColor = GuardianPalette.attn,
+            appIcon = rememberGuardianAlertTriangleIcon(GuardianPalette.attn),
+            appIconBg = GuardianPalette.attnSoft,
+            appIconTint = GuardianPalette.attn,
+            appLabel = "This app",
+            items = listOf("What actually happened" to current.detail),
+            safeLine = "Nothing about this app was changed. This is safe.",
+            disclosure = "Guardian always double-checks its own work. If it can't be sure a fix worked, " +
+                "it undoes it instead of guessing, so your phone is never left half-changed.",
+            secondaryAction = "Dismiss" to onDone,
+            primaryAction = "Try again" to { state = controller.protect() },
+            primaryUsesAttnColor = true,
+        )
+    }
+}
+
+@Composable
+private fun StoryScreen(
+    onBack: () -> Unit,
+    label: String,
+    dotColor: Color,
+    appIcon: ImageVector,
+    appIconBg: Color,
+    appIconTint: Color,
+    appLabel: String,
+    items: List<Pair<String, String>>,
+    safeLine: String? = null,
+    disclosure: String? = null,
+    secondaryAction: Pair<String, () -> Unit>? = null,
+    primaryAction: Pair<String, () -> Unit>? = null,
+    primaryUsesAttnColor: Boolean = false,
+) {
+    GuardianPhoneFrame(screenBg = GuardianPalette.bg) {
+        GuardianStatusRow(ink = GuardianPalette.ink)
+        Text(
+            backToOverviewLabel,
+            color = GuardianPalette.muted,
+            fontSize = 12.sp,
+            modifier = Modifier.clickable(onClick = onBack).padding(top = 12.dp, start = 20.dp, end = 20.dp),
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
+        ) {
+            Box(modifier = Modifier.size(8.dp).background(dotColor, RoundedCornerShape(50)))
+            Text(
+                label.uppercase(),
+                color = dotColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.6.sp,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 20.dp, end = 20.dp, bottom = 8.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(44.dp).background(appIconBg, RoundedCornerShape(13.dp)),
+            ) {
+                Icon(imageVector = appIcon, contentDescription = null, tint = appIconTint, modifier = Modifier.size(20.dp))
+            }
+            Text(appLabel, color = GuardianPalette.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+        Surface(
+            color = GuardianPalette.card,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, GuardianPalette.border),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                items.forEachIndexed { index, (dt, dd) ->
+                    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                        Text(
+                            dt.uppercase(),
+                            color = GuardianPalette.muted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.4.sp,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        Text(dd, color = GuardianPalette.ink, fontSize = 13.sp, lineHeight = 19.sp)
+                    }
+                    if (index < items.lastIndex) {
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(GuardianPalette.border))
+                    }
+                }
+            }
+        }
+        if (safeLine != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 20.dp, end = 20.dp),
+            ) {
+                Icon(
+                    imageVector = rememberGuardianCheckIcon(GuardianPalette.verified),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                )
+                Text(safeLine, color = GuardianPalette.verified, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        if (disclosure != null) {
+            var expanded by remember { mutableStateOf(false) }
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 20.dp, end = 20.dp)) {
+                Text(
+                    (if (expanded) "– " else "+ ") + storyWhyLabel,
+                    color = GuardianPalette.ink,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { expanded = !expanded },
+                )
+                if (expanded) {
+                    Text(
+                        disclosure,
+                        color = GuardianPalette.muted,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun BackToOverview(onDone: () -> Unit) {
-    Text(
-        backToOverviewLabel,
-        color = mutedText,
-        fontSize = 14.sp,
-        modifier = Modifier.clickable(onClick = onDone),
-    )
-}
-
-@Composable
-private fun GuardianHeader() {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Guardian", color = highContrastText, fontSize = 34.sp, fontWeight = FontWeight.SemiBold)
-        Text(
-            "A focused review of one safety action.",
-            color = mutedText,
-            fontSize = 16.sp,
-        )
-    }
-}
-
-@Composable
-private fun SimulationNotice() {
-    Surface(
-        color = elevatedGraphite,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, panelBorder),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(
-            simulationNotice,
-            color = highContrastText,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
-        )
-    }
-}
-
-@Composable
-private fun IncidentCard(
-    state: GuardianUiState,
-    onProtect: () -> Unit,
-    onUndo: () -> Unit,
-) {
-    Surface(
-        color = elevatedGraphite,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, panelBorder),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.padding(28.dp),
-        ) {
-            when (state) {
-                is GuardianUiState.Detected -> DetectedContent(state, onProtect)
-                is GuardianUiState.Verified -> VerifiedContent(state, onUndo)
-                is GuardianUiState.Undone -> UndoneContent(state)
-                is GuardianUiState.Failure -> FailureContent(state)
+        if (secondaryAction != null || primaryAction != null) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp),
+            ) {
+                if (secondaryAction != null) {
+                    ActionButton(
+                        label = secondaryAction.first,
+                        onClick = secondaryAction.second,
+                        background = GuardianPalette.border,
+                        contentColor = GuardianPalette.ink,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (primaryAction != null) {
+                    ActionButton(
+                        label = primaryAction.first,
+                        onClick = primaryAction.second,
+                        background = if (primaryUsesAttnColor) GuardianPalette.attn else GuardianPalette.verified,
+                        contentColor = if (primaryUsesAttnColor) GuardianPalette.attnPrimaryOn else Color.White,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun DetectedContent(state: GuardianUiState.Detected, onProtect: () -> Unit) {
-    SeverityChip(state.severity)
-    Text(state.title, color = highContrastText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-    Text(
-        "Background location activity needs your review. Guardian can protect this app in the local reference simulation.",
-        color = mutedText,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-    )
-    DetailRow("Action", "Protect this app")
-    DetailRow("Impact", "Background location access stops until you undo this change.")
-    CompactReference("Action reference", state.actionId)
-    PrimaryAction(label = protectLabel, onClick = onProtect)
-}
-
-@Composable
-private fun VerifiedContent(state: GuardianUiState.Verified, onUndo: () -> Unit) {
-    SeverityChip("VERIFIED")
-    Text("Protection verified", color = highContrastText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-    Text(
-        "The requested protection was verified in the local reference simulation. You can reverse it now.",
-        color = mutedText,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-    )
-    DetailRow("Action", state.detail)
-    DetailRow("Impact", "Background location access remains stopped until you undo this change.")
-    CompactReference("Audit reference", state.auditId)
-    PrimaryAction(label = undoLabel, onClick = onUndo)
-}
-
-@Composable
-private fun UndoneContent(state: GuardianUiState.Undone) {
-    SeverityChip("UNDONE")
-    Text("Protection undone", color = highContrastText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-    Text(
-        "The local reference simulation recorded the undo. No further action is available in this view.",
-        color = mutedText,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-    )
-    CompactReference("Audit reference", state.auditId)
-}
-
-@Composable
-private fun FailureContent(state: GuardianUiState.Failure) {
-    SeverityChip("NO CHANGE")
-    Text("Action could not be verified", color = highContrastText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-    Text(state.detail, color = mutedText, fontSize = 16.sp, lineHeight = 24.sp)
-}
-
-@Composable
-private fun SeverityChip(label: String) {
-    Surface(color = accent.copy(alpha = 0.16f), shape = RoundedCornerShape(50)) {
         Text(
-            label,
-            color = accent,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            simulationNotice,
+            color = GuardianPalette.muted,
+            fontSize = 10.sp,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp),
         )
     }
 }
 
 @Composable
-private fun DetailRow(label: String, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.fillMaxWidth()) {
-        Text(label, color = mutedText, fontSize = 14.sp, modifier = Modifier.widthIn(min = 72.dp))
-        Text(value, color = highContrastText, fontSize = 14.sp, modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun CompactReference(label: String, identifier: String) {
-    Text(
-        "$label · ${identifier.takeLast(8)}",
-        color = mutedText,
-        fontSize = 12.sp,
-    )
-}
-
-@Composable
-private fun PrimaryAction(label: String, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(backgroundColor = accent, contentColor = Color(0xFF06251F)),
-        shape = RoundedCornerShape(10.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .onFocusChanged { focused = it.isFocused }
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (focused) highContrastText else accent)
-            .border(if (focused) 2.dp else 0.dp, highContrastText, RoundedCornerShape(10.dp))
-            .focusable(),
+private fun ActionButton(label: String, onClick: () -> Unit, background: Color, contentColor: Color, modifier: Modifier = Modifier) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .background(background, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 11.dp),
     ) {
-        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }

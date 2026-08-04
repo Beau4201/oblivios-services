@@ -1,17 +1,30 @@
 package org.aegisos.guardian.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import org.aegisos.guardian.reference.GuardianReferenceScenario
 
+private val deskBackground = Color(0xFFF3F1EC)
+
 fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
-        state = rememberWindowState(width = 1120.dp, height = 760.dp),
+        state = rememberWindowState(width = 340.dp, height = 680.dp),
         title = "Guardian reference",
     ) {
-        GuardianApp(GuardianUiController(GuardianReferenceScenario.create()))
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize().background(deskBackground),
+        ) {
+            GuardianApp(GuardianUiController(GuardianReferenceScenario.create()))
+        }
     }
 }

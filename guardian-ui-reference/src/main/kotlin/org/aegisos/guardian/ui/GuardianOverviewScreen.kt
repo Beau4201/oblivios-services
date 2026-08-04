@@ -2,178 +2,289 @@ package org.aegisos.guardian.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Button
-import androidx.compose.material.ButtonDefaults
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-const val overviewAllClearHeadline = "Nothing needs your attention"
-const val overviewNeedsALookTitle = "Needs a look"
-const val overviewGuardingNowTitle = "Guarding now"
-const val overviewRecentChangesTitle = "Recent changes"
-const val overviewCheckNowLabel = "Check now"
+const val overviewAllClearHeadline = "Everything looks good"
+const val overviewCardTitle = "Guarding now"
+const val overviewSeeAllPrefix = "See all "
 const val overviewNoProtectionsCopy = "No active protections yet."
-const val overviewNoChangesCopy = "No changes recorded yet."
-const val overviewUndoAvailableCopy = "Undo available"
+const val overviewFooterNudgeCopy = "New here? See what Guardian can and can't see"
+const val guardingNowFullTitle = "Guarding now"
+const val protectedChipLabel = "Protected"
+const val changeMyMindLabel = "Change my mind"
+
+/** Stage 01 "Home" from guardian-quiet-authority.html, wired to a real GuardianOverviewUiModel. */
+@Composable
+fun GuardianHomeScreen(model: GuardianOverviewUiModel, onCheckNow: () -> Unit, onSeeAllGuarding: () -> Unit) {
+    val attentionCount = model.needsALook.size
+    val stateColor = if (attentionCount > 0) GuardianPalette.attn else GuardianPalette.verified
+    val stateSoft = if (attentionCount > 0) GuardianPalette.attnSoft else GuardianPalette.verifiedSoft
+
+    GuardianPhoneFrame(screenBg = GuardianPalette.bg) {
+        GuardianStatusRow(ink = GuardianPalette.ink)
+        HomeAppBar()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
+        ) {
+            HeroBadge(ringColor = stateColor, softColor = stateSoft, glyphPlate = stateColor)
+            Text(
+                if (attentionCount > 0) "$attentionCount item${if (attentionCount == 1) "" else "s"} need a look" else overviewAllClearHeadline,
+                color = GuardianPalette.ink,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Text(
+                if (attentionCount > 0) {
+                    "Guardian noticed something and wants you to take a look."
+                } else {
+                    "Guardian is watching ${model.guardingNow.size} app${if (model.guardingNow.size == 1) "" else "s"}. Nothing needs your attention."
+                },
+                color = GuardianPalette.muted,
+                fontSize = 13.5.sp,
+                lineHeight = 19.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 230.dp).padding(bottom = 16.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 16.dp)) {
+                StatPill("${model.guardingNow.size} active protection${if (model.guardingNow.size == 1) "" else "s"}")
+                StatPill("${model.recentChanges.size} recent change${if (model.recentChanges.size == 1) "" else "s"}")
+            }
+        }
+        GuardingNowCard(model = model, onSeeAll = onSeeAllGuarding)
+        Spacer(modifier = Modifier.weight(1f))
+        FooterNudge(onClick = onCheckNow)
+    }
+}
 
 @Composable
-fun GuardianOverviewScreen(model: GuardianOverviewUiModel, onCheckNow: () -> Unit) {
-    MaterialTheme {
-        Surface(color = graphite, modifier = Modifier.fillMaxSize()) {
-            Box(contentAlignment = Alignment.TopCenter, modifier = Modifier.fillMaxSize().padding(48.dp)) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                    modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(),
-                ) {
-                    OverviewHeader(attentionCount = model.needsALook.size, onCheckNow = onCheckNow)
+private fun HomeAppBar() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp, start = 20.dp, end = 20.dp, bottom = 2.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                imageVector = rememberGuardianShieldMark(plateColor = GuardianPalette.muted, glyphColor = GuardianPalette.bg),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(width = 16.dp, height = 18.dp),
+            )
+            Text("Guardian", color = GuardianPalette.muted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(30.dp).background(GuardianPalette.border, RoundedCornerShape(9.dp)),
+        ) {
+            Icon(
+                imageVector = rememberGuardianSettingsIcon(GuardianPalette.muted),
+                contentDescription = "Settings",
+                modifier = Modifier.size(15.dp),
+            )
+        }
+    }
+}
 
-                    if (model.needsALook.isNotEmpty()) {
-                        OverviewSection(title = overviewNeedsALookTitle, accentColor = attention) {
-                            model.needsALook.forEachIndexed { index, row ->
-                                if (index > 0) RowDivider()
-                                AttentionRowContent(row)
-                            }
-                        }
-                    }
+@Composable
+private fun HeroBadge(ringColor: Color, softColor: Color, glyphPlate: Color) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(132.dp).padding(bottom = 16.dp)) {
+        Box(
+            modifier = Modifier.size(132.dp)
+                .border(BorderStroke(1.dp, ringColor.copy(alpha = 0.14f)), CircleShape),
+        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(104.dp)
+                .background(
+                    Brush.radialGradient(0f to softColor, 0.62f to softColor, 0.64f to Color.Transparent),
+                    CircleShape,
+                )
+                .border(BorderStroke(1.dp, ringColor.copy(alpha = 0.30f)), CircleShape),
+        ) {
+            Icon(
+                imageVector = rememberGuardianShieldMark(plateColor = glyphPlate, glyphColor = GuardianPalette.bg),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(width = 42.dp, height = 48.dp),
+            )
+        }
+    }
+}
 
-                    OverviewSection(title = overviewGuardingNowTitle, accentColor = accent) {
-                        if (model.guardingNow.isEmpty()) {
-                            EmptyRow(overviewNoProtectionsCopy)
-                        } else {
-                            model.guardingNow.forEachIndexed { index, row ->
-                                if (index > 0) RowDivider()
-                                GuardingRowContent(row)
-                            }
-                        }
-                    }
+@Composable
+private fun StatPill(text: String) {
+    Surface(color = GuardianPalette.verifiedSoft, shape = RoundedCornerShape(999.dp)) {
+        Text(
+            text,
+            color = GuardianPalette.verified,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
 
-                    OverviewSection(title = overviewRecentChangesTitle, accentColor = mutedText) {
-                        if (model.recentChanges.isEmpty()) {
-                            EmptyRow(overviewNoChangesCopy)
-                        } else {
-                            model.recentChanges.forEachIndexed { index, row ->
-                                if (index > 0) RowDivider()
-                                ChangeRowContent(row)
-                            }
-                        }
-                    }
+@Composable
+private fun GuardingNowCard(model: GuardianOverviewUiModel, onSeeAll: () -> Unit) {
+    Surface(
+        color = GuardianPalette.card,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, GuardianPalette.border),
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            ) {
+                Text(overviewCardTitle, color = GuardianPalette.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                if (model.guardingNow.isNotEmpty()) {
+                    Text(
+                        "$overviewSeeAllPrefix${model.guardingNow.size}",
+                        color = GuardianPalette.verified,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable(onClick = onSeeAll),
+                    )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun OverviewHeader(attentionCount: Int, onCheckNow: () -> Unit) {
-    Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Icon(
-                imageVector = rememberGuardianShieldMark(
-                    plateColor = if (attentionCount > 0) attention else accent,
-                    glyphColor = graphite,
-                ),
-                contentDescription = "AegisOS Guardian",
-                tint = Color.Unspecified,
-                modifier = Modifier.size(30.dp),
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Guardian", color = highContrastText, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (attentionCount > 0) "$attentionCount item needs a look" else overviewAllClearHeadline,
-                    color = if (attentionCount > 0) attention else mutedText,
-                    fontSize = 14.sp,
-                )
+            if (model.guardingNow.isEmpty()) {
+                Text(overviewNoProtectionsCopy, color = GuardianPalette.muted, fontSize = 12.5.sp)
+            } else {
+                model.guardingNow.take(2).forEach { row -> MiniRow(row) }
             }
         }
-        Button(
-            onClick = onCheckNow,
-            colors = ButtonDefaults.buttonColors(backgroundColor = elevatedGraphite, contentColor = highContrastText),
-            border = BorderStroke(1.dp, panelBorder),
-            shape = RoundedCornerShape(10.dp),
-        ) {
-            Text(overviewCheckNowLabel, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        }
     }
 }
 
 @Composable
-private fun OverviewSection(title: String, accentColor: Color, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(title.uppercase(), color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Surface(
-            color = elevatedGraphite,
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, panelBorder),
-            modifier = Modifier.fillMaxWidth(),
+private fun MiniRow(row: GuardianOverviewUiModel.GuardingRow) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 7.dp)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(26.dp).background(GuardianPalette.verifiedSoft, RoundedCornerShape(8.dp)),
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.padding(20.dp),
-                content = content,
+            Icon(
+                imageVector = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun RowDivider() {
-    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(panelBorder))
-}
-
-@Composable
-private fun GuardingRowContent(row: GuardianOverviewUiModel.GuardingRow) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(row.appLabel, color = highContrastText, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        Text(row.effect, color = mutedText, fontSize = 13.sp)
-        if (row.undoAvailable) {
-            Text(overviewUndoAvailableCopy, color = accent, fontSize = 12.sp)
+        Column {
+            Text(row.appLabel, color = GuardianPalette.ink, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+            Text(row.effect, color = GuardianPalette.muted, fontSize = 11.sp)
         }
     }
 }
 
 @Composable
-private fun AttentionRowContent(row: GuardianOverviewUiModel.AttentionRow) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(row.appLabel, color = highContrastText, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        Text(row.headline, color = attention, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text(row.ownerReason, color = mutedText, fontSize = 13.sp)
+private fun FooterNudge(onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
+            .background(GuardianPalette.border, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Icon(
+            imageVector = rememberGuardianAlertTriangleIcon(GuardianPalette.muted),
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(overviewFooterNudgeCopy, color = GuardianPalette.ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Stage 02 "Guarding now, in full" from guardian-quiet-authority.html. */
+@Composable
+fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit) {
+    GuardianPhoneFrame(screenBg = GuardianPalette.bg) {
+        GuardianStatusRow(ink = GuardianPalette.ink)
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp)) {
+            Text(
+                backToOverviewLabel,
+                color = GuardianPalette.muted,
+                fontSize = 12.sp,
+                modifier = Modifier.clickable(onClick = onBack).padding(bottom = 8.dp),
+            )
+            Text(guardingNowFullTitle, color = GuardianPalette.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "${model.guardingNow.size} thing${if (model.guardingNow.size == 1) "" else "s"} Guardian is actively protecting",
+                color = GuardianPalette.muted,
+                fontSize = 12.5.sp,
+            )
+        }
+        Column(modifier = Modifier.padding(horizontal = 12.dp).verticalScroll(rememberScrollState())) {
+            model.guardingNow.forEach { row -> GuardingRow(row) }
+        }
     }
 }
 
 @Composable
-private fun ChangeRowContent(row: GuardianOverviewUiModel.ChangeRow) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        Text(row.appLabel, color = highContrastText, fontSize = 14.sp, modifier = Modifier.widthIn(min = 120.dp))
-        Text(row.headline, color = mutedText, fontSize = 14.sp)
+private fun GuardingRow(row: GuardianOverviewUiModel.GuardingRow) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 13.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(38.dp).background(GuardianPalette.verifiedSoft, RoundedCornerShape(11.dp)),
+        ) {
+            Icon(
+                imageVector = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(row.appLabel, color = GuardianPalette.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(row.effect, color = GuardianPalette.muted, fontSize = 12.5.sp, lineHeight = 17.sp)
+        }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Surface(color = GuardianPalette.verifiedSoft, shape = RoundedCornerShape(999.dp)) {
+                Text(
+                    protectedChipLabel,
+                    color = GuardianPalette.verified,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+                )
+            }
+            if (row.undoAvailable) {
+                Text(changeMyMindLabel, color = GuardianPalette.muted, fontSize = 11.sp)
+            }
+        }
     }
-}
-
-@Composable
-private fun EmptyRow(text: String) {
-    Text(text, color = mutedText, fontSize = 13.sp)
 }
