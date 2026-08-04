@@ -1,10 +1,13 @@
 package org.aegisos.guardian.remediation;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.aegisos.guardian.audit.GuardianAuditEntry;
 import org.aegisos.guardian.audit.InMemoryGuardianAuditStore;
 import org.aegisos.guardian.contracts.GuardianIncidentV1;
+import org.aegisos.guardian.overview.GuardianOverviewStore;
+import org.aegisos.guardian.overview.GuardianOverviewTransitionStatus;
 import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
 import org.aegisos.guardian.platform.PlatformSnapshot;
@@ -15,16 +18,19 @@ public final class GuardianRemediationService {
     private final GuardianPlatformGateway gateway;
     private final InMemoryGuardianAuditStore auditStore;
     private final GuardianIncidentStore incidentStore;
+    private final GuardianOverviewStore overviewStore;
 
     public GuardianRemediationService(
         RemediationCatalog catalog,
         GuardianPlatformGateway gateway,
         InMemoryGuardianAuditStore auditStore,
-        GuardianIncidentStore incidentStore) {
+        GuardianIncidentStore incidentStore,
+        GuardianOverviewStore overviewStore) {
         this.catalog = catalog;
         this.gateway = gateway;
         this.auditStore = auditStore;
         this.incidentStore = incidentStore;
+        this.overviewStore = Objects.requireNonNull(overviewStore, "overviewStore");
     }
 
     public RemediationOutcome approve(String incidentId, String actionId) {
@@ -72,6 +78,7 @@ public final class GuardianRemediationService {
                 ? RemediationOutcome.Status.VERIFICATION_FAILED_ROLLED_BACK
                 : RemediationOutcome.Status.VERIFICATION_FAILED_ROLLBACK_FAILED;
             GuardianAuditEntry entry = record(incident, typedAction, before, execution, verification, rollback, false, outcome);
+            overviewStore.recordVerificationFailure(entry, stored);
             if (!rollback.completed()) {
                 return new RemediationOutcome(
                     RemediationOutcome.Status.VERIFICATION_FAILED_ROLLBACK_FAILED,
@@ -89,6 +96,7 @@ public final class GuardianRemediationService {
         GuardianAuditEntry entry = record(
             incident, typedAction, before, execution, verification, null, true,
             RemediationOutcome.Status.VERIFIED_SUCCESS);
+        overviewStore.recordVerifiedProtection(entry, stored);
         return new RemediationOutcome(
             RemediationOutcome.Status.VERIFIED_SUCCESS,
             entry.auditId(),
@@ -125,6 +133,7 @@ public final class GuardianRemediationService {
             : RemediationOutcome.Status.UNDO_FAILED;
         GuardianAuditEntry undoEntry = record(
             entry.incident(), entry.actionId(), entry.before(), undo, null, null, false, outcome);
+        recordUndoOverviewTransition(undoEntry, entry, undo.completed());
         return new RemediationOutcome(
             outcome,
             undoEntry.auditId(),
@@ -152,6 +161,16 @@ public final class GuardianRemediationService {
             rollback,
             verifiedSuccess,
             outcome));
+    }
+
+    private void recordUndoOverviewTransition(
+        GuardianAuditEntry undoAudit, GuardianAuditEntry protectedAudit, boolean completed) {
+        GuardianOverviewTransitionStatus status = completed
+            ? overviewStore.recordUndoCompleted(undoAudit, protectedAudit)
+            : overviewStore.recordUndoFailed(undoAudit, protectedAudit);
+        if (status == GuardianOverviewTransitionStatus.SOURCE_PROJECTION_MISSING) {
+            return;
+        }
     }
 
     private RemediationOutcome deny(

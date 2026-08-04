@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -22,6 +23,8 @@ import org.aegisos.guardian.platform.GatewayExecution;
 import org.aegisos.guardian.platform.GuardianPlatformGateway;
 import org.aegisos.guardian.platform.PlatformSnapshot;
 import org.aegisos.guardian.platform.VerificationResult;
+import org.aegisos.guardian.overview.InMemoryGuardianOverviewStore;
+import org.aegisos.guardian.overview.GuardianOverviewStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -159,6 +162,68 @@ class GuardianRemediationServiceTest {
     }
 
     @Test
+    void undoWithFreshOverviewProjectionReturnsTheAuditedOutcome() {
+        FakeGateway gateway = new FakeGateway(BEFORE);
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
+        incidentStore.record(new StoredGuardianIncident(INCIDENT, PACKAGE_NAME));
+        GuardianRemediationService beforeRestart = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new InMemoryGuardianOverviewStore());
+        RemediationOutcome approved = beforeRestart.approve(INCIDENT.incidentId(),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
+        InMemoryGuardianOverviewStore freshOverviewStore = new InMemoryGuardianOverviewStore();
+        GuardianRemediationService afterRestart = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, freshOverviewStore);
+
+        RemediationOutcome undo = afterRestart.undo(approved.auditId());
+
+        assertEquals(RemediationOutcome.Status.UNDONE, undo.status());
+        assertEquals(RemediationOutcome.Status.UNDONE,
+            auditStore.find(undo.auditId()).orElseThrow().outcome());
+        assertTrue(freshOverviewStore.snapshot().activeProtections().isEmpty());
+        assertTrue(freshOverviewStore.snapshot().changes().isEmpty());
+    }
+
+    @Test
+    void failedUndoWithFreshOverviewProjectionKeepsAuditedFailureWithoutOverviewState() {
+        FakeGateway gateway = new FakeGateway(BEFORE);
+        gateway.undoExecution = new GatewayExecution(false, "undo refused");
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
+        incidentStore.record(new StoredGuardianIncident(INCIDENT, PACKAGE_NAME));
+        GuardianRemediationService beforeRestart = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new InMemoryGuardianOverviewStore());
+        RemediationOutcome approved = beforeRestart.approve(INCIDENT.incidentId(),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
+        InMemoryGuardianOverviewStore freshOverviewStore = new InMemoryGuardianOverviewStore();
+        GuardianRemediationService afterRestart = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, freshOverviewStore);
+
+        RemediationOutcome undo = afterRestart.undo(approved.auditId());
+
+        assertEquals(RemediationOutcome.Status.UNDO_FAILED, undo.status());
+        assertEquals(RemediationOutcome.Status.UNDO_FAILED,
+            auditStore.find(undo.auditId()).orElseThrow().outcome());
+        assertTrue(freshOverviewStore.snapshot().activeProtections().isEmpty());
+        assertTrue(freshOverviewStore.snapshot().changes().isEmpty());
+        assertTrue(freshOverviewStore.snapshot().protectionAttention().isEmpty());
+    }
+
+    @Test
+    void undoDoesNotSuppressUnexpectedOverviewProjectionFaults() {
+        FakeGateway gateway = new FakeGateway(BEFORE);
+        InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
+        InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
+        incidentStore.record(new StoredGuardianIncident(INCIDENT, PACKAGE_NAME));
+        GuardianRemediationService service = new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new FaultingOverviewStore());
+        RemediationOutcome approved = service.approve(INCIDENT.incidentId(),
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
+
+        assertThrows(IllegalStateException.class, () -> service.undo(approved.auditId()));
+    }
+
+    @Test
     void registeredActionMustMatchTheIncidentRecommendationAndIsAudited() {
         FakeGateway gateway = new FakeGateway(BEFORE);
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
@@ -185,7 +250,7 @@ class GuardianRemediationServiceTest {
         FakeGateway gateway = new FakeGateway(BEFORE);
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
         GuardianRemediationService service = new GuardianRemediationService(
-            new RemediationCatalog(), gateway, auditStore, incidentStore);
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new InMemoryGuardianOverviewStore());
 
         RemediationOutcome outcome = service.approve(
             detected.incident().incidentId(), differentAction.name());
@@ -201,7 +266,8 @@ class GuardianRemediationServiceTest {
         FakeGateway gateway = new FakeGateway(BEFORE);
         InMemoryGuardianAuditStore auditStore = new InMemoryGuardianAuditStore();
         GuardianRemediationService service = new GuardianRemediationService(
-            new RemediationCatalog(), gateway, auditStore, new InMemoryGuardianDetectionCommitStore());
+            new RemediationCatalog(), gateway, auditStore, new InMemoryGuardianDetectionCommitStore(),
+            new InMemoryGuardianOverviewStore());
 
         RemediationOutcome outcome = service.approve("unknown-incident",
             RemediationActionId.REVOKE_BACKGROUND_LOCATION.name());
@@ -268,7 +334,8 @@ class GuardianRemediationServiceTest {
         FakeGateway gateway, InMemoryGuardianAuditStore auditStore, GuardianIncidentV1 incident) {
         InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
         incidentStore.record(new StoredGuardianIncident(incident, PACKAGE_NAME));
-        return new GuardianRemediationService(new RemediationCatalog(), gateway, auditStore, incidentStore);
+        return new GuardianRemediationService(
+            new RemediationCatalog(), gateway, auditStore, incidentStore, new InMemoryGuardianOverviewStore());
     }
 
     private static Stream<Arguments> detectedIncidentActions() {
@@ -336,6 +403,31 @@ class GuardianRemediationServiceTest {
                 currentState = previous;
             }
             return undoExecution;
+        }
+    }
+
+    private static final class FaultingOverviewStore implements GuardianOverviewStore {
+        @Override public void recordVerifiedProtection(
+            org.aegisos.guardian.audit.GuardianAuditEntry audit, StoredGuardianIncident incident) { }
+
+        @Override public void recordVerificationFailure(
+            org.aegisos.guardian.audit.GuardianAuditEntry audit, StoredGuardianIncident incident) { }
+
+        @Override public org.aegisos.guardian.overview.GuardianOverviewTransitionStatus recordUndoCompleted(
+            org.aegisos.guardian.audit.GuardianAuditEntry undoAudit,
+            org.aegisos.guardian.audit.GuardianAuditEntry protectedAudit) {
+            throw new IllegalStateException("unexpected projection fault");
+        }
+
+        @Override public org.aegisos.guardian.overview.GuardianOverviewTransitionStatus recordUndoFailed(
+            org.aegisos.guardian.audit.GuardianAuditEntry undoAudit,
+            org.aegisos.guardian.audit.GuardianAuditEntry protectedAudit) {
+            throw new IllegalStateException("unexpected projection fault");
+        }
+
+        @Override public org.aegisos.guardian.overview.GuardianOverviewSnapshot snapshot() {
+            return new org.aegisos.guardian.overview.GuardianOverviewSnapshot(
+                List.of(), List.of(), List.of());
         }
     }
 }
