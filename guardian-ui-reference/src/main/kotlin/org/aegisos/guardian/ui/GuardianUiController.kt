@@ -1,6 +1,7 @@
 package org.aegisos.guardian.ui
 
 import org.aegisos.guardian.application.GuardianApplicationResult
+import org.aegisos.guardian.overview.GuardianOverviewSnapshot
 import org.aegisos.guardian.reference.GuardianReferenceScenario
 import org.aegisos.guardian.remediation.RemediationOutcome
 
@@ -10,6 +11,8 @@ internal interface GuardianUiScenario {
     fun approve(incidentId: String, actionId: String): GuardianApplicationResult
 
     fun undo(auditId: String): GuardianApplicationResult
+
+    fun overview(): GuardianApplicationResult
 }
 
 class GuardianUiController internal constructor(private val scenario: GuardianUiScenario) {
@@ -20,6 +23,8 @@ class GuardianUiController internal constructor(private val scenario: GuardianUi
             override fun approve(incidentId: String, actionId: String) = scenario.approve(incidentId, actionId)
 
             override fun undo(auditId: String) = scenario.undo(auditId)
+
+            override fun overview() = scenario.overview()
         },
     )
 
@@ -76,6 +81,11 @@ class GuardianUiController internal constructor(private val scenario: GuardianUi
         } catch (_: RuntimeException) {
             undoFailure()
         }
+    }
+
+    fun overview(): GuardianOverviewSnapshot = when (val result = scenario.overview()) {
+        is GuardianApplicationResult.Overview -> result.snapshot()
+        else -> GuardianOverviewSnapshot(emptyList(), emptyList(), emptyList())
     }
 
     private fun failure() = GuardianUiState.Failure("No successful change was applied")

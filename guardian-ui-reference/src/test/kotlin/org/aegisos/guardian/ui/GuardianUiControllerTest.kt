@@ -5,6 +5,7 @@ import org.aegisos.guardian.application.GuardianApplicationResult
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class GuardianUiControllerTest {
@@ -64,12 +65,31 @@ class GuardianUiControllerTest {
         assertSafeFailure(controller.undo(), "Protection remains active; Undo was not completed")
     }
 
+    @Test
+    fun `overview starts empty and reflects a verified protection after approval`() {
+        val controller = GuardianUiController(GuardianReferenceScenario.create())
+
+        val before = controller.overview()
+        assertTrue(before.activeProtections().isEmpty())
+        assertTrue(before.protectionAttention().isEmpty())
+
+        controller.start()
+        controller.protect()
+
+        val after = controller.overview()
+        assertEquals(1, after.activeProtections().size)
+        assertTrue(after.activeProtections().first().toString().let {
+            !it.contains("org.aegisos.reference.target")
+        })
+    }
+
     private fun scenario(
         detect: (GuardianReferenceScenario) -> GuardianApplicationResult = { it.detectBackgroundLocation() },
         approve: (GuardianReferenceScenario, String, String) -> GuardianApplicationResult = { delegate, incidentId, actionId ->
             delegate.approve(incidentId, actionId)
         },
         undo: (GuardianReferenceScenario) -> GuardianApplicationResult = { it.undo("unused") },
+        overview: (GuardianReferenceScenario) -> GuardianApplicationResult = { it.overview() },
     ): GuardianUiScenario {
         val delegate = GuardianReferenceScenario.create()
         return object : GuardianUiScenario {
@@ -78,6 +98,8 @@ class GuardianUiControllerTest {
             override fun approve(incidentId: String, actionId: String) = approve(delegate, incidentId, actionId)
 
             override fun undo(auditId: String) = undo(delegate)
+
+            override fun overview() = overview(delegate)
         }
     }
 

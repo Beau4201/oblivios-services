@@ -37,6 +37,10 @@ public final class GuardianReferenceScenario {
         return service.undo(auditId);
     }
 
+    public GuardianApplicationResult overview() {
+        return service.overview();
+    }
+
     private static GuardianApplicationService createService() {
         InMemoryGuardianDetectionCommitStore incidentStore = new InMemoryGuardianDetectionCommitStore();
         InMemoryGuardianOverviewStore overviewStore = new InMemoryGuardianOverviewStore();

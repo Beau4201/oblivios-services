@@ -3,6 +3,7 @@ package org.aegisos.guardian.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,16 +37,10 @@ import androidx.compose.ui.unit.sp
 const val simulationNotice = "Local reference simulation — not Android enforcement"
 const val protectLabel = "Protect app"
 const val undoLabel = "Undo"
-
-private val graphite = Color(0xFF15171B)
-private val elevatedGraphite = Color(0xFF22262C)
-private val panelBorder = Color(0xFF3A4049)
-private val highContrastText = Color(0xFFF4F6F8)
-private val mutedText = Color(0xFFBAC2CC)
-private val accent = Color(0xFF67D5BD)
+const val backToOverviewLabel = "← Back to overview"
 
 @Composable
-fun GuardianReferenceScreen(controller: GuardianUiController) {
+fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit = {}) {
     var state by remember(controller) { mutableStateOf(controller.start()) }
 
     MaterialTheme {
@@ -55,6 +50,7 @@ fun GuardianReferenceScreen(controller: GuardianUiController) {
                     verticalArrangement = Arrangement.spacedBy(18.dp),
                     modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(),
                 ) {
+                    BackToOverview(onDone)
                     GuardianHeader()
                     SimulationNotice()
                     IncidentCard(
@@ -66,6 +62,16 @@ fun GuardianReferenceScreen(controller: GuardianUiController) {
             }
         }
     }
+}
+
+@Composable
+private fun BackToOverview(onDone: () -> Unit) {
+    Text(
+        backToOverviewLabel,
+        color = mutedText,
+        fontSize = 14.sp,
+        modifier = Modifier.clickable(onClick = onDone),
+    )
 }
 
 @Composable

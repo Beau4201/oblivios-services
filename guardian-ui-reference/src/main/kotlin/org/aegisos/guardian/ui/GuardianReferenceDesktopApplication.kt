@@ -12,6 +12,6 @@ fun main() = application {
         state = rememberWindowState(width = 1120.dp, height = 760.dp),
         title = "Guardian reference",
     ) {
-        GuardianReferenceScreen(GuardianUiController(GuardianReferenceScenario.create()))
+        GuardianApp(GuardianUiController(GuardianReferenceScenario.create()))
     }
 }
