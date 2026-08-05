@@ -26,14 +26,6 @@ private fun ImageVector.Builder.strokePath(pathData: String, color: Color) {
 }
 
 @Composable
-fun rememberGuardianShieldCheckIcon(color: Color): ImageVector = remember(color) {
-    ImageVector.Builder("ShieldCheck", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
-        strokePath("M12 2 4 5v6c0 5 3.4 8.7 8 9 4.6-.3 8-4 8-9V5l-8-3Z", color)
-        strokePath("M9 12l2 2 4-4", color)
-    }.build()
-}
-
-@Composable
 fun rememberGuardianBlockedDataIcon(color: Color): ImageVector = remember(color) {
     ImageVector.Builder("BlockedData", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
         strokePath("M2 8.82a15 15 0 0 1 20 0", color)

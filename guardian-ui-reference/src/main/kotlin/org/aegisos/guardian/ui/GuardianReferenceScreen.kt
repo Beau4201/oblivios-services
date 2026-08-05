@@ -58,8 +58,7 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             label = "Guardian noticed something",
             dotColor = GuardianPalette.verified,
             softColor = GuardianPalette.verifiedSoft,
-            appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
-            appIconTint = GuardianPalette.verified,
+            appIcon = rememberGuardianShieldMark(plateColor = GuardianPalette.verified, glyphColor = GuardianPalette.bg),
             appLabel = "This app",
             items = listOf(
                 "What it's doing" to "It's using your location in the background.",
@@ -72,8 +71,7 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             label = "Protected",
             dotColor = GuardianPalette.verified,
             softColor = GuardianPalette.verifiedSoft,
-            appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
-            appIconTint = GuardianPalette.verified,
+            appIcon = rememberGuardianShieldMark(plateColor = GuardianPalette.verified, glyphColor = GuardianPalette.bg),
             appLabel = "This app",
             items = listOf("What changed" to "Background location access is now turned off for this app."),
             safeLine = "Protected, and double-checked it worked.",
@@ -84,8 +82,7 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             label = "Undone",
             dotColor = GuardianPalette.muted,
             softColor = GuardianPalette.border,
-            appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.muted),
-            appIconTint = GuardianPalette.muted,
+            appIcon = rememberGuardianShieldMark(plateColor = GuardianPalette.muted, glyphColor = GuardianPalette.bg),
             appLabel = "This app",
             items = listOf("What changed" to "Guardian undid the protection. The app works like it did before."),
             primaryAction = backToOverviewLabel to onDone,
@@ -95,7 +92,6 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             dotColor = GuardianPalette.attn,
             softColor = GuardianPalette.attnSoft,
             appIcon = rememberGuardianAlertTriangleIcon(GuardianPalette.attn),
-            appIconTint = GuardianPalette.attn,
             appLabel = "This app",
             items = listOf("What actually happened" to current.detail),
             safeLine = "Nothing about this app was changed. This is safe.",
@@ -114,7 +110,6 @@ private fun StoryScreen(
     dotColor: Color,
     softColor: Color,
     appIcon: ImageVector,
-    appIconTint: Color,
     appLabel: String,
     items: List<Pair<String, String>>,
     safeLine: String? = null,
@@ -132,7 +127,7 @@ private fun StoryScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
         ) {
-            StoryBadge(icon = appIcon, iconTint = appIconTint, softColor = softColor)
+            StoryBadge(icon = appIcon, softColor = softColor)
             Text(
                 appLabel,
                 color = GuardianPalette.ink,
@@ -306,7 +301,7 @@ private fun StatusChip(label: String, dotColor: Color, softColor: Color) {
 }
 
 @Composable
-private fun StoryBadge(icon: ImageVector, iconTint: Color, softColor: Color) {
+private fun StoryBadge(icon: ImageVector, softColor: Color) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -316,6 +311,11 @@ private fun StoryBadge(icon: ImageVector, iconTint: Color, softColor: Color) {
                 CircleShape,
             ),
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(34.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(34.dp),
+        )
     }
 }

@@ -195,12 +195,22 @@ private fun MiniRow(row: GuardianOverviewUiModel.GuardingRow) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 7.dp)) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(26.dp).background(GuardianPalette.verifiedSoft, RoundedCornerShape(8.dp)),
+            modifier = Modifier
+                .size(30.dp)
+                .background(
+                    Brush.radialGradient(
+                        0f to GuardianPalette.verifiedSoft,
+                        0.65f to GuardianPalette.verifiedSoft,
+                        0.7f to Color.Transparent,
+                    ),
+                    CircleShape,
+                ),
         ) {
             Icon(
-                imageVector = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
+                imageVector = rememberGuardianShieldMark(plateColor = GuardianPalette.verified, glyphColor = GuardianPalette.bg),
                 contentDescription = null,
-                modifier = Modifier.size(14.dp),
+                tint = Color.Unspecified,
+                modifier = Modifier.size(width = 14.dp, height = 16.dp),
             )
         }
         Column {
@@ -230,7 +240,8 @@ private fun FooterNudge() {
     }
 }
 
-/** Stage 02 "Guarding now, in full" from guardian-quiet-authority.html. */
+/** Stage 02 "Guarding now, in full" from guardian-quiet-authority.html, redrawn as a
+ * column of elevated per-app cards rather than a flat divided list. */
 @Composable
 fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit) {
     GuardianScreen(background = GuardianPalette.bg) {
@@ -239,53 +250,105 @@ fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit
                 label = backToOverviewLabel,
                 onClick = onBack,
                 color = GuardianPalette.muted,
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = Modifier.padding(bottom = 12.dp),
             )
-            Text(guardingNowFullTitle, color = GuardianPalette.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(guardingNowFullTitle, color = GuardianPalette.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text(
                 "${model.guardingNow.size} thing${if (model.guardingNow.size == 1) "" else "s"} Guardian is actively protecting",
                 color = GuardianPalette.muted,
-                fontSize = 12.5.sp,
+                fontSize = 13.5.sp,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Column(modifier = Modifier.padding(horizontal = 12.dp).verticalScroll(rememberScrollState())) {
-            model.guardingNow.forEach { row -> GuardingRow(row) }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .padding(top = 16.dp, bottom = 20.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            if (model.guardingNow.isEmpty()) {
+                Text(overviewNoProtectionsCopy, color = GuardianPalette.muted, fontSize = 13.sp)
+            } else {
+                model.guardingNow.forEach { row -> GuardingCard(row) }
+            }
         }
     }
 }
 
 @Composable
-private fun GuardingRow(row: GuardianOverviewUiModel.GuardingRow) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 13.dp),
+private fun GuardingCard(row: GuardianOverviewUiModel.GuardingRow) {
+    Surface(
+        color = GuardianPalette.card,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, GuardianPalette.border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(1.dp, RoundedCornerShape(16.dp), clip = false),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(38.dp).background(GuardianPalette.verifiedSoft, RoundedCornerShape(11.dp)),
-        ) {
-            Icon(
-                imageVector = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(row.appLabel, color = GuardianPalette.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(row.effect, color = GuardianPalette.muted, fontSize = 12.5.sp, lineHeight = 17.sp)
-        }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Surface(color = GuardianPalette.verifiedSoft, shape = RoundedCornerShape(999.dp)) {
-                Text(
-                    protectedChipLabel,
-                    color = GuardianPalette.verified,
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
-                )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                            Brush.radialGradient(
+                                0f to GuardianPalette.verifiedSoft,
+                                0.65f to GuardianPalette.verifiedSoft,
+                                0.7f to Color.Transparent,
+                            ),
+                            CircleShape,
+                        ),
+                ) {
+                    Icon(
+                        imageVector = rememberGuardianShieldMark(
+                            plateColor = GuardianPalette.verified,
+                            glyphColor = GuardianPalette.bg,
+                        ),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(width = 19.dp, height = 22.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f).padding(top = 2.dp)) {
+                    Text(row.appLabel, color = GuardianPalette.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        row.effect,
+                        color = GuardianPalette.muted,
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
-            if (row.undoAvailable) {
-                Text(changeMyMindLabel, color = GuardianPalette.muted, fontSize = 11.sp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier
+                        .background(GuardianPalette.verifiedSoft, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                ) {
+                    Icon(
+                        imageVector = rememberGuardianCheckIcon(GuardianPalette.verified),
+                        contentDescription = null,
+                        modifier = Modifier.size(11.dp),
+                    )
+                    Text(
+                        protectedChipLabel,
+                        color = GuardianPalette.verified,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                if (row.undoAvailable) {
+                    Text(changeMyMindLabel, color = GuardianPalette.muted, fontSize = 11.sp)
+                }
             }
         }
     }
