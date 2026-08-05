@@ -72,6 +72,7 @@ fun GuardianApp(controller: GuardianUiController) {
             )
             GuardianRoute.CHOICES -> GuardianChoicesScreen(
                 onBack = { route = GuardianRoute.HOME },
+                onOpenTrust = { route = GuardianRoute.TRUST },
             )
             GuardianRoute.INCIDENT_REVIEW -> GuardianReferenceScreen(
                 controller = controller,

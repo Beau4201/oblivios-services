@@ -1,5 +1,6 @@
 package org.aegisos.guardian.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,9 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
+import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -49,11 +52,14 @@ private val NEVER_SEES = listOf(
 @Composable
 fun GuardianTrustScreen(onBack: () -> Unit) {
     GuardianScreen(background = GuardianPalette.bg) {
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 4.dp)) {
-            GuardianBackButton(label = backToOverviewLabel, onClick = onBack, modifier = Modifier.padding(bottom = 16.dp))
-            Text(trustTitle, color = GuardianPalette.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text(trustSubtitle, color = GuardianPalette.muted, fontSize = 13.5.sp, modifier = Modifier.padding(top = 4.dp))
-        }
+        GuardianDetailHeader(
+            icon = rememberGuardianLockIcon(GuardianPalette.verified),
+            iconColor = GuardianPalette.verified,
+            iconSoftColor = GuardianPalette.verifiedSoft,
+            title = trustTitle,
+            subtitle = trustSubtitle,
+            onBack = onBack,
+        )
         Column(
             verticalArrangement = Arrangement.spacedBy(22.dp),
             modifier = Modifier
@@ -64,13 +70,19 @@ fun GuardianTrustScreen(onBack: () -> Unit) {
             TrustGroup(
                 label = trustCanSeeLabel,
                 labelColor = GuardianPalette.verified,
-                icon = rememberGuardianCheckIcon(GuardianPalette.verified),
+                headerIcon = rememberGuardianCheckIcon(GuardianPalette.verified),
+                itemIcon = rememberGuardianCheckIcon(GuardianPalette.verified),
+                itemIconColor = GuardianPalette.verified,
+                itemPlateColor = GuardianPalette.verifiedSoft,
                 items = CAN_SEE,
             )
             TrustGroup(
                 label = trustNeverSeesLabel,
                 labelColor = GuardianPalette.muted,
-                icon = rememberGuardianEyeOffIcon(GuardianPalette.muted),
+                headerIcon = rememberGuardianEyeOffIcon(GuardianPalette.muted),
+                itemIcon = rememberGuardianBlockedDataIcon(GuardianPalette.muted),
+                itemIconColor = GuardianPalette.muted,
+                itemPlateColor = GuardianPalette.border,
                 items = NEVER_SEES,
             )
         }
@@ -93,15 +105,29 @@ fun GuardianTrustScreen(onBack: () -> Unit) {
     }
 }
 
+/** A section label above an actual card, matching Settings' grammar (uppercase
+ * label, then a bordered group below) instead of bare text rows floating
+ * directly on the page background with nothing but a hairline between them.
+ * Each item gets its own icon plate, the same "plate + text" language every
+ * other row in the app already uses (MiniRow, GuardingCard, AboutRow, the
+ * Recent changes timeline) — this was the one screen that didn't. */
 @Composable
-private fun TrustGroup(label: String, labelColor: Color, icon: ImageVector, items: List<String>) {
+private fun TrustGroup(
+    label: String,
+    labelColor: Color,
+    headerIcon: ImageVector,
+    itemIcon: ImageVector,
+    itemIconColor: Color,
+    itemPlateColor: Color,
+    items: List<String>,
+) {
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 10.dp),
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = labelColor, modifier = Modifier.size(14.dp))
+            Icon(imageVector = headerIcon, contentDescription = null, tint = labelColor, modifier = Modifier.size(14.dp))
             Text(
                 label.uppercase(),
                 color = labelColor,
@@ -110,11 +136,29 @@ private fun TrustGroup(label: String, labelColor: Color, icon: ImageVector, item
                 letterSpacing = 0.4.sp,
             )
         }
-        items.forEachIndexed { index, item ->
-            Column {
-                Text(item, color = GuardianPalette.ink, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
-                if (index < items.lastIndex) {
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(GuardianPalette.border))
+        Surface(
+            color = GuardianPalette.card,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, GuardianPalette.border),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                items.forEachIndexed { index, item ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(26.dp).background(itemPlateColor, CircleShape),
+                        ) {
+                            Icon(imageVector = itemIcon, contentDescription = null, tint = itemIconColor, modifier = Modifier.size(12.dp))
+                        }
+                        Text(item, color = GuardianPalette.ink, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    }
+                    if (index < items.lastIndex) {
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(GuardianPalette.border))
+                    }
                 }
             }
         }

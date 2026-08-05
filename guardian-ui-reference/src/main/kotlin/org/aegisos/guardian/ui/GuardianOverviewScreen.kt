@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -56,46 +56,70 @@ fun GuardianHomeScreen(
 
     GuardianScreen(background = GuardianPalette.bg) {
         HomeAppBar(onOpenSettings = onOpenSettings)
+        // Home used to pin FooterNudge to the bottom via a weighted Spacer, which
+        // silently assumed the content always fit the window. A resized/short
+        // window then clipped content with no way to reach it — every other
+        // screen already scrolls; Home is no longer the one exception.
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
         ) {
-            HeroBadge(softColor = stateSoft, glyphPlate = stateColor)
-            Text(
-                if (attentionCount > 0) "$attentionCount item${if (attentionCount == 1) "" else "s"} need a look" else overviewAllClearHeadline,
-                color = GuardianPalette.ink,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            Text(
-                if (attentionCount > 0) {
-                    "Guardian noticed something and wants you to take a look."
-                } else {
-                    "Guardian is watching ${model.guardingNow.size} app${if (model.guardingNow.size == 1) "" else "s"}. Nothing needs your attention."
-                },
-                color = GuardianPalette.muted,
-                fontSize = 13.5.sp,
-                lineHeight = 19.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 230.dp).padding(bottom = 16.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 16.dp)) {
-                StatPill("${model.guardingNow.size} active protection${if (model.guardingNow.size == 1) "" else "s"}")
-                StatPill("${model.recentChanges.size} recent change${if (model.recentChanges.size == 1) "" else "s"}")
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
+            ) {
+                HeroBadge(softColor = stateSoft, glyphPlate = stateColor)
+                Text(
+                    if (attentionCount > 0) "$attentionCount item${if (attentionCount == 1) "" else "s"} need a look" else overviewAllClearHeadline,
+                    color = GuardianPalette.ink,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                Text(
+                    if (attentionCount > 0) {
+                        "Guardian noticed something and wants you to take a look."
+                    } else {
+                        "Guardian is watching ${model.guardingNow.size} app${if (model.guardingNow.size == 1) "" else "s"}. Nothing needs your attention."
+                    },
+                    color = GuardianPalette.muted,
+                    fontSize = 13.5.sp,
+                    lineHeight = 19.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 230.dp).padding(bottom = 16.dp),
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                ) {
+                    StatTile(
+                        icon = rememberGuardianCheckIcon(GuardianPalette.verified),
+                        iconColor = GuardianPalette.verified,
+                        iconSoftColor = GuardianPalette.verifiedSoft,
+                        value = model.guardingNow.size,
+                        label = "active protection${if (model.guardingNow.size == 1) "" else "s"}",
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatTile(
+                        icon = rememberGuardianActivityIcon(GuardianPalette.muted),
+                        iconColor = GuardianPalette.muted,
+                        iconSoftColor = GuardianPalette.border,
+                        value = model.recentChanges.size,
+                        label = "recent change${if (model.recentChanges.size == 1) "" else "s"}",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
+            GuardingNowCard(model = model, onSeeAll = onSeeAllGuarding)
+            RecentChangesCard(model = model, onSeeAll = onSeeAllChanges)
+            GuardianButton(
+                label = overviewCheckNowLabel,
+                onClick = onCheckNow,
+                background = GuardianPalette.verified,
+                contentColor = Color.White,
+                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+            )
+            FooterNudge(onClick = onOpenTrust)
         }
-        GuardingNowCard(model = model, onSeeAll = onSeeAllGuarding)
-        RecentChangesCard(model = model, onSeeAll = onSeeAllChanges)
-        GuardianButton(
-            label = overviewCheckNowLabel,
-            onClick = onCheckNow,
-            background = GuardianPalette.verified,
-            contentColor = Color.White,
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        FooterNudge(onClick = onOpenTrust)
     }
 }
 
@@ -145,16 +169,39 @@ private fun HeroBadge(softColor: Color, glyphPlate: Color) {
     }
 }
 
+/** A small dashboard tile (icon plate + number + label), replacing a pair of
+ * identical green pills with two distinct, readable stat cards. */
 @Composable
-private fun StatPill(text: String) {
-    Surface(color = GuardianPalette.verifiedSoft, shape = RoundedCornerShape(999.dp)) {
-        Text(
-            text,
-            color = GuardianPalette.verified,
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        )
+private fun StatTile(
+    icon: ImageVector,
+    iconColor: Color,
+    iconSoftColor: Color,
+    value: Int,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = GuardianPalette.card,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, GuardianPalette.border),
+        modifier = modifier,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(30.dp).background(iconSoftColor, RoundedCornerShape(10.dp)),
+            ) {
+                Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(15.dp))
+            }
+            Column {
+                Text("$value", color = GuardianPalette.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(label, color = GuardianPalette.muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 
@@ -295,20 +342,14 @@ private fun GuardianOverviewUiModel.ChangeTone.dotColor(): Color = when (this) {
 @Composable
 fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit) {
     GuardianScreen(background = GuardianPalette.bg) {
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 4.dp)) {
-            GuardianBackButton(
-                label = backToOverviewLabel,
-                onClick = onBack,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
-            Text(guardingNowFullTitle, color = GuardianPalette.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "${model.guardingNow.size} thing${if (model.guardingNow.size == 1) "" else "s"} Guardian is actively protecting",
-                color = GuardianPalette.muted,
-                fontSize = 13.5.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
+        GuardianDetailHeader(
+            icon = rememberGuardianCheckIcon(GuardianPalette.verified),
+            iconColor = GuardianPalette.verified,
+            iconSoftColor = GuardianPalette.verifiedSoft,
+            title = guardingNowFullTitle,
+            subtitle = "${model.guardingNow.size} thing${if (model.guardingNow.size == 1) "" else "s"} Guardian is actively protecting",
+            onBack = onBack,
+        )
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier

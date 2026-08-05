@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -162,8 +163,10 @@ fun GuardianQuietAction(
 
 /**
  * A real corner navigation control (e.g. "Back to overview"): a raised pill with the
- * same card/border/shadow language as the corner icon buttons, so it reads as an
- * actual control instead of a stray line of text floating in the corner.
+ * same card/border/shadow language as the corner icon buttons, with the chevron
+ * sitting in its own plate (the same treatment used for row leading icons elsewhere)
+ * so it reads as an actual control instead of a stray line of text floating in the
+ * corner. The plate and border warm slightly on hover to confirm it's interactive.
  */
 @Composable
 fun GuardianBackButton(
@@ -180,25 +183,40 @@ fun GuardianBackButton(
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "guardian-back-scale",
     )
+    val borderColor by animateColorAsState(
+        targetValue = if (hovered) GuardianPalette.verified.copy(alpha = 0.45f) else GuardianPalette.border,
+        animationSpec = tween(180),
+        label = "guardian-back-border",
+    )
+    val plateColor by animateColorAsState(
+        targetValue = if (hovered) GuardianPalette.verifiedSoft else GuardianPalette.border,
+        animationSpec = tween(180),
+        label = "guardian-back-plate",
+    )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
         modifier = modifier
             .scale(scale)
-            .shadow(1.dp, RoundedCornerShape(999.dp), clip = false)
+            .shadow(2.dp, RoundedCornerShape(999.dp), clip = false)
             .background(GuardianPalette.card, RoundedCornerShape(999.dp))
-            .border(BorderStroke(1.dp, GuardianPalette.border), RoundedCornerShape(999.dp))
+            .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(999.dp))
             .hoverable(interactionSource)
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
     ) {
-        Icon(
-            imageVector = rememberGuardianChevronLeftIcon(GuardianPalette.ink),
-            contentDescription = null,
-            modifier = Modifier.size(14.dp),
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(26.dp).background(plateColor, CircleShape),
+        ) {
+            Icon(
+                imageVector = rememberGuardianChevronLeftIcon(GuardianPalette.ink),
+                contentDescription = null,
+                modifier = Modifier.size(13.dp),
+            )
+        }
         Text(label, color = GuardianPalette.ink, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
     }
 }
