@@ -2,7 +2,6 @@ package org.aegisos.guardian.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,14 +45,13 @@ fun GuardianHomeScreen(model: GuardianOverviewUiModel, onCheckNow: () -> Unit, o
     val stateColor = if (attentionCount > 0) GuardianPalette.attn else GuardianPalette.verified
     val stateSoft = if (attentionCount > 0) GuardianPalette.attnSoft else GuardianPalette.verifiedSoft
 
-    GuardianPhoneFrame(screenBg = GuardianPalette.bg) {
-        GuardianStatusRow(ink = GuardianPalette.ink)
+    GuardianScreen(background = GuardianPalette.bg) {
         HomeAppBar()
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
         ) {
-            HeroBadge(ringColor = stateColor, softColor = stateSoft, glyphPlate = stateColor)
+            HeroBadge(softColor = stateSoft, glyphPlate = stateColor)
             Text(
                 if (attentionCount > 0) "$attentionCount item${if (attentionCount == 1) "" else "s"} need a look" else overviewAllClearHeadline,
                 color = GuardianPalette.ink,
@@ -89,7 +87,7 @@ private fun HomeAppBar() {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxWidth().padding(top = 14.dp, start = 20.dp, end = 20.dp, bottom = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 2.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(
@@ -114,12 +112,8 @@ private fun HomeAppBar() {
 }
 
 @Composable
-private fun HeroBadge(ringColor: Color, softColor: Color, glyphPlate: Color) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(132.dp).padding(bottom = 16.dp)) {
-        Box(
-            modifier = Modifier.size(132.dp)
-                .border(BorderStroke(1.dp, ringColor.copy(alpha = 0.14f)), CircleShape),
-        )
+private fun HeroBadge(softColor: Color, glyphPlate: Color) {
+    Box(modifier = Modifier.padding(bottom = 16.dp)) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -127,8 +121,7 @@ private fun HeroBadge(ringColor: Color, softColor: Color, glyphPlate: Color) {
                 .background(
                     Brush.radialGradient(0f to softColor, 0.62f to softColor, 0.64f to Color.Transparent),
                     CircleShape,
-                )
-                .border(BorderStroke(1.dp, ringColor.copy(alpha = 0.30f)), CircleShape),
+                ),
         ) {
             Icon(
                 imageVector = rememberGuardianShieldMark(plateColor = glyphPlate, glyphColor = GuardianPalette.bg),
@@ -230,9 +223,8 @@ private fun FooterNudge(onClick: () -> Unit) {
 /** Stage 02 "Guarding now, in full" from guardian-quiet-authority.html. */
 @Composable
 fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit) {
-    GuardianPhoneFrame(screenBg = GuardianPalette.bg) {
-        GuardianStatusRow(ink = GuardianPalette.ink)
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp)) {
+    GuardianScreen(background = GuardianPalette.bg) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 4.dp)) {
             Text(
                 backToOverviewLabel,
                 color = GuardianPalette.muted,

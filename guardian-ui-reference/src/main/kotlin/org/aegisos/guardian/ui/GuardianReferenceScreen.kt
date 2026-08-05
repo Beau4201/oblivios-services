@@ -114,13 +114,12 @@ private fun StoryScreen(
     primaryAction: Pair<String, () -> Unit>? = null,
     primaryUsesAttnColor: Boolean = false,
 ) {
-    GuardianPhoneFrame(screenBg = GuardianPalette.bg) {
-        GuardianStatusRow(ink = GuardianPalette.ink)
+    GuardianScreen(background = GuardianPalette.bg) {
         Text(
             backToOverviewLabel,
             color = GuardianPalette.muted,
             fontSize = 12.sp,
-            modifier = Modifier.clickable(onClick = onBack).padding(top = 12.dp, start = 20.dp, end = 20.dp),
+            modifier = Modifier.clickable(onClick = onBack).padding(top = 24.dp, start = 20.dp, end = 20.dp),
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
