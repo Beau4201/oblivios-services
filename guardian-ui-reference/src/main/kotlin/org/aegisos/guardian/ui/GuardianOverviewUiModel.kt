@@ -1,5 +1,6 @@
 package org.aegisos.guardian.ui
 
+import java.time.Instant
 import org.aegisos.guardian.overview.GuardianMeaningfulChangeType
 import org.aegisos.guardian.overview.GuardianOverviewSnapshot
 
@@ -31,7 +32,14 @@ data class GuardianOverviewUiModel(
         val iconKey: String,
         val headline: String,
         val compatibilityImpact: String,
+        val occurredAt: Instant,
+        val tone: ChangeTone,
     )
+
+    /** Three meanings, matching the mockup's timeline: confirmed (green), safely
+     * undone (amber), and "just so you know" (neutral grey). Never more than a
+     * glance can sort. */
+    enum class ChangeTone { CONFIRMED, UNDONE, NEUTRAL }
 }
 
 fun GuardianOverviewSnapshot.toUiModel(): GuardianOverviewUiModel = GuardianOverviewUiModel(
@@ -61,6 +69,8 @@ fun GuardianOverviewSnapshot.toUiModel(): GuardianOverviewUiModel = GuardianOver
             iconKey = entry.iconKey(),
             headline = entry.changeType().toHeadline(),
             compatibilityImpact = entry.compatibilityImpact(),
+            occurredAt = entry.occurredAt(),
+            tone = entry.changeType().toTone(),
         )
     },
 )
@@ -73,4 +83,17 @@ private fun GuardianMeaningfulChangeType.toHeadline(): String = when (this) {
     GuardianMeaningfulChangeType.UNDO_COMPLETED -> "Protection undone"
     GuardianMeaningfulChangeType.VERIFICATION_FAILED -> "Protection could not be verified"
     GuardianMeaningfulChangeType.UNDO_FAILED -> "Undo did not complete"
+}
+
+private fun GuardianMeaningfulChangeType.toTone(): GuardianOverviewUiModel.ChangeTone = when (this) {
+    GuardianMeaningfulChangeType.PROTECTION_VERIFIED -> GuardianOverviewUiModel.ChangeTone.CONFIRMED
+    GuardianMeaningfulChangeType.UNDO_COMPLETED -> GuardianOverviewUiModel.ChangeTone.UNDONE
+    // VERIFICATION_FAILED/UNDO_FAILED can never reach `changes()` (the domain routes
+    // them to protectionAttention() instead); mapped here only for exhaustiveness.
+    GuardianMeaningfulChangeType.SENSITIVE_PERMISSION_ADDED,
+    GuardianMeaningfulChangeType.POLICY_CHANGED,
+    GuardianMeaningfulChangeType.POST_UPDATE_BEHAVIOUR_CHANGE,
+    GuardianMeaningfulChangeType.VERIFICATION_FAILED,
+    GuardianMeaningfulChangeType.UNDO_FAILED,
+    -> GuardianOverviewUiModel.ChangeTone.NEUTRAL
 }

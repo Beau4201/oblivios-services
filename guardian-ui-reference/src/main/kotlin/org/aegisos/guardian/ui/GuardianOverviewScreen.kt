@@ -2,7 +2,7 @@ package org.aegisos.guardian.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,13 +42,20 @@ const val changeMyMindLabel = "Change my mind"
 
 /** Stage 01 "Home" from guardian-quiet-authority.html, wired to a real GuardianOverviewUiModel. */
 @Composable
-fun GuardianHomeScreen(model: GuardianOverviewUiModel, onCheckNow: () -> Unit, onSeeAllGuarding: () -> Unit) {
+fun GuardianHomeScreen(
+    model: GuardianOverviewUiModel,
+    onCheckNow: () -> Unit,
+    onSeeAllGuarding: () -> Unit,
+    onSeeAllChanges: () -> Unit,
+    onOpenTrust: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val attentionCount = model.needsALook.size
     val stateColor = if (attentionCount > 0) GuardianPalette.attn else GuardianPalette.verified
     val stateSoft = if (attentionCount > 0) GuardianPalette.attnSoft else GuardianPalette.verifiedSoft
 
     GuardianScreen(background = GuardianPalette.bg) {
-        HomeAppBar()
+        HomeAppBar(onOpenSettings = onOpenSettings)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
@@ -79,6 +86,7 @@ fun GuardianHomeScreen(model: GuardianOverviewUiModel, onCheckNow: () -> Unit, o
             }
         }
         GuardingNowCard(model = model, onSeeAll = onSeeAllGuarding)
+        RecentChangesCard(model = model, onSeeAll = onSeeAllChanges)
         GuardianButton(
             label = overviewCheckNowLabel,
             onClick = onCheckNow,
@@ -87,12 +95,12 @@ fun GuardianHomeScreen(model: GuardianOverviewUiModel, onCheckNow: () -> Unit, o
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
         )
         Spacer(modifier = Modifier.weight(1f))
-        FooterNudge()
+        FooterNudge(onClick = onOpenTrust)
     }
 }
 
 @Composable
-private fun HomeAppBar() {
+private fun HomeAppBar(onOpenSettings: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -107,20 +115,11 @@ private fun HomeAppBar() {
             )
             Text("Guardian", color = GuardianPalette.muted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(36.dp)
-                .shadow(2.dp, RoundedCornerShape(11.dp), clip = false)
-                .background(GuardianPalette.card, RoundedCornerShape(11.dp))
-                .border(BorderStroke(1.dp, GuardianPalette.border), RoundedCornerShape(11.dp)),
-        ) {
-            Icon(
-                imageVector = rememberGuardianSettingsIcon(GuardianPalette.muted),
-                contentDescription = "Settings",
-                modifier = Modifier.size(17.dp),
-            )
-        }
+        GuardianCornerIconButton(
+            icon = rememberGuardianSettingsIcon(GuardianPalette.muted),
+            contentDescription = "Settings",
+            onClick = onOpenSettings,
+        )
     }
 }
 
@@ -222,7 +221,7 @@ private fun MiniRow(row: GuardianOverviewUiModel.GuardingRow) {
 }
 
 @Composable
-private fun FooterNudge() {
+private fun FooterNudge(onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -230,6 +229,7 @@ private fun FooterNudge() {
             .fillMaxWidth()
             .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
             .background(GuardianPalette.border, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Icon(
@@ -239,6 +239,55 @@ private fun FooterNudge() {
         )
         Text(overviewFooterNudgeCopy, color = GuardianPalette.ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+@Composable
+private fun RecentChangesCard(model: GuardianOverviewUiModel, onSeeAll: () -> Unit) {
+    if (model.recentChanges.isEmpty()) return
+
+    Surface(
+        color = GuardianPalette.card,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, GuardianPalette.border),
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            ) {
+                Text(recentChangesTitle, color = GuardianPalette.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                GuardianChipLink(
+                    label = "$overviewSeeAllPrefix${model.recentChanges.size}",
+                    onClick = onSeeAll,
+                    color = GuardianPalette.verified,
+                    softColor = GuardianPalette.verifiedSoft,
+                )
+            }
+            model.recentChanges.take(2).forEach { row -> MiniChangeRow(row) }
+        }
+    }
+}
+
+@Composable
+private fun MiniChangeRow(row: GuardianOverviewUiModel.ChangeRow) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.padding(vertical = 7.dp),
+    ) {
+        Box(modifier = Modifier.size(8.dp).background(row.tone.dotColor(), CircleShape))
+        Column {
+            Text(row.appLabel, color = GuardianPalette.ink, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+            Text(row.headline, color = GuardianPalette.muted, fontSize = 11.sp)
+        }
+    }
+}
+
+private fun GuardianOverviewUiModel.ChangeTone.dotColor(): Color = when (this) {
+    GuardianOverviewUiModel.ChangeTone.CONFIRMED -> GuardianPalette.verified
+    GuardianOverviewUiModel.ChangeTone.UNDONE -> GuardianPalette.attn
+    GuardianOverviewUiModel.ChangeTone.NEUTRAL -> GuardianPalette.muted
 }
 
 /** Stage 02 "Guarding now, in full" from guardian-quiet-authority.html, redrawn as a

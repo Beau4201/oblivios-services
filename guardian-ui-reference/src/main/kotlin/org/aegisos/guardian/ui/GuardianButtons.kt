@@ -245,3 +245,38 @@ fun GuardianChipLink(
         )
     }
 }
+
+/** A real corner icon control (e.g. Settings): a raised card square with the same
+ * press/hover feedback as every other real button, instead of a static decoration. */
+@Composable
+fun GuardianCornerIconButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.92f else if (hovered) 1.05f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "guardian-corner-scale",
+    )
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(36.dp)
+            .scale(scale)
+            .shadow(2.dp, RoundedCornerShape(11.dp), clip = false)
+            .background(GuardianPalette.card, RoundedCornerShape(11.dp))
+            .border(BorderStroke(1.dp, GuardianPalette.border), RoundedCornerShape(11.dp))
+            .hoverable(interactionSource)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+    ) {
+        Icon(imageVector = icon, contentDescription = contentDescription, tint = GuardianPalette.muted, modifier = Modifier.size(17.dp))
+    }
+}

@@ -54,9 +54,10 @@ class GuardianOverviewUiModelTest {
 
     @Test
     fun `maps a meaningful change into a recent-changes row`() {
+        val occurredAt = Instant.parse("2026-07-24T12:01:00Z")
         val entry = GuardianOverviewEntry.MeaningfulChange(
             "change-1", "Story app", "icon-story", GuardianMeaningfulChangeType.PROTECTION_VERIFIED,
-            Instant.parse("2026-07-24T12:01:00Z"), "Guardian verified the requested protection",
+            occurredAt, "Guardian verified the requested protection",
             "Undo restores background location access", "guardian://change-1",
         )
 
@@ -64,6 +65,25 @@ class GuardianOverviewUiModelTest {
 
         assertEquals("Protection verified", row.headline)
         assertEquals("Undo restores background location access", row.compatibilityImpact)
+        assertEquals(occurredAt, row.occurredAt)
+        assertEquals(GuardianOverviewUiModel.ChangeTone.CONFIRMED, row.tone)
+    }
+
+    @Test
+    fun `maps change tone per type matching the timeline's three colours`() {
+        fun toneFor(type: GuardianMeaningfulChangeType): GuardianOverviewUiModel.ChangeTone {
+            val entry = GuardianOverviewEntry.MeaningfulChange(
+                "change-1", "Story app", "icon-story", type,
+                Instant.parse("2026-07-24T12:01:00Z"), "owner reason", "impact", "guardian://change-1",
+            )
+            return GuardianOverviewSnapshot(emptyList(), listOf(entry), emptyList()).toUiModel().recentChanges.single().tone
+        }
+
+        assertEquals(GuardianOverviewUiModel.ChangeTone.CONFIRMED, toneFor(GuardianMeaningfulChangeType.PROTECTION_VERIFIED))
+        assertEquals(GuardianOverviewUiModel.ChangeTone.UNDONE, toneFor(GuardianMeaningfulChangeType.UNDO_COMPLETED))
+        assertEquals(GuardianOverviewUiModel.ChangeTone.NEUTRAL, toneFor(GuardianMeaningfulChangeType.SENSITIVE_PERMISSION_ADDED))
+        assertEquals(GuardianOverviewUiModel.ChangeTone.NEUTRAL, toneFor(GuardianMeaningfulChangeType.POLICY_CHANGED))
+        assertEquals(GuardianOverviewUiModel.ChangeTone.NEUTRAL, toneFor(GuardianMeaningfulChangeType.POST_UPDATE_BEHAVIOUR_CHANGE))
     }
 
     @Test
