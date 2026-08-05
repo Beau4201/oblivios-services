@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -156,5 +157,91 @@ fun GuardianQuietAction(
     ) {
         Icon(icon, contentDescription = null, tint = color.copy(alpha = contentAlpha), modifier = Modifier.size(14.dp))
         Text(label, color = color.copy(alpha = contentAlpha), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/**
+ * A real corner navigation control (e.g. "Back to overview"): a raised pill with the
+ * same card/border/shadow language as the corner icon buttons, so it reads as an
+ * actual control instead of a stray line of text floating in the corner.
+ */
+@Composable
+fun GuardianBackButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else if (hovered) 1.02f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "guardian-back-scale",
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier
+            .scale(scale)
+            .shadow(1.dp, RoundedCornerShape(999.dp), clip = false)
+            .background(GuardianPalette.card, RoundedCornerShape(999.dp))
+            .border(BorderStroke(1.dp, GuardianPalette.border), RoundedCornerShape(999.dp))
+            .hoverable(interactionSource)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+    ) {
+        Icon(
+            imageVector = rememberGuardianChevronLeftIcon(GuardianPalette.ink),
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(label, color = GuardianPalette.ink, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/**
+ * A small pill link with a trailing chevron (e.g. "See all N"), for navigation that
+ * deserves more visual presence than plain text but shouldn't compete with the
+ * screen's primary action.
+ */
+@Composable
+fun GuardianChipLink(
+    label: String,
+    onClick: () -> Unit,
+    color: Color,
+    softColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else if (hovered) 1.03f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "guardian-chip-scale",
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = modifier
+            .scale(scale)
+            .background(softColor, RoundedCornerShape(999.dp))
+            .hoverable(interactionSource)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(start = 10.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
+    ) {
+        Text(label, color = color, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+        Icon(
+            imageVector = rememberGuardianChevronRightIcon(color),
+            contentDescription = null,
+            modifier = Modifier.size(12.dp),
+        )
     }
 }

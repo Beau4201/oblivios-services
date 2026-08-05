@@ -174,10 +174,11 @@ private fun GuardingNowCard(model: GuardianOverviewUiModel, onSeeAll: () -> Unit
             ) {
                 Text(overviewCardTitle, color = GuardianPalette.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 if (model.guardingNow.isNotEmpty()) {
-                    GuardianTextLink(
+                    GuardianChipLink(
                         label = "$overviewSeeAllPrefix${model.guardingNow.size}",
                         onClick = onSeeAll,
                         color = GuardianPalette.verified,
+                        softColor = GuardianPalette.verifiedSoft,
                     )
                 }
             }
@@ -246,11 +247,10 @@ private fun FooterNudge() {
 fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit) {
     GuardianScreen(background = GuardianPalette.bg) {
         Column(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 4.dp)) {
-            GuardianTextLink(
+            GuardianBackButton(
                 label = backToOverviewLabel,
                 onClick = onBack,
-                color = GuardianPalette.muted,
-                modifier = Modifier.padding(bottom = 12.dp),
+                modifier = Modifier.padding(bottom = 16.dp),
             )
             Text(guardingNowFullTitle, color = GuardianPalette.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text(
