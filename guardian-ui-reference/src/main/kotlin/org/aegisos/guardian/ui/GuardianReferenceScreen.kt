@@ -31,19 +31,22 @@ import androidx.compose.ui.unit.sp
 const val simulationNotice = "Local reference simulation — not Android enforcement"
 const val protectLabel = "Protect app"
 const val undoLabel = "Undo"
-const val backToOverviewLabel = "← Back to overview"
+const val backToOverviewLabel = "Back to overview"
 const val storyWhyLabel = "Why does this happen?"
 
 /** Drives GuardianUiController's Detected/Verified/Undone/Failure lifecycle through the
  * exact "story" visual template (stage 03, "A bad day told honestly") from
- * guardian-quiet-authority.html, adapted per state. */
+ * guardian-quiet-authority.html, adapted per state.
+ *
+ * Once something is decided (Verified/Undone), "Back to overview" is the real,
+ * prominent button; Undo is a quiet, easy-to-ignore text link next to it. It's
+ * a rarely-needed option, not a second decision competing for attention. */
 @Composable
 fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit = {}) {
     var state by remember(controller) { mutableStateOf(controller.start()) }
 
     when (val current = state) {
         is GuardianUiState.Detected -> StoryScreen(
-            onBack = onDone,
             label = "Guardian noticed something",
             dotColor = GuardianPalette.verified,
             appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
@@ -58,7 +61,6 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             primaryAction = protectLabel to { state = controller.protect() },
         )
         is GuardianUiState.Verified -> StoryScreen(
-            onBack = onDone,
             label = "Protected",
             dotColor = GuardianPalette.verified,
             appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
@@ -67,10 +69,10 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             appLabel = "This app",
             items = listOf("What changed" to "Background location access is now turned off for this app."),
             safeLine = "Protected, and double-checked it worked.",
-            secondaryAction = undoLabel to { state = controller.undo() },
+            primaryAction = backToOverviewLabel to onDone,
+            quietAction = undoLabel to { state = controller.undo() },
         )
         is GuardianUiState.Undone -> StoryScreen(
-            onBack = onDone,
             label = "Undone",
             dotColor = GuardianPalette.muted,
             appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.muted),
@@ -78,9 +80,9 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
             appIconTint = GuardianPalette.muted,
             appLabel = "This app",
             items = listOf("What changed" to "Guardian undid the protection. The app works like it did before."),
+            primaryAction = backToOverviewLabel to onDone,
         )
         is GuardianUiState.Failure -> StoryScreen(
-            onBack = onDone,
             label = "Needs a look",
             dotColor = GuardianPalette.attn,
             appIcon = rememberGuardianAlertTriangleIcon(GuardianPalette.attn),
@@ -100,7 +102,6 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
 
 @Composable
 private fun StoryScreen(
-    onBack: () -> Unit,
     label: String,
     dotColor: Color,
     appIcon: ImageVector,
@@ -113,18 +114,13 @@ private fun StoryScreen(
     secondaryAction: Pair<String, () -> Unit>? = null,
     primaryAction: Pair<String, () -> Unit>? = null,
     primaryUsesAttnColor: Boolean = false,
+    quietAction: Pair<String, () -> Unit>? = null,
 ) {
     GuardianScreen(background = GuardianPalette.bg) {
-        Text(
-            backToOverviewLabel,
-            color = GuardianPalette.muted,
-            fontSize = 12.sp,
-            modifier = Modifier.clickable(onClick = onBack).padding(top = 24.dp, start = 20.dp, end = 20.dp),
-        )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
         ) {
             Box(modifier = Modifier.size(8.dp).background(dotColor, RoundedCornerShape(50)))
             Text(
@@ -214,7 +210,7 @@ private fun StoryScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp),
             ) {
                 if (secondaryAction != null) {
-                    ActionButton(
+                    GuardianButton(
                         label = secondaryAction.first,
                         onClick = secondaryAction.second,
                         background = GuardianPalette.border,
@@ -223,7 +219,7 @@ private fun StoryScreen(
                     )
                 }
                 if (primaryAction != null) {
-                    ActionButton(
+                    GuardianButton(
                         label = primaryAction.first,
                         onClick = primaryAction.second,
                         background = if (primaryUsesAttnColor) GuardianPalette.attn else GuardianPalette.verified,
@@ -233,24 +229,20 @@ private fun StoryScreen(
                 }
             }
         }
+        if (quietAction != null) {
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 14.dp), contentAlignment = Alignment.Center) {
+                GuardianTextLink(
+                    label = quietAction.first,
+                    onClick = quietAction.second,
+                    color = GuardianPalette.muted,
+                )
+            }
+        }
         Text(
             simulationNotice,
             color = GuardianPalette.muted,
             fontSize = 10.sp,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp),
         )
-    }
-}
-
-@Composable
-private fun ActionButton(label: String, onClick: () -> Unit, background: Color, contentColor: Color, modifier: Modifier = Modifier) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .background(background, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 11.dp),
-    ) {
-        Text(label, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }

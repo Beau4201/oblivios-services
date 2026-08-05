@@ -2,7 +2,6 @@ package org.aegisos.guardian.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +32,7 @@ const val overviewAllClearHeadline = "Everything looks good"
 const val overviewCardTitle = "Guarding now"
 const val overviewSeeAllPrefix = "See all "
 const val overviewNoProtectionsCopy = "No active protections yet."
+const val overviewCheckNowLabel = "Check now"
 const val overviewFooterNudgeCopy = "New here? See what Guardian can and can't see"
 const val guardingNowFullTitle = "Guarding now"
 const val protectedChipLabel = "Protected"
@@ -77,8 +77,15 @@ fun GuardianHomeScreen(model: GuardianOverviewUiModel, onCheckNow: () -> Unit, o
             }
         }
         GuardingNowCard(model = model, onSeeAll = onSeeAllGuarding)
+        GuardianButton(
+            label = overviewCheckNowLabel,
+            onClick = onCheckNow,
+            background = GuardianPalette.verified,
+            contentColor = Color.White,
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+        )
         Spacer(modifier = Modifier.weight(1f))
-        FooterNudge(onClick = onCheckNow)
+        FooterNudge()
     }
 }
 
@@ -161,12 +168,10 @@ private fun GuardingNowCard(model: GuardianOverviewUiModel, onSeeAll: () -> Unit
             ) {
                 Text(overviewCardTitle, color = GuardianPalette.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 if (model.guardingNow.isNotEmpty()) {
-                    Text(
-                        "$overviewSeeAllPrefix${model.guardingNow.size}",
+                    GuardianTextLink(
+                        label = "$overviewSeeAllPrefix${model.guardingNow.size}",
+                        onClick = onSeeAll,
                         color = GuardianPalette.verified,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable(onClick = onSeeAll),
                     )
                 }
             }
@@ -200,7 +205,7 @@ private fun MiniRow(row: GuardianOverviewUiModel.GuardingRow) {
 }
 
 @Composable
-private fun FooterNudge(onClick: () -> Unit) {
+private fun FooterNudge() {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -208,7 +213,6 @@ private fun FooterNudge(onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
             .background(GuardianPalette.border, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Icon(
@@ -225,11 +229,11 @@ private fun FooterNudge(onClick: () -> Unit) {
 fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit) {
     GuardianScreen(background = GuardianPalette.bg) {
         Column(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 4.dp)) {
-            Text(
-                backToOverviewLabel,
+            GuardianTextLink(
+                label = backToOverviewLabel,
+                onClick = onBack,
                 color = GuardianPalette.muted,
-                fontSize = 12.sp,
-                modifier = Modifier.clickable(onClick = onBack).padding(bottom = 8.dp),
+                modifier = Modifier.padding(bottom = 8.dp),
             )
             Text(guardingNowFullTitle, color = GuardianPalette.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(
