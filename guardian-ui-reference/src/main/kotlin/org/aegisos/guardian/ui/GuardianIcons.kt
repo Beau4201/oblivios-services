@@ -73,3 +73,18 @@ fun rememberGuardianCheckIcon(color: Color): ImageVector = remember(color) {
         strokePath("M20 6 9 17l-5-5", color)
     }.build()
 }
+
+@Composable
+fun rememberGuardianChevronDownIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("ChevronDown", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M6 9l6 6 6-6", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianUndoIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("Undo", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M9 14 4 9l5-5", color)
+        strokePath("M4 9h10.5a5.5 5.5 0 0 1 0 11H11", color)
+    }.build()
+}

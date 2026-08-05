@@ -5,15 +5,21 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
@@ -107,4 +114,47 @@ fun GuardianTextLink(
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     )
+}
+
+/**
+ * A rarely-needed, low-emphasis action (Undo, Change my mind): icon + label with no
+ * border at rest, so it reads as quiet, secondary information rather than a second
+ * decision. Hovering reveals a soft outline, confirming it's real without shouting.
+ */
+@Composable
+fun GuardianQuietAction(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (pressed) 0.5f else 1f,
+        animationSpec = tween(150),
+        label = "guardian-quiet-alpha",
+    )
+    val borderAlpha by animateFloatAsState(
+        targetValue = if (hovered) 0.4f else 0f,
+        animationSpec = tween(200),
+        label = "guardian-quiet-border",
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier
+            .border(BorderStroke(1.dp, color.copy(alpha = borderAlpha)), RoundedCornerShape(999.dp))
+            .hoverable(interactionSource)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = color.copy(alpha = contentAlpha), modifier = Modifier.size(14.dp))
+        Text(label, color = color.copy(alpha = contentAlpha), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
 }

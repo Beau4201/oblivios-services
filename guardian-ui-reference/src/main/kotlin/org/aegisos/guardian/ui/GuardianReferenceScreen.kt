@@ -1,5 +1,8 @@
 package org.aegisos.guardian.ui
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Surface
@@ -22,9 +26,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -35,12 +42,13 @@ const val backToOverviewLabel = "Back to overview"
 const val storyWhyLabel = "Why does this happen?"
 
 /** Drives GuardianUiController's Detected/Verified/Undone/Failure lifecycle through the
- * exact "story" visual template (stage 03, "A bad day told honestly") from
- * guardian-quiet-authority.html, adapted per state.
+ * "story" visual template (stage 03, "A bad day told honestly") from
+ * guardian-quiet-authority.html, adapted per state and given the same hero treatment
+ * as Home so "Needs a look" reads as considered, not just a plain error dump.
  *
  * Once something is decided (Verified/Undone), "Back to overview" is the real,
- * prominent button; Undo is a quiet, easy-to-ignore text link next to it. It's
- * a rarely-needed option, not a second decision competing for attention. */
+ * prominent button; Undo is a quiet, easy-to-ignore action next to it. It's a
+ * rarely-needed option, not a second decision competing for attention. */
 @Composable
 fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit = {}) {
     var state by remember(controller) { mutableStateOf(controller.start()) }
@@ -49,8 +57,8 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
         is GuardianUiState.Detected -> StoryScreen(
             label = "Guardian noticed something",
             dotColor = GuardianPalette.verified,
+            softColor = GuardianPalette.verifiedSoft,
             appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
-            appIconBg = GuardianPalette.verifiedSoft,
             appIconTint = GuardianPalette.verified,
             appLabel = "This app",
             items = listOf(
@@ -63,8 +71,8 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
         is GuardianUiState.Verified -> StoryScreen(
             label = "Protected",
             dotColor = GuardianPalette.verified,
+            softColor = GuardianPalette.verifiedSoft,
             appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.verified),
-            appIconBg = GuardianPalette.verifiedSoft,
             appIconTint = GuardianPalette.verified,
             appLabel = "This app",
             items = listOf("What changed" to "Background location access is now turned off for this app."),
@@ -75,8 +83,8 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
         is GuardianUiState.Undone -> StoryScreen(
             label = "Undone",
             dotColor = GuardianPalette.muted,
+            softColor = GuardianPalette.border,
             appIcon = rememberGuardianShieldCheckIcon(GuardianPalette.muted),
-            appIconBg = GuardianPalette.border,
             appIconTint = GuardianPalette.muted,
             appLabel = "This app",
             items = listOf("What changed" to "Guardian undid the protection. The app works like it did before."),
@@ -85,8 +93,8 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
         is GuardianUiState.Failure -> StoryScreen(
             label = "Needs a look",
             dotColor = GuardianPalette.attn,
+            softColor = GuardianPalette.attnSoft,
             appIcon = rememberGuardianAlertTriangleIcon(GuardianPalette.attn),
-            appIconBg = GuardianPalette.attnSoft,
             appIconTint = GuardianPalette.attn,
             appLabel = "This app",
             items = listOf("What actually happened" to current.detail),
@@ -104,8 +112,8 @@ fun GuardianReferenceScreen(controller: GuardianUiController, onDone: () -> Unit
 private fun StoryScreen(
     label: String,
     dotColor: Color,
+    softColor: Color,
     appIcon: ImageVector,
-    appIconBg: Color,
     appIconTint: Color,
     appLabel: String,
     items: List<Pair<String, String>>,
@@ -117,51 +125,51 @@ private fun StoryScreen(
     quietAction: Pair<String, () -> Unit>? = null,
 ) {
     GuardianScreen(background = GuardianPalette.bg) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
-        ) {
-            Box(modifier = Modifier.size(8.dp).background(dotColor, RoundedCornerShape(50)))
-            Text(
-                label.uppercase(),
-                color = dotColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.6.sp,
-            )
+        Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 20.dp, end = 20.dp)) {
+            StatusChip(label, dotColor, softColor)
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 20.dp, end = 20.dp, bottom = 8.dp),
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 4.dp),
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(44.dp).background(appIconBg, RoundedCornerShape(13.dp)),
-            ) {
-                Icon(imageVector = appIcon, contentDescription = null, tint = appIconTint, modifier = Modifier.size(20.dp))
-            }
-            Text(appLabel, color = GuardianPalette.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            StoryBadge(icon = appIcon, iconTint = appIconTint, softColor = softColor)
+            Text(
+                appLabel,
+                color = GuardianPalette.ink,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 12.dp),
+            )
         }
         Surface(
             color = GuardianPalette.card,
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.dp, GuardianPalette.border),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 20.dp, end = 20.dp),
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 items.forEachIndexed { index, (dt, dd) ->
-                    Column(modifier = Modifier.padding(vertical = 12.dp)) {
-                        Text(
-                            dt.uppercase(),
-                            color = GuardianPalette.muted,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.4.sp,
-                            modifier = Modifier.padding(bottom = 4.dp),
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 3.dp)
+                                .size(7.dp)
+                                .background(dotColor.copy(alpha = 0.55f), CircleShape),
                         )
-                        Text(dd, color = GuardianPalette.ink, fontSize = 13.sp, lineHeight = 19.sp)
+                        Column {
+                            Text(
+                                dt.uppercase(),
+                                color = GuardianPalette.muted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.4.sp,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                            Text(dd, color = GuardianPalette.ink, fontSize = 13.sp, lineHeight = 19.sp)
+                        }
                     }
                     if (index < items.lastIndex) {
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(GuardianPalette.border))
@@ -173,7 +181,11 @@ private fun StoryScreen(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 20.dp, end = 20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, start = 20.dp, end = 20.dp)
+                    .background(GuardianPalette.verifiedSoft, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
             ) {
                 Icon(
                     imageVector = rememberGuardianCheckIcon(GuardianPalette.verified),
@@ -185,22 +197,46 @@ private fun StoryScreen(
         }
         if (disclosure != null) {
             var expanded by remember { mutableStateOf(false) }
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 20.dp, end = 20.dp)) {
-                Text(
-                    (if (expanded) "– " else "+ ") + storyWhyLabel,
-                    color = GuardianPalette.ink,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { expanded = !expanded },
-                )
-                if (expanded) {
-                    Text(
-                        disclosure,
-                        color = GuardianPalette.muted,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
+            val chevronRotation by animateFloatAsState(
+                targetValue = if (expanded) 180f else 0f,
+                animationSpec = tween(220),
+                label = "disclosure-chevron",
+            )
+            Surface(
+                color = GuardianPalette.card,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, GuardianPalette.border),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 20.dp, end = 20.dp),
+            ) {
+                Column(modifier = Modifier.animateContentSize(tween(220)).padding(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = !expanded },
+                    ) {
+                        Text(
+                            storyWhyLabel,
+                            color = GuardianPalette.ink,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            imageVector = rememberGuardianChevronDownIcon(GuardianPalette.muted),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp).rotate(chevronRotation),
+                        )
+                    }
+                    if (expanded) {
+                        Text(
+                            disclosure,
+                            color = GuardianPalette.muted,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
                 }
             }
         }
@@ -231,8 +267,9 @@ private fun StoryScreen(
         }
         if (quietAction != null) {
             Box(modifier = Modifier.fillMaxWidth().padding(top = 14.dp), contentAlignment = Alignment.Center) {
-                GuardianTextLink(
+                GuardianQuietAction(
                     label = quietAction.first,
+                    icon = rememberGuardianUndoIcon(GuardianPalette.muted),
                     onClick = quietAction.second,
                     color = GuardianPalette.muted,
                 )
@@ -242,7 +279,43 @@ private fun StoryScreen(
             simulationNotice,
             color = GuardianPalette.muted,
             fontSize = 10.sp,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 20.dp, end = 20.dp),
         )
+    }
+}
+
+@Composable
+private fun StatusChip(label: String, dotColor: Color, softColor: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        modifier = Modifier
+            .background(softColor, RoundedCornerShape(999.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Box(modifier = Modifier.size(7.dp).background(dotColor, CircleShape))
+        Text(
+            label.uppercase(),
+            color = dotColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+        )
+    }
+}
+
+@Composable
+private fun StoryBadge(icon: ImageVector, iconTint: Color, softColor: Color) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(88.dp)
+            .background(
+                Brush.radialGradient(0f to softColor, 0.62f to softColor, 0.66f to Color.Transparent),
+                CircleShape,
+            ),
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(34.dp))
     }
 }
