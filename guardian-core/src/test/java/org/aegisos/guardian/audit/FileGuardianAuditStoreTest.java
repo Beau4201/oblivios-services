@@ -1,8 +1,10 @@
 package org.aegisos.guardian.audit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -48,6 +50,28 @@ class FileGuardianAuditStoreTest {
         FileGuardianAuditStore reloaded = new FileGuardianAuditStore(file);
         assertTrue(reloaded.find("old").isEmpty());
         assertEquals("recent", reloaded.find("recent").orElseThrow().auditId());
+    }
+
+    @Test
+    void skipsACorruptedLineWithoutLosingTheEntriesAroundIt() throws Exception {
+        Path file = tempDir.resolve("guardian-audit.jsonl");
+        GuardianAuditEntry before = sampleEntry("audit-1", Instant.parse("2026-08-07T12:00:00Z"));
+        GuardianAuditEntry after = sampleEntry("audit-3", Instant.parse("2026-08-07T13:00:00Z"));
+
+        // Simulates a crash mid-append (append() has no fsync/atomicity guarantee):
+        // one truncated, unparsable JSON line sitting between two valid ones.
+        String content = GuardianAuditEntryCodec.toJsonLine(before) + "\n"
+            + "{\"auditId\":\"audit-2\",\"recordedAt\":\"2026-08-07T12:30"
+            + "\n"
+            + GuardianAuditEntryCodec.toJsonLine(after) + "\n";
+        Files.writeString(file, content);
+
+        FileGuardianAuditStore store = new FileGuardianAuditStore(file);
+
+        assertEquals(before, store.find("audit-1").orElseThrow());
+        assertEquals(after, store.find("audit-3").orElseThrow());
+        assertTrue(store.find("audit-2").isEmpty());
+        assertFalse(store.skippedLoadEntries().isEmpty());
     }
 
     private static GuardianAuditEntry sampleEntry(String auditId, Instant recordedAt) {

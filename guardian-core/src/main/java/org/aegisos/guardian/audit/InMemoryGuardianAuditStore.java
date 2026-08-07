@@ -35,10 +35,7 @@ public final class InMemoryGuardianAuditStore implements GuardianAuditStore {
 
     @Override
     public void applyRetention(Instant now) {
-        List<String> expired = entries.values().stream()
-            .filter(entry -> !retentionPeriod.isWithinWindow(entry.recordedAt(), now))
-            .map(GuardianAuditEntry::auditId)
-            .toList();
+        List<String> expired = GuardianAuditRetention.expiredAuditIds(entries, retentionPeriod, now);
         expired.forEach(entries::remove);
     }
 }

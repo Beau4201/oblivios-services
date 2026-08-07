@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import org.aegisos.guardian.evidence.GuardianEvidenceRetentionPeriod;
 public final class FileGuardianAuditStore implements GuardianAuditStore {
     private final Path path;
     private final Map<String, GuardianAuditEntry> entries = new LinkedHashMap<>();
+    private final List<String> skippedLoadEntries = new ArrayList<>();
     private GuardianEvidenceRetentionPeriod retentionPeriod = GuardianEvidenceRetentionPeriod.THIRTY_DAYS;
 
     public FileGuardianAuditStore(Path path) {
@@ -45,6 +47,17 @@ public final class FileGuardianAuditStore implements GuardianAuditStore {
         return Optional.ofNullable(entries.get(auditId));
     }
 
+    /**
+     * Diagnostic record of JSON-lines entries skipped during {@link #load()}
+     * because they failed to parse (e.g. truncated by a crash mid-append), in
+     * file order as {@code "line <n>: <cause>"}. Package-private: lets tests
+     * and future Android-side callers notice that data was dropped, without
+     * guardian-core taking on a logging dependency.
+     */
+    synchronized List<String> skippedLoadEntries() {
+        return List.copyOf(skippedLoadEntries);
+    }
+
     @Override
     public synchronized void setRetentionPeriod(GuardianEvidenceRetentionPeriod period) {
         this.retentionPeriod = Objects.requireNonNull(period, "period");
@@ -57,10 +70,7 @@ public final class FileGuardianAuditStore implements GuardianAuditStore {
 
     @Override
     public synchronized void applyRetention(Instant now) {
-        List<String> expired = entries.values().stream()
-            .filter(entry -> !retentionPeriod.isWithinWindow(entry.recordedAt(), now))
-            .map(GuardianAuditEntry::auditId)
-            .toList();
+        List<String> expired = GuardianAuditRetention.expiredAuditIds(entries, retentionPeriod, now);
         if (expired.isEmpty()) {
             return;
         }
@@ -73,12 +83,23 @@ public final class FileGuardianAuditStore implements GuardianAuditStore {
             return;
         }
         try {
-            for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+            for (int lineNumber = 1; lineNumber <= lines.size(); lineNumber++) {
+                String line = lines.get(lineNumber - 1);
                 if (line.isBlank()) {
                     continue;
                 }
-                GuardianAuditEntry entry = GuardianAuditEntryCodec.fromJsonLine(line);
-                entries.put(entry.auditId(), entry);
+                try {
+                    GuardianAuditEntry entry = GuardianAuditEntryCodec.fromJsonLine(line);
+                    entries.put(entry.auditId(), entry);
+                } catch (RuntimeException malformed) {
+                    // A single corrupted/truncated line (e.g. from a crash mid-append --
+                    // append() has no fsync/atomicity guarantee) must never take down the
+                    // rest of the audit trail. Skip just this line and keep loading; record
+                    // it so the drop is still observable without pulling in a logging
+                    // dependency (guardian-core stays zero-runtime-dependency, ADR-013).
+                    skippedLoadEntries.add("line " + lineNumber + ": " + malformed);
+                }
             }
         } catch (IOException exception) {
             throw new UncheckedIOException("Failed to load Guardian audit trail from " + path, exception);
