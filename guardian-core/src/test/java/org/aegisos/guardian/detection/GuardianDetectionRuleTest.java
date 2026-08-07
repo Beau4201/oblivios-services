@@ -71,7 +71,11 @@ class GuardianDetectionRuleTest {
             Arguments.of(
                 event("REPEATED_BACKGROUND_EXECUTION", "APPLICATION_EXECUTION", "BACKGROUND", "ALLOWED", "NONE", 0, 0),
                 "REPEATED_BACKGROUND_EXECUTION_V1", "PROBABLY_HARMFUL", 85,
-                RemediationActionId.FREEZE_APPLICATION, "repeated background execution allowed"));
+                RemediationActionId.FREEZE_APPLICATION, "repeated background execution allowed"),
+            Arguments.of(
+                event("BACKGROUND_LOCATION", "LOCATION_APPROXIMATE", "BACKGROUND", "ALLOWED", "NONE", 0, 0),
+                "BACKGROUND_LOCATION_APPROXIMATE_V1", "UNUSUAL", 55,
+                RemediationActionId.REVOKE_BACKGROUND_LOCATION, "background approximate location allowed"));
     }
 
     private static GuardianEventV1 networkEvent(String category, long bytesSent, long bytesReceived) {

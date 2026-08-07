@@ -12,6 +12,10 @@ public enum GuardianDetectionRule {
         "BACKGROUND_LOCATION", "LOCATION_PRECISE", "BACKGROUND", "ALLOWED",
         "SUSPICIOUS", 80, RemediationActionId.REVOKE_BACKGROUND_LOCATION,
         "background precise location allowed"),
+    BACKGROUND_LOCATION_APPROXIMATE_V1(
+        "BACKGROUND_LOCATION", "LOCATION_APPROXIMATE", "BACKGROUND", "ALLOWED",
+        "UNUSUAL", 55, RemediationActionId.REVOKE_BACKGROUND_LOCATION,
+        "background approximate location allowed"),
     BACKGROUND_NETWORK_V1(
         "BACKGROUND_NETWORK", "NETWORK", "BACKGROUND", "ALLOWED",
         "UNUSUAL", 65, RemediationActionId.BLOCK_BACKGROUND_NETWORK,
