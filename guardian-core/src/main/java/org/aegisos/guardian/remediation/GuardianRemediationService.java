@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.aegisos.guardian.audit.GuardianAuditEntry;
-import org.aegisos.guardian.audit.InMemoryGuardianAuditStore;
+import org.aegisos.guardian.audit.GuardianAuditStore;
 import org.aegisos.guardian.contracts.GuardianIncidentV1;
 import org.aegisos.guardian.overview.GuardianOverviewStore;
 import org.aegisos.guardian.overview.GuardianOverviewTransitionStatus;
@@ -16,14 +16,14 @@ import org.aegisos.guardian.platform.VerificationResult;
 public final class GuardianRemediationService {
     private final RemediationCatalog catalog;
     private final GuardianPlatformGateway gateway;
-    private final InMemoryGuardianAuditStore auditStore;
+    private final GuardianAuditStore auditStore;
     private final GuardianIncidentStore incidentStore;
     private final GuardianOverviewStore overviewStore;
 
     public GuardianRemediationService(
         RemediationCatalog catalog,
         GuardianPlatformGateway gateway,
-        InMemoryGuardianAuditStore auditStore,
+        GuardianAuditStore auditStore,
         GuardianIncidentStore incidentStore,
         GuardianOverviewStore overviewStore) {
         this.catalog = catalog;
