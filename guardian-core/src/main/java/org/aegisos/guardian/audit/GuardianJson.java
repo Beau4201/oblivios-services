@@ -11,12 +11,15 @@ import java.util.Map;
  * booleans, null). Not a general-purpose library -- scoped to what this
  * package's own writer produces and reader consumes, so guardian-core keeps
  * its zero-runtime-dependency, plain-JUnit-testable property (ADR-013).
+ * Public (and its two entry points public) so org.aegisos.guardian.overview's
+ * GuardianOverviewEntryCodec can reuse the same helper instead of duplicating
+ * a second hand-rolled JSON reader/writer.
  */
-final class GuardianJson {
+public final class GuardianJson {
     private GuardianJson() {
     }
 
-    static String write(Object value) {
+    public static String write(Object value) {
         StringBuilder out = new StringBuilder();
         writeValue(value, out);
         return out.toString();
@@ -82,7 +85,7 @@ final class GuardianJson {
         out.append('"');
     }
 
-    static Object parse(String json) {
+    public static Object parse(String json) {
         Parser parser = new Parser(json);
         Object value = parser.parseValue();
         parser.skipWhitespace();
