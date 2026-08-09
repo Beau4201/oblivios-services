@@ -28,6 +28,7 @@ final class GuardianOverviewEntryCodec {
         root.put("compatibilityImpact", protection.compatibilityImpact());
         root.put("undoAvailable", protection.undoAvailable());
         root.put("detailDestination", protection.detailDestination());
+        root.put("auditId", protection.auditId());
         return GuardianJson.write(root);
     }
 
@@ -45,7 +46,8 @@ final class GuardianOverviewEntryCodec {
             (String) map.get("registeredEffect"),
             (String) map.get("compatibilityImpact"),
             (Boolean) map.get("undoAvailable"),
-            (String) map.get("detailDestination"));
+            (String) map.get("detailDestination"),
+            (String) map.get("auditId"));
     }
 
     static String changeToJsonLine(GuardianMeaningfulChangeV1 change) {

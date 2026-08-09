@@ -34,7 +34,7 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
             protectionId, incident.incident().incidentId(), audit.actionId(), incident.packageName(),
             FALLBACK_APP_LABEL, FALLBACK_ICON_KEY, GuardianProtectionLifecycle.VERIFIED_ACTIVE,
             audit.recordedAt(), audit.recordedAt(), description.effect(), description.compatibilityImpact(), true,
-            protectionDestination(protectionId));
+            protectionDestination(protectionId), audit.auditId());
         protectionsByAuditId.put(audit.auditId(), protection);
         retainSummary(changeFor(protection, GuardianMeaningfulChangeType.PROTECTION_VERIFIED,
             audit.recordedAt(), "Guardian verified a temporary protection.",
@@ -108,7 +108,7 @@ public final class InMemoryGuardianOverviewStore implements GuardianOverviewStor
         return new GuardianOverviewEntry.ActiveProtection(protection.protectionId(), protection.appLabel(),
             protection.appIconKey(), protection.lifecycle(), protection.lastVerifiedAt(),
             protection.registeredEffect(), protection.compatibilityImpact(), protection.undoAvailable(),
-            protection.detailDestination());
+            protection.detailDestination(), protection.auditId());
     }
 
     private GuardianOverviewEntry.MeaningfulChange toMeaningfulChange(GuardianMeaningfulChangeV1 change) {

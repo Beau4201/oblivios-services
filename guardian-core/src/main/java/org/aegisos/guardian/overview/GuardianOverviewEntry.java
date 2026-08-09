@@ -18,7 +18,7 @@ public sealed interface GuardianOverviewEntry permits
         String entryId, String appLabel, String iconKey,
         GuardianProtectionLifecycle lifecycle, Instant occurredAt,
         String effect, String compatibilityImpact, boolean undoAvailable,
-        String destination) implements GuardianOverviewEntry {
+        String destination, String auditId) implements GuardianOverviewEntry {
 
         public ActiveProtection {
             requireText(entryId, "entryId");
@@ -31,6 +31,7 @@ public sealed interface GuardianOverviewEntry permits
             requireText(effect, "effect");
             requireText(compatibilityImpact, "compatibilityImpact");
             requireText(destination, "destination");
+            requireText(auditId, "auditId");
         }
     }
 

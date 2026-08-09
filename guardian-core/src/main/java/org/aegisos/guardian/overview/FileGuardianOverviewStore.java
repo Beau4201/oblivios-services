@@ -60,7 +60,7 @@ public final class FileGuardianOverviewStore implements GuardianOverviewStore {
             protectionId, incident.incident().incidentId(), audit.actionId(), incident.packageName(),
             FALLBACK_APP_LABEL, FALLBACK_ICON_KEY, GuardianProtectionLifecycle.VERIFIED_ACTIVE,
             audit.recordedAt(), audit.recordedAt(), description.effect(), description.compatibilityImpact(), true,
-            protectionDestination(protectionId));
+            protectionDestination(protectionId), audit.auditId());
         protectionsByAuditId.put(audit.auditId(), protection);
         appendProtection(protection);
         GuardianMeaningfulChangeV1 change = changeFor(protection, GuardianMeaningfulChangeType.PROTECTION_VERIFIED,
@@ -161,15 +161,9 @@ public final class FileGuardianOverviewStore implements GuardianOverviewStore {
         String kind = (String) root.get("kind");
         if ("protection".equals(kind)) {
             GuardianActiveProtectionV1 protection = GuardianOverviewEntryCodec.protectionFromMap(root);
-            // Re-key by the same auditId the write-time caller used; the on-disk
-            // record does not carry auditId separately from protectionId today,
-            // so use protectionId as the map key on reload -- undo lookups after
-            // a reload key on protectionId's originating auditId, which is only
-            // available at record-time, not reload-time. This is a known
-            // limitation: recordUndoCompleted/recordUndoFailed after a reload
-            // will not find a protection recorded before that reload unless the
-            // caller re-derives the same key. See Task 9 follow-up note below.
-            protectionsByAuditId.put(protection.protectionId(), protection);
+            // auditId is now a persisted field, so reload can key on the same
+            // identity as the live write path (recordVerifiedProtection above).
+            protectionsByAuditId.put(protection.auditId(), protection);
         } else if ("change".equals(kind)) {
             changes.add(GuardianOverviewEntryCodec.changeFromMap(root));
         } else {
@@ -214,7 +208,7 @@ public final class FileGuardianOverviewStore implements GuardianOverviewStore {
         return new GuardianOverviewEntry.ActiveProtection(protection.protectionId(), protection.appLabel(),
             protection.appIconKey(), protection.lifecycle(), protection.lastVerifiedAt(),
             protection.registeredEffect(), protection.compatibilityImpact(), protection.undoAvailable(),
-            protection.detailDestination());
+            protection.detailDestination(), protection.auditId());
     }
 
     private GuardianOverviewEntry.MeaningfulChange toMeaningfulChange(GuardianMeaningfulChangeV1 change) {

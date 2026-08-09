@@ -44,4 +44,40 @@ class FileGuardianOverviewStoreTest {
         assertEquals(1, reloaded.snapshot().activeProtections().size());
         assertTrue(Files.exists(path));
     }
+
+    @Test
+    void undoWorksOnAProtectionReloadedFromDisk(@TempDir Path tempDir) throws IOException {
+        Path path = tempDir.resolve("guardian-overview.jsonl");
+        GuardianIncidentV1 incidentRecord = new GuardianIncidentV1(
+            1, "incident-reload-1", java.util.List.of("event-1"), "UNUSUAL", 80,
+            java.util.List.of("fact"), "REVOKE_BACKGROUND_LOCATION", Instant.parse("2026-08-09T10:00:00Z"),
+            "DETECTED");
+        StoredGuardianIncident incident = new StoredGuardianIncident(incidentRecord, "org.example.app");
+        GuardianAuditEntry protectedAudit = new GuardianAuditEntry(
+            "audit-reload-1", Instant.parse("2026-08-09T10:00:05Z"), incidentRecord,
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION,
+            new PlatformSnapshot("org.example.app", java.util.Map.of()),
+            new GatewayExecution(true, "revoked"),
+            new VerificationResult(true, "confirmed revoked"),
+            null, true, RemediationOutcome.Status.VERIFIED_SUCCESS);
+
+        FileGuardianOverviewStore first = new FileGuardianOverviewStore(path);
+        first.recordVerifiedProtection(protectedAudit, incident);
+
+        // Simulate a real process restart: a brand-new store instance reloads from disk.
+        FileGuardianOverviewStore reloaded = new FileGuardianOverviewStore(path);
+        assertEquals(1, reloaded.snapshot().activeProtections().size());
+
+        GuardianAuditEntry undoAudit = new GuardianAuditEntry(
+            "audit-reload-1-undo", Instant.parse("2026-08-09T11:00:00Z"), incidentRecord,
+            RemediationActionId.REVOKE_BACKGROUND_LOCATION,
+            new PlatformSnapshot("org.example.app", java.util.Map.of()),
+            new GatewayExecution(true, "undone"),
+            new VerificationResult(true, "confirmed restored"),
+            null, true, RemediationOutcome.Status.UNDONE);
+
+        GuardianOverviewTransitionStatus status = reloaded.recordUndoCompleted(undoAudit, protectedAudit);
+        assertEquals(GuardianOverviewTransitionStatus.RECORDED, status);
+        assertEquals(0, reloaded.snapshot().activeProtections().size());
+    }
 }
