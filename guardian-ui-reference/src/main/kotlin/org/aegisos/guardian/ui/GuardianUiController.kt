@@ -83,6 +83,18 @@ class GuardianUiController internal constructor(private val scenario: GuardianUi
         }
     }
 
+    fun undo(explicitAuditId: String): GuardianUiState = try {
+        when (val result = scenario.undo(explicitAuditId)) {
+            is GuardianApplicationResult.UndoCompleted -> {
+                if (result.status() != RemediationOutcome.Status.UNDONE) return undoFailure()
+                GuardianUiState.Undone(result.auditId(), "Undo")
+            }
+            else -> undoFailure()
+        }
+    } catch (_: RuntimeException) {
+        undoFailure()
+    }
+
     fun overview(): GuardianOverviewSnapshot = when (val result = scenario.overview()) {
         is GuardianApplicationResult.Overview -> result.snapshot()
         else -> GuardianOverviewSnapshot(emptyList(), emptyList(), emptyList())

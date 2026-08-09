@@ -340,7 +340,11 @@ private fun GuardianOverviewUiModel.ChangeTone.dotColor(): Color = when (this) {
 /** Stage 02 "Guarding now, in full" from guardian-quiet-authority.html, redrawn as a
  * column of elevated per-app cards rather than a flat divided list. */
 @Composable
-fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit) {
+fun GuardianGuardingNowScreen(
+    model: GuardianOverviewUiModel,
+    onBack: () -> Unit,
+    onUndo: (auditId: String) -> Unit,
+) {
     GuardianScreen(background = GuardianPalette.bg) {
         GuardianDetailHeader(
             icon = rememberGuardianCheckIcon(GuardianPalette.verified),
@@ -360,14 +364,14 @@ fun GuardianGuardingNowScreen(model: GuardianOverviewUiModel, onBack: () -> Unit
             if (model.guardingNow.isEmpty()) {
                 Text(overviewNoProtectionsCopy, color = GuardianPalette.muted, fontSize = 13.sp)
             } else {
-                model.guardingNow.forEach { row -> GuardingCard(row) }
+                model.guardingNow.forEach { row -> GuardingCard(row, onUndo) }
             }
         }
     }
 }
 
 @Composable
-private fun GuardingCard(row: GuardianOverviewUiModel.GuardingRow) {
+private fun GuardingCard(row: GuardianOverviewUiModel.GuardingRow, onUndo: (String) -> Unit) {
     Surface(
         color = GuardianPalette.card,
         shape = RoundedCornerShape(16.dp),
@@ -437,7 +441,12 @@ private fun GuardingCard(row: GuardianOverviewUiModel.GuardingRow) {
                     )
                 }
                 if (row.undoAvailable) {
-                    Text(changeMyMindLabel, color = GuardianPalette.muted, fontSize = 11.sp)
+                    Text(
+                        changeMyMindLabel,
+                        color = GuardianPalette.muted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.clickable { onUndo(row.auditId) },
+                    )
                 }
             }
         }
