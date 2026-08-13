@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -18,15 +19,28 @@ import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 
+/**
+ * Cards should read as gently floating, not just differently-toned
+ * rectangles (design spec: "Layout, shape, and elevation") — a soft,
+ * brand-tinted shadow rather than stock M3's flat tonal elevation, which
+ * read as "boring/flat" in review.
+ */
 @Composable
 fun GuardianFloatingCard(
     modifier: Modifier = Modifier,
     cornerRadius: Int = 26,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(cornerRadius.dp)
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(cornerRadius.dp))
+            .shadow(
+                elevation = 10.dp,
+                shape = shape,
+                ambientColor = GuardianColor.Glow.copy(alpha = 0.25f),
+                spotColor = GuardianColor.Glow.copy(alpha = 0.35f),
+            )
+            .clip(shape)
             .background(GuardianColor.SurfaceContainerLowest)
             .padding(20.dp),
         content = content,
@@ -42,10 +56,17 @@ fun GuardianListItem(
     subtitle: String,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val shape = RoundedCornerShape(20.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .shadow(
+                elevation = 4.dp,
+                shape = shape,
+                ambientColor = GuardianColor.Glow.copy(alpha = 0.15f),
+                spotColor = GuardianColor.Glow.copy(alpha = 0.25f),
+            )
+            .clip(shape)
             .background(GuardianColor.SurfaceContainerLowest)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,

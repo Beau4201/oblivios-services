@@ -3,6 +3,7 @@ package org.aegisos.guardianui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -10,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,7 +41,27 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
     ) {
         Spacer(Modifier.weight(1.1f))
 
-        GuardianMark(modifier = Modifier.size(96.dp))
+        // Soft ambient glow behind the hero mark (design spec, First Run:
+        // "the real shield mark at hero size with a soft ambient glow
+        // behind it"). A radial gradient of the brand glow tint, fading to
+        // transparent, sized larger than the mark so it reads as an aura
+        // rather than a hard-edged halo.
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(168.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                GuardianColor.Glow.copy(alpha = 0.30f),
+                                Color.Transparent,
+                            ),
+                        ),
+                        shape = CircleShape,
+                    ),
+            )
+            GuardianMark(modifier = Modifier.size(96.dp))
+        }
         Spacer(Modifier.height(22.dp))
         Text(
             "Meet Guardian",
