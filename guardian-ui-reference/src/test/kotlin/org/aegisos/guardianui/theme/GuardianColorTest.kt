@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 private fun channelLuminance(c: Float): Double =
-    if (c <= 0.03928) c / 12.92 else ((c + 0.055) / 1.055).toDouble().pow(2.4)
+    if (c <= 0.03928) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
 
 private fun relativeLuminance(color: Color): Double =
     0.2126 * channelLuminance(color.red) +
