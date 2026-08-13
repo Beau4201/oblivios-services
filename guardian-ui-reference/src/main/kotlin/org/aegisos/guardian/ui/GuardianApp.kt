@@ -62,6 +62,10 @@ fun GuardianApp(controller: GuardianUiController) {
             GuardianRoute.GUARDING_NOW -> GuardianGuardingNowScreen(
                 model = model,
                 onBack = { route = GuardianRoute.HOME },
+                onUndo = { auditId ->
+                    controller.undo(auditId)
+                    overview = controller.overview()
+                },
             )
             GuardianRoute.RECENT_CHANGES -> GuardianRecentChangesScreen(
                 model = model,

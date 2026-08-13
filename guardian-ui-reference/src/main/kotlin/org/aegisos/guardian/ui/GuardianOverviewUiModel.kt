@@ -11,6 +11,7 @@ data class GuardianOverviewUiModel(
 ) {
     data class GuardingRow(
         val entryId: String,
+        val auditId: String,
         val appLabel: String,
         val iconKey: String,
         val effect: String,
@@ -46,6 +47,7 @@ fun GuardianOverviewSnapshot.toUiModel(): GuardianOverviewUiModel = GuardianOver
     guardingNow = activeProtections().map { entry ->
         GuardianOverviewUiModel.GuardingRow(
             entryId = entry.entryId(),
+            auditId = entry.auditId(),
             appLabel = entry.appLabel(),
             iconKey = entry.iconKey(),
             effect = entry.effect(),

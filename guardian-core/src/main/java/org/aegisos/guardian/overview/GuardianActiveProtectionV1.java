@@ -17,7 +17,8 @@ record GuardianActiveProtectionV1(
     String registeredEffect,
     String compatibilityImpact,
     boolean undoAvailable,
-    String detailDestination) {
+    String detailDestination,
+    String auditId) {
 
     GuardianActiveProtectionV1 {
         requireText(protectionId, "protectionId");
@@ -32,6 +33,7 @@ record GuardianActiveProtectionV1(
         requireText(registeredEffect, "registeredEffect");
         requireText(compatibilityImpact, "compatibilityImpact");
         requireText(detailDestination, "detailDestination");
+        requireText(auditId, "auditId");
     }
 
     private static void requireText(String value, String name) {

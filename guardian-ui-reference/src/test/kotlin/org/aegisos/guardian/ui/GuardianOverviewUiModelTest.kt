@@ -25,12 +25,13 @@ class GuardianOverviewUiModelTest {
         val entry = GuardianOverviewEntry.ActiveProtection(
             "protection-1", "Story app", "icon-story", GuardianProtectionLifecycle.VERIFIED_ACTIVE,
             Instant.parse("2026-07-24T12:01:00Z"), "Background location access stops",
-            "Undo restores background location access", true, "guardian://protection-1",
+            "Undo restores background location access", true, "guardian://protection-1", "audit-1",
         )
 
         val row = GuardianOverviewSnapshot(listOf(entry), emptyList(), emptyList()).toUiModel().guardingNow.single()
 
         assertEquals("protection-1", row.entryId)
+        assertEquals("audit-1", row.auditId)
         assertEquals("Story app", row.appLabel)
         assertEquals("icon-story", row.iconKey)
         assertEquals("Background location access stops", row.effect)
