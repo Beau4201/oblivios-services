@@ -11,9 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.aegisos.guardianui.components.GuardianFloatingCard
+import org.aegisos.guardianui.components.GuardianPrimaryButton
 import org.aegisos.guardianui.components.GuardianStatusChip
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
@@ -44,7 +46,10 @@ fun GuardianIncidentReviewScreen(
                 GuardianIcons.ArrowBackIos,
                 contentDescription = "Back",
                 tint = GuardianColor.OnSurface,
-                modifier = Modifier.size(19.dp).clickable { onBack() },
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                    .size(19.dp)
+                    .clickable(role = Role.Button, onClick = onBack),
             )
             Spacer(Modifier.width(14.dp))
             Text("Review access", style = MaterialTheme.typography.titleMedium, color = GuardianColor.OnSurface)
@@ -84,17 +89,9 @@ fun GuardianIncidentReviewScreen(
 
             Spacer(Modifier.weight(1f))
 
-            Text(
-                "Restrict ${state.permissionLabel.replaceFirstChar { it.lowercase() }}",
-                style = MaterialTheme.typography.labelLarge,
-                color = GuardianColor.OnPrimary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(GuardianColor.Primary)
-                    .clickable { onRestrict() }
-                    .padding(15.dp),
+            GuardianPrimaryButton(
+                text = "Restrict ${state.permissionLabel.replaceFirstChar { it.lowercase() }}",
+                onClick = onRestrict,
             )
             Text(
                 "Not now",
@@ -103,7 +100,8 @@ fun GuardianIncidentReviewScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onNotNow() }
+                    .defaultMinSize(minHeight = 48.dp)
+                    .clickable(role = Role.Button, onClick = onNotNow)
                     .padding(10.dp),
             )
         }

@@ -1,7 +1,6 @@
 package org.aegisos.guardianui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +17,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.components.GuardianMark
+import org.aegisos.guardianui.components.GuardianPrimaryButton
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 import androidx.compose.material3.Icon
@@ -106,18 +106,7 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
 
         Spacer(Modifier.weight(0.9f))
 
-        Text(
-            "Get started",
-            style = MaterialTheme.typography.labelLarge,
-            color = GuardianColor.OnPrimary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(999.dp))
-                .background(GuardianColor.Primary)
-                .clickable { onGetStarted() }
-                .padding(15.dp),
-        )
+        GuardianPrimaryButton(text = "Get started", onClick = onGetStarted)
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(GuardianIcons.Lock, contentDescription = null, tint = GuardianColor.OnSurfaceVariant, modifier = Modifier.size(13.dp))

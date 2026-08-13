@@ -71,4 +71,35 @@ class GuardianChoicesScreenTest {
         composeRule.onNodeWithText("Home").performClick()
         kotlin.test.assertEquals(0, navIndex)
     }
+
+    @Test
+    fun `shows a count summary instead of the empty state when apps are allowed`() {
+        composeRule.setContent {
+            GuardianTheme {
+                GuardianChoicesScreen(
+                    state = sampleState.copy(allowedAppsCount = 3),
+                    onWatchToggle = { _, _ -> },
+                    onNotifyImmediatelyToggle = {},
+                    onNavSelect = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("3 apps allowed — manage anytime.").assertExists()
+        composeRule.onNodeWithText("No exceptions yet. Anything you allow shows up here — and can be revoked anytime.").assertDoesNotExist()
+    }
+
+    @Test
+    fun `count summary uses singular wording for exactly one allowed app`() {
+        composeRule.setContent {
+            GuardianTheme {
+                GuardianChoicesScreen(
+                    state = sampleState.copy(allowedAppsCount = 1),
+                    onWatchToggle = { _, _ -> },
+                    onNotifyImmediatelyToggle = {},
+                    onNavSelect = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("1 app allowed — manage anytime.").assertExists()
+    }
 }

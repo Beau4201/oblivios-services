@@ -13,6 +13,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,6 +96,66 @@ fun GuardianListItem(
     }
 }
 
+/**
+ * The mark + title row shared by every top-level tab (Home, Trust, Choices)
+ * — was hand-copied identically three times before this extraction, with
+ * only the title text and an optional trailing action differing.
+ */
+@Composable
+fun GuardianTopBar(
+    title: String,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        GuardianMark(modifier = Modifier.size(26.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(title, style = MaterialTheme.typography.titleLarge, color = GuardianColor.OnSurface)
+        if (trailing != null) {
+            Spacer(Modifier.weight(1f))
+            trailing()
+        }
+    }
+}
+
+/**
+ * The small-caps section heading used above every grouped list on Home,
+ * Trust, and Choices ("RECENT CHANGES", "ACTIVITY LOG", "WHAT GUARDIAN
+ * WATCHES", ...) — was three separately hand-styled `Text` calls before
+ * this extraction.
+ */
+@Composable
+fun GuardianSectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        color = GuardianColor.OnSurfaceVariant,
+    )
+}
+
+/**
+ * The filled pill call-to-action button shared by First Run ("Get
+ * started") and Incident Review ("Restrict ...") — was two hand-copied
+ * modifier chains before this extraction.
+ */
+@Composable
+fun GuardianPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = GuardianColor.OnPrimary,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(999.dp))
+            .background(GuardianColor.Primary)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(15.dp),
+    )
+}
+
 @Composable
 fun GuardianStatusChip(
     icon: ImageVector,
@@ -164,7 +226,15 @@ fun GuardianNavBar(
             val selected = index == selectedIndex
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { onSelect(index) },
+                // defaultMinSize, not Material3's minimumInteractiveComponentSize():
+                // confirmed by direct investigation that the latter is a no-op on
+                // this Compose Multiplatform Desktop/JVM-test target (its
+                // LayoutModifierNode gates enlargement on isAttached(), which
+                // reads false here even after settling) — defaultMinSize achieves
+                // the same 48dp floor and is verified working on this target.
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                    .clickable(role = Role.Tab, onClick = { onSelect(index) }),
             ) {
                 Box(
                     modifier = Modifier

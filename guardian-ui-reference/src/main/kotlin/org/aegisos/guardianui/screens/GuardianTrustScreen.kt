@@ -1,10 +1,12 @@
 package org.aegisos.guardianui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -12,13 +14,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import org.aegisos.guardianui.components.GuardianBottomNavItems
 import org.aegisos.guardianui.components.GuardianFloatingCard
 import org.aegisos.guardianui.components.GuardianListItem
-import org.aegisos.guardianui.components.GuardianMark
 import org.aegisos.guardianui.components.GuardianNavBar
+import org.aegisos.guardianui.components.GuardianSectionLabel
+import org.aegisos.guardianui.components.GuardianTopBar
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 
@@ -51,17 +54,13 @@ fun GuardianTrustScreen(
     onNavSelect: (Int) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(GuardianColor.Surface)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GuardianMark(modifier = Modifier.size(26.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("Trust", style = MaterialTheme.typography.titleLarge, color = GuardianColor.OnSurface)
-        }
+        GuardianTopBar(title = "Trust")
 
         Column(
-            modifier = Modifier.weight(1f).padding(horizontal = 20.dp),
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
@@ -89,11 +88,7 @@ fun GuardianTrustScreen(
 
             if (state.activityLog.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "ACTIVITY LOG",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = GuardianColor.OnSurfaceVariant,
-                    )
+                    GuardianSectionLabel("ACTIVITY LOG")
                     state.activityLog.forEach { entry ->
                         val icon = if (entry.isSafe) GuardianIcons.Check else GuardianIcons.Visibility
                         val container = if (entry.isSafe) GuardianColor.SuccessContainer else GuardianColor.SecondaryContainer
@@ -113,11 +108,7 @@ fun GuardianTrustScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "KEEP HISTORY FOR",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = GuardianColor.OnSurfaceVariant,
-                )
+                GuardianSectionLabel("KEEP HISTORY FOR")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -133,9 +124,10 @@ fun GuardianTrustScreen(
                             color = if (selected) GuardianColor.OnPrimary else GuardianColor.OnSurfaceVariant,
                             modifier = Modifier
                                 .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
                                 .clip(RoundedCornerShape(999.dp))
                                 .background(if (selected) GuardianColor.Primary else androidx.compose.ui.graphics.Color.Transparent)
-                                .clickable { onRetentionSelected(option) }
+                                .selectable(selected = selected, role = Role.RadioButton, onClick = { onRetentionSelected(option) })
                                 .padding(vertical = 8.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )

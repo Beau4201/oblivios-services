@@ -3,6 +3,8 @@ package org.aegisos.guardianui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -10,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.aegisos.guardianui.components.GuardianBottomNavItems
@@ -18,6 +20,8 @@ import org.aegisos.guardianui.components.GuardianFloatingCard
 import org.aegisos.guardianui.components.GuardianListItem
 import org.aegisos.guardianui.components.GuardianMark
 import org.aegisos.guardianui.components.GuardianNavBar
+import org.aegisos.guardianui.components.GuardianSectionLabel
+import org.aegisos.guardianui.components.GuardianTopBar
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 
@@ -45,27 +49,23 @@ fun GuardianHomeScreen(
             .fillMaxSize()
             .background(GuardianColor.Surface),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GuardianMark(modifier = Modifier.size(26.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("Guardian", style = MaterialTheme.typography.titleLarge, color = GuardianColor.OnSurface)
-            Spacer(Modifier.weight(1f))
+        GuardianTopBar(title = "Guardian") {
             Icon(
                 GuardianIcons.Settings,
                 contentDescription = "Settings",
                 tint = GuardianColor.OnSurfaceVariant,
-                modifier = Modifier.size(22.dp).clickable { onSettingsClick() },
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                    .size(22.dp)
+                    .clickable(role = Role.Button, onClick = onSettingsClick),
             )
         }
 
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 20.dp)
-                .verticalScrollPadding(),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(26.dp),
         ) {
             GuardianFloatingCard(
@@ -114,16 +114,12 @@ fun GuardianHomeScreen(
 
             if (state.recentChanges.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "RECENT CHANGES",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = GuardianColor.OnSurfaceVariant,
-                    )
+                    GuardianSectionLabel("RECENT CHANGES")
                     state.recentChanges.forEach { change ->
                         val icon: ImageVector = if (change.isSafe) GuardianIcons.Check else GuardianIcons.Warning
                         val container = if (change.isSafe) GuardianColor.SuccessContainer else GuardianColor.WarningContainer
                         val tint = if (change.isSafe) GuardianColor.OnSuccessContainer else GuardianColor.OnWarningContainer
-                        Box(modifier = Modifier.clickable { onRecentChangeClick(change) }) {
+                        Box(modifier = Modifier.clickable(role = Role.Button) { onRecentChangeClick(change) }) {
                             GuardianListItem(
                                 leadingIcon = icon,
                                 leadingTint = tint,
@@ -140,5 +136,3 @@ fun GuardianHomeScreen(
         GuardianNavBar(items = GuardianBottomNavItems, selectedIndex = 0, onSelect = onNavSelect)
     }
 }
-
-private fun Modifier.verticalScrollPadding(): Modifier = this.padding(vertical = 8.dp)
