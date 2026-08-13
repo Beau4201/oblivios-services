@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.assertCountEquals
 import org.aegisos.guardianui.theme.GuardianTheme
 import org.junit.Rule
 import org.junit.Test
@@ -46,6 +47,17 @@ class GuardianChoicesScreenTest {
         composeRule.onAllNodesWithTag("watch-toggle-switch")[0].performClick()
         kotlin.test.assertEquals(0, reportedIndex)
         kotlin.test.assertEquals(false, reportedValue)
+    }
+
+    @Test
+    fun `watch-toggle-switch tag is exclusive to watch toggles, not the notify switch`() {
+        composeRule.setContent {
+            GuardianTheme {
+                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onNavSelect = {})
+            }
+        }
+        composeRule.onAllNodesWithTag("watch-toggle-switch").assertCountEquals(sampleState.watchToggles.size)
+        composeRule.onAllNodesWithTag("notify-immediately-switch").assertCountEquals(1)
     }
 
     @Test

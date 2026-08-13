@@ -62,6 +62,7 @@ fun GuardianChoicesScreen(
                         description = toggle.description,
                         checked = toggle.enabled,
                         onCheckedChange = { onWatchToggle(index, it) },
+                        testTag = "watch-toggle-switch",
                     )
                 }
             }
@@ -73,6 +74,7 @@ fun GuardianChoicesScreen(
                     description = "Otherwise, grouped into a daily summary",
                     checked = state.notifyImmediately,
                     onCheckedChange = onNotifyImmediatelyToggle,
+                    testTag = "notify-immediately-switch",
                 )
             }
 
@@ -108,7 +110,13 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun ToggleRow(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun ToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -117,7 +125,7 @@ private fun ToggleRow(title: String, description: String, checked: Boolean, onCh
             Text(title, style = MaterialTheme.typography.titleMedium, color = GuardianColor.OnSurface)
             Text(description, style = MaterialTheme.typography.bodyMedium, color = GuardianColor.OnSurfaceVariant)
         }
-        androidx.compose.foundation.layout.Box(modifier = Modifier.testTag("watch-toggle-switch")) {
+        androidx.compose.foundation.layout.Box(modifier = Modifier.testTag(testTag)) {
             GuardianSwitch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
