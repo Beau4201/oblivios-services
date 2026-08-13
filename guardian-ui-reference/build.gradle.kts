@@ -22,7 +22,7 @@ dependencies {
     implementation(project(":guardian-core"))
     implementation(project(":guardian-reference"))
     implementation(compose.desktop.currentOs)
-    implementation("androidx.compose.material3:material3:1.3.0")
+    implementation(compose.material3)
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
