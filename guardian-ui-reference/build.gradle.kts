@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":guardian-core"))
     implementation(project(":guardian-reference"))
     implementation(compose.desktop.currentOs)
+    testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
