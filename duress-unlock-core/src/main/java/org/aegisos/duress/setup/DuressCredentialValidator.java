@@ -1,4 +1,3 @@
-// duress-unlock-core/src/main/java/org/aegisos/duress/setup/DuressCredentialValidator.java
 package org.aegisos.duress.setup;
 
 import java.util.Arrays;

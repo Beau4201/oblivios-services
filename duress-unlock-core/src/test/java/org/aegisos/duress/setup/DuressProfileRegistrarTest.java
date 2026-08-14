@@ -1,4 +1,3 @@
-// duress-unlock-core/src/test/java/org/aegisos/duress/setup/DuressProfileRegistrarTest.java
 package org.aegisos.duress.setup;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

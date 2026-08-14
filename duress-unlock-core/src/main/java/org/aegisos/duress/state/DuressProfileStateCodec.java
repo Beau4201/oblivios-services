@@ -27,7 +27,7 @@ final class DuressProfileStateCodec {
         }
         String[] parts = line.split(",", 4);
         if (parts.length != 4 || !parts[0].equals("REGISTERED")) {
-            throw new IllegalArgumentException("Malformed duress profile state line: " + line);
+            throw new IllegalArgumentException("Malformed duress profile state line");
         }
         String profileId = new String(Base64.getDecoder().decode(parts[1]), StandardCharsets.UTF_8);
         byte[] hash = Base64.getDecoder().decode(parts[2]);

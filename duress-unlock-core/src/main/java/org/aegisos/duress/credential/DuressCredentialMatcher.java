@@ -3,6 +3,29 @@ package org.aegisos.duress.credential;
 import java.security.MessageDigest;
 import org.aegisos.duress.state.DuressProfileState;
 
+/**
+ * Compares an entered unlock credential against the device's registered
+ * duress (decoy) profile, if any.
+ *
+ * <p><strong>{@link #matches(DuressProfileState, char[])} MUST be called
+ * unconditionally on every unlock attempt</strong>, regardless of whether
+ * {@code DuressProfileStateStore.load()} returned {@link
+ * DuressProfileState.Off} or {@link DuressProfileState.Registered}. This
+ * method always performs a PBKDF2 hash of the entered credential — against
+ * the real salt/hash when registered, or against a fixed dummy salt/hash of
+ * identical length when not (see {@link #effectiveSalt} / {@link
+ * #effectiveHash}) — specifically so that an unregistered device pays the
+ * same computational cost as a registered one on every attempt.
+ *
+ * <p>Guarding this call with something like
+ * {@code if (state instanceof DuressProfileState.Registered r) { ... }}
+ * before calling {@code matches()} would skip the PBKDF2 computation on the
+ * {@code Off} path and reintroduce the exact timing side-channel this class
+ * exists to eliminate: an attacker could measure unlock response time to
+ * learn whether a decoy profile is registered at all. Always call this
+ * method first, unconditionally, and branch on its {@link DuressMatchResult}
+ * return value instead.
+ */
 public final class DuressCredentialMatcher {
 
     // Fixed-length placeholders so an unregistered device pays the exact

@@ -39,7 +39,6 @@ class DuressProfileStateCodecTest {
                 () -> DuressProfileStateCodec.decode("not-a-valid-line"));
     }
 
-
     @Test
     void encodesAndDecodesProfileIdContainingCommasRoundTrip() {
         byte[] hash = {1, 2, 3};

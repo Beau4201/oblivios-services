@@ -6,6 +6,15 @@ import java.security.spec.InvalidKeySpecException;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
+/**
+ * PBKDF2-HMAC-SHA256 hashing for duress (decoy) credentials.
+ *
+ * <p>This class never mutates or zeroizes caller-supplied {@code char[]}
+ * credential arrays. {@link #hash(char[], byte[])} only clears its own
+ * internal {@link PBEKeySpec} clone (via {@link PBEKeySpec#clearPassword()})
+ * before returning. The caller retains ownership of the {@code credential}
+ * array passed in and is responsible for wiping it after use.
+ */
 public final class DuressCredentialHasher {
 
     static final int SALT_LENGTH_BYTES = 16;
