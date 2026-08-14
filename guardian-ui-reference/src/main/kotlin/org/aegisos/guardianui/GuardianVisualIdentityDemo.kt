@@ -134,7 +134,6 @@ fun GuardianVisualIdentityDemo() {
 
             GuardianDemoRoute.Home -> GuardianHomeScreen(
                 state = homeState,
-                onSettingsClick = { route = GuardianDemoRoute.Choices },
                 onRecentChangeClick = { route = GuardianDemoRoute.IncidentReview },
                 onNavSelect = { onNavSelect(it) },
             )

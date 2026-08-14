@@ -1,10 +1,15 @@
 package org.aegisos.guardianui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -12,12 +17,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -327,58 +343,162 @@ val GuardianBottomNavItems = listOf(
     GuardianNavItem("Choices", GuardianIcons.Tune),
 )
 
+private val GuardianNavMotionEasing = CubicBezierEasing(0.32f, 1.4f, 0.5f, 1f)
+internal val GuardianNavIndicatorWidth = 88.dp
+private val GuardianNavIndicatorHeight = 48.dp
+private val GuardianNavBarHeight = 64.dp
+
+/**
+ * Pure so it's directly unit-testable without a Compose UI test rule
+ * (and without fighting `animateDpAsState`'s frame-clock timing) — the
+ * indicator centers itself within the selected item's equal-width slot,
+ * `rowWidthPx / itemCount`, the same formula as the CSS mockup's
+ * `SLOT_W = barWidth / 3` centering math, just against the real measured
+ * row width instead of the mockup's fixed 320px frame.
+ */
+internal fun guardianNavIndicatorOffsetPx(
+    rowWidthPx: Float,
+    indicatorWidthPx: Float,
+    itemCount: Int,
+    selectedIndex: Int,
+): Float {
+    val slotWidthPx = rowWidthPx / itemCount.coerceAtLeast(1)
+    return slotWidthPx * selectedIndex + (slotWidthPx - indicatorWidthPx) / 2f
+}
+
+/**
+ * Revision 3 (design mockup, guardian-final artifact): the previous nav
+ * bar animated `flex-grow`-equivalent size changes to expand the active
+ * tab — a real layout-shift anti-pattern. This one keeps every item a
+ * fixed size (icon + always-visible label, never icon-only — bare icon
+ * nav is its own accessibility anti-pattern) and moves only a separate
+ * indicator layer behind them via `offset`, matching the CSS mockup's
+ * `transform: translateX()`-only motion. The indicator's fill is a soft
+ * radial wash of the same brand glow token already used behind the First
+ * Run hero mark, not a solid tonal block — drawn as a circle then
+ * non-uniformly scaled into the mockup's elliptical
+ * `radial-gradient(60% 60% at 50% 42%, ...)` shape.
+ */
 @Composable
 fun GuardianNavBar(
     items: List<GuardianNavItem>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(GuardianColor.SurfaceContainer)
-            .padding(top = 10.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.SpaceAround,
-    ) {
-        items.forEachIndexed { index, item ->
-            val selected = index == selectedIndex
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                // defaultMinSize, not Material3's minimumInteractiveComponentSize():
-                // confirmed by direct investigation that the latter is a no-op on
-                // this Compose Multiplatform Desktop/JVM-test target (its
-                // LayoutModifierNode gates enlargement on isAttached(), which
-                // reads false here even after settling) — defaultMinSize achieves
-                // the same 48dp floor and is verified working on this target.
-                modifier = Modifier
-                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                    .clickable(role = Role.Tab, onClick = { onSelect(index) }),
-            ) {
+    val density = LocalDensity.current
+    var rowWidthPx by remember { mutableStateOf(0f) }
+    val targetOffset = with(density) {
+        guardianNavIndicatorOffsetPx(
+            rowWidthPx = rowWidthPx,
+            indicatorWidthPx = GuardianNavIndicatorWidth.toPx(),
+            itemCount = items.size,
+            selectedIndex = selectedIndex,
+        ).toDp()
+    }
+    val indicatorOffset by animateDpAsState(
+        targetValue = targetOffset,
+        animationSpec = tween(durationMillis = 420, easing = GuardianNavMotionEasing),
+        label = "guardian-nav-indicator",
+    )
+
+    Column {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(GuardianColor.OutlineVariant),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(GuardianNavBarHeight)
+                .background(GuardianColor.SurfaceContainer),
+        ) {
+            if (rowWidthPx > 0f) {
                 Box(
                     modifier = Modifier
-                        .size(width = 52.dp, height = 28.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (selected) GuardianColor.SecondaryContainer else Color.Transparent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (item.useMarkIcon) {
-                        GuardianMark(modifier = Modifier.size(20.dp))
-                    } else {
-                        Icon(
-                            item.icon,
-                            contentDescription = null,
-                            tint = if (selected) GuardianColor.OnSecondaryContainer else GuardianColor.OnSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
+                        .testTag("guardian-nav-indicator")
+                        .offset(x = indicatorOffset, y = (GuardianNavBarHeight - GuardianNavIndicatorHeight) / 2)
+                        .size(width = GuardianNavIndicatorWidth, height = GuardianNavIndicatorHeight)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(GuardianColor.Glow.copy(alpha = 0.06f))
+                        .drawWithCache {
+                            val center = Offset(size.width * 0.5f, size.height * 0.42f)
+                            val radiusY = size.height * 0.6f
+                            val radiusX = size.width * 0.6f
+                            onDrawBehind {
+                                scale(scaleX = radiusX / radiusY, scaleY = 1f, pivot = center) {
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colorStops = arrayOf(
+                                                0f to GuardianColor.Glow.copy(alpha = 0.30f),
+                                                0.62f to GuardianColor.Glow.copy(alpha = 0.12f),
+                                                1f to GuardianColor.Glow.copy(alpha = 0f),
+                                            ),
+                                            center = center,
+                                            radius = radiusY,
+                                        ),
+                                        radius = radiusY,
+                                        center = center,
+                                    )
+                                }
+                            }
+                        },
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned { rowWidthPx = it.size.width.toFloat() },
+            ) {
+                items.forEachIndexed { index, item ->
+                    val selected = index == selectedIndex
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val pressed by interactionSource.collectIsPressedAsState()
+                    val iconScale by animateFloatAsState(
+                        targetValue = if (pressed) 0.92f else 1f,
+                        animationSpec = tween(durationMillis = 200, easing = GuardianNavMotionEasing),
+                        label = "guardian-nav-icon-scale",
+                    )
+                    val tint = if (selected) GuardianColor.Primary else GuardianColor.OnSurfaceVariant
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                role = Role.Tab,
+                                onClick = { onSelect(index) },
+                            ),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer { scaleX = iconScale; scaleY = iconScale },
+                        ) {
+                            if (item.useMarkIcon) {
+                                GuardianMark(modifier = Modifier.fillMaxSize())
+                            } else {
+                                Icon(
+                                    item.icon,
+                                    contentDescription = null,
+                                    tint = tint,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            item.label,
+                            style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp),
+                            color = tint,
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    item.label,
-                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp),
-                    color = if (selected) GuardianColor.OnSurface else GuardianColor.OnSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }

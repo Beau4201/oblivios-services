@@ -1,12 +1,9 @@
 package org.aegisos.guardianui.screens
 
-import androidx.compose.ui.test.assertHeightIsAtLeast
-import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.dp
 import org.aegisos.guardianui.theme.GuardianTheme
 import org.junit.Rule
 import org.junit.Test
@@ -28,7 +25,7 @@ class GuardianHomeScreenTest {
     fun `shows headline, attention line, and every recent change`() {
         composeRule.setContent {
             GuardianTheme {
-                GuardianHomeScreen(state = sampleState, onSettingsClick = {}, onRecentChangeClick = {}, onNavSelect = {})
+                GuardianHomeScreen(state = sampleState, onRecentChangeClick = {}, onNavSelect = {})
             }
         }
         composeRule.onNodeWithText("You're protected").assertExists()
@@ -42,7 +39,7 @@ class GuardianHomeScreenTest {
         var clicked: GuardianRecentChange? = null
         composeRule.setContent {
             GuardianTheme {
-                GuardianHomeScreen(state = sampleState, onSettingsClick = {}, onRecentChangeClick = { clicked = it }, onNavSelect = {})
+                GuardianHomeScreen(state = sampleState, onRecentChangeClick = { clicked = it }, onNavSelect = {})
             }
         }
         composeRule.onNodeWithText("Weather").performClick()
@@ -55,7 +52,6 @@ class GuardianHomeScreenTest {
             GuardianTheme {
                 GuardianHomeScreen(
                     state = sampleState.copy(attentionLine = null),
-                    onSettingsClick = {},
                     onRecentChangeClick = {},
                     onNavSelect = {},
                 )
@@ -69,7 +65,7 @@ class GuardianHomeScreenTest {
         var navIndex = -1
         composeRule.setContent {
             GuardianTheme {
-                GuardianHomeScreen(state = sampleState, onSettingsClick = {}, onRecentChangeClick = {}, onNavSelect = { navIndex = it })
+                GuardianHomeScreen(state = sampleState, onRecentChangeClick = {}, onNavSelect = { navIndex = it })
             }
         }
         composeRule.onNodeWithText("Trust").performClick()
@@ -77,24 +73,12 @@ class GuardianHomeScreenTest {
     }
 
     @Test
-    fun `tapping the settings icon invokes its callback`() {
-        var tapped = 0
+    fun `top bar has no settings gear, matching Trust and Choices`() {
         composeRule.setContent {
             GuardianTheme {
-                GuardianHomeScreen(state = sampleState, onSettingsClick = { tapped++ }, onRecentChangeClick = {}, onNavSelect = {})
+                GuardianHomeScreen(state = sampleState, onRecentChangeClick = {}, onNavSelect = {})
             }
         }
-        composeRule.onNodeWithContentDescription("Settings").performClick()
-        kotlin.test.assertEquals(1, tapped)
-    }
-
-    @Test
-    fun `settings icon has at least a 48dp touch target`() {
-        composeRule.setContent {
-            GuardianTheme {
-                GuardianHomeScreen(state = sampleState, onSettingsClick = {}, onRecentChangeClick = {}, onNavSelect = {})
-            }
-        }
-        composeRule.onNodeWithContentDescription("Settings").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+        composeRule.onNodeWithContentDescription("Settings").assertDoesNotExist()
     }
 }

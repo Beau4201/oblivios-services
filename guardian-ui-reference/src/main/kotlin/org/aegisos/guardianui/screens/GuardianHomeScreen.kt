@@ -44,7 +44,6 @@ data class GuardianHomeUiState(
 @Composable
 fun GuardianHomeScreen(
     state: GuardianHomeUiState,
-    onSettingsClick: () -> Unit,
     onRecentChangeClick: (GuardianRecentChange) -> Unit,
     onNavSelect: (Int) -> Unit,
 ) {
@@ -53,17 +52,7 @@ fun GuardianHomeScreen(
             .fillMaxSize()
             .background(GuardianColor.Surface),
     ) {
-        GuardianTopBar(title = "Guardian") {
-            Icon(
-                GuardianIcons.Settings,
-                contentDescription = "Settings",
-                tint = GuardianColor.OnSurfaceVariant,
-                modifier = Modifier
-                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                    .size(22.dp)
-                    .clickable(role = Role.Button, onClick = onSettingsClick),
-            )
-        }
+        GuardianTopBar(title = "Guardian")
 
         Column(
             modifier = Modifier

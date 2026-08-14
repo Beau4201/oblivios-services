@@ -3,7 +3,9 @@ package org.aegisos.guardianui.components
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -66,6 +68,43 @@ class GuardianUiComponentsTest {
             }
         }
         composeRule.onNodeWithText("Home").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `nav bar indicator is a fixed 88dp by 48dp regardless of item count`() {
+        composeRule.setContent {
+            GuardianTheme {
+                GuardianNavBar(
+                    items = listOf(
+                        GuardianNavItem("Home", GuardianIcons.Home),
+                        GuardianNavItem("Trust", GuardianIcons.Home, useMarkIcon = true),
+                        GuardianNavItem("Choices", GuardianIcons.Tune),
+                    ),
+                    selectedIndex = 0,
+                    onSelect = {},
+                )
+            }
+        }
+        val bounds = composeRule.onNodeWithTag("guardian-nav-indicator").getBoundsInRoot()
+        kotlin.test.assertEquals(88.dp, bounds.right - bounds.left)
+        kotlin.test.assertEquals(48.dp, bounds.bottom - bounds.top)
+    }
+
+    @Test
+    fun `nav bar indicator offset centers within each equal-width slot`() {
+        // 3 items in a 300px row: each slot is 100px wide; an 88px-wide
+        // indicator centers with a 6px margin on either side.
+        kotlin.test.assertEquals(6f, guardianNavIndicatorOffsetPx(rowWidthPx = 300f, indicatorWidthPx = 88f, itemCount = 3, selectedIndex = 0))
+        kotlin.test.assertEquals(106f, guardianNavIndicatorOffsetPx(rowWidthPx = 300f, indicatorWidthPx = 88f, itemCount = 3, selectedIndex = 1))
+        kotlin.test.assertEquals(206f, guardianNavIndicatorOffsetPx(rowWidthPx = 300f, indicatorWidthPx = 88f, itemCount = 3, selectedIndex = 2))
+    }
+
+    @Test
+    fun `nav bar indicator offset never divides by an empty item list`() {
+        kotlin.test.assertEquals(
+            guardianNavIndicatorOffsetPx(rowWidthPx = 300f, indicatorWidthPx = 88f, itemCount = 0, selectedIndex = 0),
+            guardianNavIndicatorOffsetPx(rowWidthPx = 300f, indicatorWidthPx = 88f, itemCount = 1, selectedIndex = 0),
+        )
     }
 
     @Test
