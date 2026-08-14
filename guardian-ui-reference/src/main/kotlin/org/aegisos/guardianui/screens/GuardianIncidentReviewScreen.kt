@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.components.GuardianFloatingCard
 import org.aegisos.guardianui.components.GuardianPrimaryButton
 import org.aegisos.guardianui.components.GuardianStatusChip
+import org.aegisos.guardianui.components.guardianScreenTint
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 
@@ -40,7 +41,7 @@ fun GuardianIncidentReviewScreen(
     onRestrict: () -> Unit,
     onNotNow: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(GuardianColor.Surface)) {
+    Column(modifier = Modifier.fillMaxSize().background(GuardianColor.Surface).guardianScreenTint(GuardianColor.Glow, 0.16f)) {
         // .m3-topbar (back-arrow variant): icon-btn is the same 28x28
         // circular touch target as Home's gear, not a 48dp minimum inflating
         // the row; title override is 18px/500 here, not the shared

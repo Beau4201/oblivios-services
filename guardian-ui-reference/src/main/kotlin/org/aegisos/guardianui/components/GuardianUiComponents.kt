@@ -503,3 +503,34 @@ fun GuardianNavBar(
         }
     }
 }
+
+/**
+ * Every screen's background — a soft radial wash of a brand or semantic
+ * glow color at the top, fading to the flat surface color, instead of one
+ * flat tone everywhere. Matches the mockup's
+ * `radial-gradient(120% 90% at 50% -10%, rgba(color, alpha), transparent
+ * 55%)` exactly: drawn as a circle then non-uniformly scaled into that
+ * same 120%-wide/90%-tall ellipse, centered just above the top edge.
+ */
+fun Modifier.guardianScreenTint(color: Color, alpha: Float): Modifier = this.drawWithCache {
+    val cx = size.width * 0.5f
+    val cy = size.height * -0.10f
+    val rx = size.width * 1.20f
+    val ry = size.height * 0.90f
+    onDrawBehind {
+        scale(scaleX = rx / ry, scaleY = 1f, pivot = Offset(cx, cy)) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0f to color.copy(alpha = alpha),
+                        0.55f to color.copy(alpha = 0f),
+                    ),
+                    center = Offset(cx, cy),
+                    radius = ry,
+                ),
+                radius = ry,
+                center = Offset(cx, cy),
+            )
+        }
+    }
+}

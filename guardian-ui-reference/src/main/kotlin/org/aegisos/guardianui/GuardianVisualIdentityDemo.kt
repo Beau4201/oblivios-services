@@ -140,7 +140,6 @@ fun GuardianVisualIdentityDemo() {
 
             GuardianDemoRoute.Trust -> GuardianTrustScreen(
                 state = trustState,
-                onRetentionSelected = { trustState = trustState.copy(retention = it) },
                 onNavSelect = { onNavSelect(it) },
             )
 
@@ -154,6 +153,7 @@ fun GuardianVisualIdentityDemo() {
                     )
                 },
                 onNotifyImmediatelyToggle = { choicesState = choicesState.copy(notifyImmediately = it) },
+                onRetentionSelected = { choicesState = choicesState.copy(retention = it) },
                 onNavSelect = { onNavSelect(it) },
             )
 

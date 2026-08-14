@@ -1,6 +1,5 @@
 package org.aegisos.guardianui.screens
 
-import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -18,22 +17,10 @@ class GuardianTrustScreenTest {
     @Test
     fun `data-handling copy says cloud, not AI`() {
         composeRule.setContent {
-            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = {}, onNavSelect = {}) }
+            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onNavSelect = {}) }
         }
         composeRule.onNodeWithText("Never sent to the cloud").assertExists()
         composeRule.onNodeWithText("Never sent to AI or the cloud").assertDoesNotExist()
-    }
-
-    @Test
-    fun `tapping a retention option reports it`() {
-        var selected: GuardianRetentionOption? = null
-        composeRule.setContent {
-            GuardianTheme {
-                GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = { selected = it }, onNavSelect = {})
-            }
-        }
-        composeRule.onNodeWithText("90 days").performClick()
-        kotlin.test.assertEquals(GuardianRetentionOption.NinetyDays, selected)
     }
 
     @Test
@@ -41,7 +28,7 @@ class GuardianTrustScreenTest {
         var navIndex = -1
         composeRule.setContent {
             GuardianTheme {
-                GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = {}, onNavSelect = { navIndex = it })
+                GuardianTrustScreen(state = GuardianTrustUiState(), onNavSelect = { navIndex = it })
             }
         }
         composeRule.onNodeWithText("Home").performClick()
@@ -51,7 +38,7 @@ class GuardianTrustScreenTest {
     @Test
     fun `empty activity log shows no ACTIVITY LOG heading`() {
         composeRule.setContent {
-            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = {}, onNavSelect = {}) }
+            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onNavSelect = {}) }
         }
         composeRule.onNodeWithText("ACTIVITY LOG").assertDoesNotExist()
     }
@@ -64,7 +51,7 @@ class GuardianTrustScreenTest {
         )
         composeRule.setContent {
             GuardianTheme {
-                GuardianTrustScreen(state = GuardianTrustUiState(activityLog = entries), onRetentionSelected = {}, onNavSelect = {})
+                GuardianTrustScreen(state = GuardianTrustUiState(activityLog = entries), onNavSelect = {})
             }
         }
         composeRule.onNodeWithText("ACTIVITY LOG").assertExists()
@@ -74,17 +61,17 @@ class GuardianTrustScreenTest {
     }
 
     @Test
-    fun `retention option touch target is at least 48dp`() {
+    fun `does not show the retention control, that moved to Choices`() {
         composeRule.setContent {
-            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = {}, onNavSelect = {}) }
+            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onNavSelect = {}) }
         }
-        composeRule.onNodeWithText("90 days").assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithText("KEEP HISTORY FOR").assertDoesNotExist()
     }
 
     @Test
     fun `the on-this-device-only card spans the full column width, not just its content`() {
         composeRule.setContent {
-            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = {}, onNavSelect = {}) }
+            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onNavSelect = {}) }
         }
         // Regression: the card was missing fillMaxWidth and shrank to its
         // widest row's intrinsic content width instead of the column's —

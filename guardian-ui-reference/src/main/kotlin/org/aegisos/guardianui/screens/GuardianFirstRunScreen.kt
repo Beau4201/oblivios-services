@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.components.GuardianMark
 import org.aegisos.guardianui.components.GuardianPrimaryButton
+import org.aegisos.guardianui.components.guardianScreenTint
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(GuardianColor.Surface)
+            .guardianScreenTint(GuardianColor.Glow, 0.16f)
             .padding(horizontal = 28.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

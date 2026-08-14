@@ -26,6 +26,7 @@ import org.aegisos.guardianui.components.GuardianMark
 import org.aegisos.guardianui.components.GuardianNavBar
 import org.aegisos.guardianui.components.GuardianSectionLabel
 import org.aegisos.guardianui.components.GuardianTopBar
+import org.aegisos.guardianui.components.guardianScreenTint
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
 
@@ -50,7 +51,8 @@ fun GuardianHomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(GuardianColor.Surface),
+            .background(GuardianColor.Surface)
+            .guardianScreenTint(GuardianColor.Success, 0.20f),
     ) {
         GuardianTopBar(title = "Guardian")
 

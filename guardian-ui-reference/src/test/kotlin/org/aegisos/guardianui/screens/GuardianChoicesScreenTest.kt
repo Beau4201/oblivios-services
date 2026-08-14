@@ -1,10 +1,12 @@
 package org.aegisos.guardianui.screens
 
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.unit.dp
 import org.aegisos.guardianui.theme.GuardianTheme
 import org.junit.Rule
 import org.junit.Test
@@ -24,7 +26,7 @@ class GuardianChoicesScreenTest {
     fun `shows the empty state when no apps are allowed`() {
         composeRule.setContent {
             GuardianTheme {
-                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onNavSelect = {})
+                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onRetentionSelected = {}, onNavSelect = {})
             }
         }
         composeRule.onNodeWithText("No exceptions yet. Anything you allow shows up here, and can be revoked anytime.").assertExists()
@@ -40,6 +42,7 @@ class GuardianChoicesScreenTest {
                     state = sampleState,
                     onWatchToggle = { i, v -> reportedIndex = i; reportedValue = v },
                     onNotifyImmediatelyToggle = {},
+                    onRetentionSelected = {},
                     onNavSelect = {},
                 )
             }
@@ -53,7 +56,7 @@ class GuardianChoicesScreenTest {
     fun `watch-toggle-switch tag is exclusive to watch toggles, not the notify switch`() {
         composeRule.setContent {
             GuardianTheme {
-                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onNavSelect = {})
+                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onRetentionSelected = {}, onNavSelect = {})
             }
         }
         composeRule.onAllNodesWithTag("watch-toggle-switch").assertCountEquals(sampleState.watchToggles.size)
@@ -65,7 +68,7 @@ class GuardianChoicesScreenTest {
         var navIndex = -1
         composeRule.setContent {
             GuardianTheme {
-                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onNavSelect = { navIndex = it })
+                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onRetentionSelected = {}, onNavSelect = { navIndex = it })
             }
         }
         composeRule.onNodeWithText("Home").performClick()
@@ -80,6 +83,7 @@ class GuardianChoicesScreenTest {
                     state = sampleState.copy(allowedAppsCount = 3),
                     onWatchToggle = { _, _ -> },
                     onNotifyImmediatelyToggle = {},
+                    onRetentionSelected = {},
                     onNavSelect = {},
                 )
             }
@@ -96,10 +100,39 @@ class GuardianChoicesScreenTest {
                     state = sampleState.copy(allowedAppsCount = 1),
                     onWatchToggle = { _, _ -> },
                     onNotifyImmediatelyToggle = {},
+                    onRetentionSelected = {},
                     onNavSelect = {},
                 )
             }
         }
         composeRule.onNodeWithText("1 app allowed. Manage anytime.").assertExists()
+    }
+
+    @Test
+    fun `tapping a retention option reports it`() {
+        var selected: GuardianRetentionOption? = null
+        composeRule.setContent {
+            GuardianTheme {
+                GuardianChoicesScreen(
+                    state = sampleState,
+                    onWatchToggle = { _, _ -> },
+                    onNotifyImmediatelyToggle = {},
+                    onRetentionSelected = { selected = it },
+                    onNavSelect = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("90 days").performClick()
+        kotlin.test.assertEquals(GuardianRetentionOption.NinetyDays, selected)
+    }
+
+    @Test
+    fun `retention option touch target is at least 48dp`() {
+        composeRule.setContent {
+            GuardianTheme {
+                GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onRetentionSelected = {}, onNavSelect = {})
+            }
+        }
+        composeRule.onNodeWithText("90 days").assertHeightIsAtLeast(48.dp)
     }
 }
