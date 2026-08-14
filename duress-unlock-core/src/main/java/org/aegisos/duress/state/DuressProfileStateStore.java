@@ -2,6 +2,7 @@ package org.aegisos.duress.state;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,11 +43,17 @@ public final class DuressProfileStateStore {
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.TRUNCATE_EXISTING);
+            try (FileChannel tempChannel = FileChannel.open(tempPath, StandardOpenOption.WRITE)) {
+                tempChannel.force(true);
+            }
             Files.move(
                     tempPath,
                     path,
                     StandardCopyOption.ATOMIC_MOVE,
                     StandardCopyOption.REPLACE_EXISTING);
+            try (FileChannel dirChannel = FileChannel.open(path.getParent(), StandardOpenOption.READ)) {
+                dirChannel.force(true);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
