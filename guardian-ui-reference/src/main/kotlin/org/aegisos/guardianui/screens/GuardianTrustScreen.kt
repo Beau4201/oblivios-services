@@ -15,7 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.components.GuardianBottomNavItems
 import org.aegisos.guardianui.components.GuardianFloatingCard
 import org.aegisos.guardianui.components.GuardianListItem
@@ -60,8 +63,11 @@ fun GuardianTrustScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            // .m3-body { gap: 26px } — shared by every screen using this
+            // pattern; was 16dp here only, reading cramped next to Home's
+            // identical layout.
+            verticalArrangement = Arrangement.spacedBy(26.dp),
         ) {
             Text(
                 "Every claim here points to a real record on this device — not a promise.",
@@ -69,19 +75,31 @@ fun GuardianTrustScreen(
                 color = GuardianColor.OnSurfaceVariant,
             )
 
-            GuardianFloatingCard {
-                Text("On this device only", style = MaterialTheme.typography.titleMedium, color = GuardianColor.OnSurface)
+            // .tr-card: border-radius 24px, padding 18px, gap 14px — was the
+            // shared default (26dp radius, 20dp padding), close enough to pass
+            // an eyeball check but not the exact spec.
+            GuardianFloatingCard(cornerRadius = 24, contentPadding = PaddingValues(18.dp)) {
+                Text(
+                    "On this device only",
+                    // .tr-card-title: 14.5px, weight 600 — titleMedium is
+                    // 16sp/24sp/Medium(500).
+                    style = androidx.compose.ui.text.TextStyle(fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold),
+                    color = GuardianColor.OnSurface,
+                )
                 Spacer(Modifier.height(14.dp))
-                DataHandlingClaims.forEach { claim ->
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                        Box(
-                            modifier = Modifier.size(22.dp).clip(CircleShape).background(GuardianColor.SuccessContainer),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(GuardianIcons.Check, contentDescription = null, tint = GuardianColor.OnSuccessContainer, modifier = Modifier.size(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    DataHandlingClaims.forEach { claim ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier.size(22.dp).clip(CircleShape).background(GuardianColor.SuccessContainer),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(GuardianIcons.Check, contentDescription = null, tint = GuardianColor.OnSuccessContainer, modifier = Modifier.size(12.dp))
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            // .tr-data-row: 12.5px, vs bodyMedium's 14sp.
+                            Text(claim, style = androidx.compose.ui.text.TextStyle(fontSize = 12.5.sp), color = GuardianColor.OnSurface)
                         }
-                        Spacer(Modifier.width(10.dp))
-                        Text(claim, style = MaterialTheme.typography.bodyMedium, color = GuardianColor.OnSurface)
                     }
                 }
             }
@@ -109,28 +127,51 @@ fun GuardianTrustScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GuardianSectionLabel("KEEP HISTORY FOR")
+                // .tr-retention: gap 6px between segments, padding 4px on the
+                // pill itself. .opt: padding 8px 4px, font-size 11.5px, weight
+                // 600 — was touching segments (no gap), labelLarge (14sp), and
+                // a 48dp min-height forcing every segment much taller than the
+                // ~8+8+16=32px the design's own padding+line-height implies.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(999.dp))
                         .background(GuardianColor.SurfaceContainerLowest)
                         .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     GuardianRetentionOption.values().forEach { option ->
                         val selected = option == state.retention
-                        Text(
-                            option.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selected) GuardianColor.OnPrimary else GuardianColor.OnSurfaceVariant,
+                        // The design's own padding + font-size implies a
+                        // ~32dp-tall visual pill, well under Android's 48dp
+                        // minimum touch target. Compose's
+                        // minimumInteractiveComponentSize() would normally
+                        // reconcile that, but it's a documented no-op on the
+                        // Compose Desktop JVM target this module's tests run
+                        // on. Doing it by hand instead: the selectable click
+                        // target is the outer, height-enforced Box; the small
+                        // visual pill is centered inside it and carries only
+                        // the shape/background/text.
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .defaultMinSize(minHeight = 48.dp)
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(if (selected) GuardianColor.Primary else androidx.compose.ui.graphics.Color.Transparent)
-                                .selectable(selected = selected, role = Role.RadioButton, onClick = { onRetentionSelected(option) })
-                                .padding(vertical = 8.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
+                                .semantics(mergeDescendants = true) {}
+                                .selectable(selected = selected, role = Role.RadioButton, onClick = { onRetentionSelected(option) }),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                option.label,
+                                style = androidx.compose.ui.text.TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                                color = if (selected) GuardianColor.OnPrimary else GuardianColor.OnSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(if (selected) GuardianColor.Primary else androidx.compose.ui.graphics.Color.Transparent)
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                        }
                     }
                 }
             }

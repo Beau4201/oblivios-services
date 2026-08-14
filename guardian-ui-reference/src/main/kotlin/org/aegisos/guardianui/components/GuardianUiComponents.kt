@@ -31,6 +31,7 @@ import org.aegisos.guardianui.theme.GuardianColor
 fun GuardianFloatingCard(
     modifier: Modifier = Modifier,
     cornerRadius: Int = 26,
+    contentPadding: PaddingValues = PaddingValues(20.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(cornerRadius.dp)
@@ -44,7 +45,7 @@ fun GuardianFloatingCard(
             )
             .clip(shape)
             .background(GuardianColor.SurfaceContainerLowest)
-            .padding(20.dp),
+            .padding(contentPadding),
         content = content,
     )
 }

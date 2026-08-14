@@ -13,8 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.components.GuardianBottomNavItems
 import org.aegisos.guardianui.components.GuardianFloatingCard
 import org.aegisos.guardianui.components.GuardianListItem
@@ -71,10 +74,20 @@ fun GuardianHomeScreen(
             GuardianFloatingCard(
                 modifier = Modifier.fillMaxWidth(),
                 cornerRadius = 34,
+                // Design spec .m3-hero: padding 34px top / 24px horizontal /
+                // 30px bottom — asymmetric, and taller than the 20dp uniform
+                // default every other card uses. Was uniform 20dp here too,
+                // which made the hero read shallower than the design.
+                contentPadding = PaddingValues(start = 24.dp, top = 34.dp, end = 24.dp, bottom = 30.dp),
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    // .m3-hero { gap: 14px } applies uniformly between all three
+                    // children (badge, headline, supporting line) — was 14dp then
+                    // a separate 6dp, which read as the supporting line clinging
+                    // to the headline instead of matching rhythm.
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Box {
                         GuardianMark(modifier = Modifier.size(112.dp))
@@ -93,18 +106,27 @@ fun GuardianHomeScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
                     Text(
                         state.headline,
-                        style = MaterialTheme.typography.headlineSmall,
+                        // .m3-hero .headline: 24px/29px/600 — headlineSmall is
+                        // 24sp/32sp/Normal, shared with First Run's own (larger,
+                        // 27px/33px) headline, so this can't be fixed by editing
+                        // the shared token without breaking that screen.
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontSize = 24.sp,
+                            lineHeight = 29.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.015).em,
+                        ),
                         color = GuardianColor.OnSurface,
                         textAlign = TextAlign.Center,
                     )
                     state.attentionLine?.let { line ->
-                        Spacer(Modifier.height(6.dp))
                         Text(
                             line,
-                            style = MaterialTheme.typography.bodyMedium,
+                            // .m3-hero .supporting: 13.5px/19px, vs bodyMedium's
+                            // 14sp/20sp.
+                            style = androidx.compose.ui.text.TextStyle(fontSize = 13.5.sp, lineHeight = 19.sp),
                             color = GuardianColor.OnSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
