@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -173,7 +174,8 @@ fun GuardianStatusChip(
     ) {
         Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = contentColor)
+        // .m3-chip: 11.5px/600, vs labelLarge's 14sp/Medium(500).
+        Text(label, style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold), color = contentColor)
     }
 }
 

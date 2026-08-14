@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.components.GuardianMark
 import org.aegisos.guardianui.components.GuardianPrimaryButton
@@ -65,16 +66,27 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
         Spacer(Modifier.height(22.dp))
         Text(
             "Meet Guardian",
-            style = MaterialTheme.typography.headlineSmall,
+            // .fr-headline: 27px/33px/600 — headlineSmall is 24sp/32sp/Normal,
+            // shared with Home's hero headline, which wants a different exact
+            // size (24px/29px), so this can't be fixed by editing the token.
+            style = androidx.compose.ui.text.TextStyle(
+                fontSize = 27.sp,
+                lineHeight = 33.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                letterSpacing = (-0.015).em,
+            ),
             color = GuardianColor.OnSurface,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(10.dp))
         Text(
             "Guardian quietly watches for unusual app behavior — then explains what it found and only acts when you say so.",
-            style = MaterialTheme.typography.bodyMedium,
+            // .fr-body-text: 14.5px/21px, max-width 260px — vs bodyMedium's
+            // 14sp/20sp with no width constraint.
+            style = androidx.compose.ui.text.TextStyle(fontSize = 14.5.sp, lineHeight = 21.sp),
             color = GuardianColor.OnSurfaceVariant,
             textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 260.dp),
         )
         Spacer(Modifier.height(34.dp))
 
@@ -96,7 +108,8 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
                     Spacer(Modifier.width(14.dp))
                     Text(
                         feature.text,
-                        style = MaterialTheme.typography.bodyMedium,
+                        // .fr-feature .tx: 13.5px/19px, vs bodyMedium's 14sp/20sp.
+                        style = androidx.compose.ui.text.TextStyle(fontSize = 13.5.sp, lineHeight = 19.sp),
                         color = GuardianColor.OnSurface,
                         modifier = Modifier.padding(top = 8.dp).weight(1f),
                     )
