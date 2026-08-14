@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,18 @@ class DuressProfileStateStoreTest {
             entries = listing.map(p -> p.getFileName().toString()).toList();
         }
         assertEquals(List.of("state.txt"), entries);
+    }
+
+    @Test
+    void savedStateFileIsOwnerOnlyPermissions() throws IOException {
+        Path path = tempDir.resolve("state.txt");
+        DuressProfileStateStore store = new DuressProfileStateStore(path);
+
+        store.save(new DuressProfileState.Registered("profile-1", new byte[]{1}, new byte[]{2}));
+
+        assertEquals(
+                PosixFilePermissions.fromString("rw-------"),
+                Files.getPosixFilePermissions(path));
     }
 
     @Test
