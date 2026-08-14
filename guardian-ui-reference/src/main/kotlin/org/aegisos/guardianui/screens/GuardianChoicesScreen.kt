@@ -99,7 +99,7 @@ fun GuardianChoicesScreen(
                 // radius, shadow), not bare centered content — was floating
                 // text with no card at all. .m3-choices .ch-empty overrides
                 // padding to 16px 20px.
-                GuardianFloatingCard(cornerRadius = 22, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
+                GuardianFloatingCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 22, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -112,10 +112,10 @@ fun GuardianChoicesScreen(
                             modifier = Modifier.size(26.dp),
                         )
                         val label = if (state.allowedAppsCount == 0) {
-                            "No exceptions yet. Anything you allow shows up here — and can be revoked anytime."
+                            "No exceptions yet. Anything you allow shows up here, and can be revoked anytime."
                         } else {
                             val plural = if (state.allowedAppsCount == 1) "app" else "apps"
-                            "${state.allowedAppsCount} $plural allowed — manage anytime."
+                            "${state.allowedAppsCount} $plural allowed. Manage anytime."
                         }
                         Text(
                             label,

@@ -80,7 +80,7 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            "Guardian quietly watches for unusual app behavior — then explains what it found and only acts when you say so.",
+            "Guardian quietly watches for unusual app behavior. It explains what it found, and only acts when you say so.",
             // .fr-body-text: 14.5px/21px, max-width 260px — vs bodyMedium's
             // 14sp/20sp with no width constraint.
             style = androidx.compose.ui.text.TextStyle(fontSize = 14.5.sp, lineHeight = 21.sp),

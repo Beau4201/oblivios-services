@@ -27,7 +27,7 @@ class GuardianChoicesScreenTest {
                 GuardianChoicesScreen(state = sampleState, onWatchToggle = { _, _ -> }, onNotifyImmediatelyToggle = {}, onNavSelect = {})
             }
         }
-        composeRule.onNodeWithText("No exceptions yet. Anything you allow shows up here — and can be revoked anytime.").assertExists()
+        composeRule.onNodeWithText("No exceptions yet. Anything you allow shows up here, and can be revoked anytime.").assertExists()
     }
 
     @Test
@@ -84,8 +84,8 @@ class GuardianChoicesScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("3 apps allowed — manage anytime.").assertExists()
-        composeRule.onNodeWithText("No exceptions yet. Anything you allow shows up here — and can be revoked anytime.").assertDoesNotExist()
+        composeRule.onNodeWithText("3 apps allowed. Manage anytime.").assertExists()
+        composeRule.onNodeWithText("No exceptions yet. Anything you allow shows up here, and can be revoked anytime.").assertDoesNotExist()
     }
 
     @Test
@@ -100,6 +100,6 @@ class GuardianChoicesScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("1 app allowed — manage anytime.").assertExists()
+        composeRule.onNodeWithText("1 app allowed. Manage anytime.").assertExists()
     }
 }

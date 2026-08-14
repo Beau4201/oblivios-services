@@ -1,7 +1,9 @@
 package org.aegisos.guardianui.screens
 
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -77,5 +79,16 @@ class GuardianTrustScreenTest {
             GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = {}, onNavSelect = {}) }
         }
         composeRule.onNodeWithText("90 days").assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `the on-this-device-only card spans the full column width, not just its content`() {
+        composeRule.setContent {
+            GuardianTheme { GuardianTrustScreen(state = GuardianTrustUiState(), onRetentionSelected = {}, onNavSelect = {}) }
+        }
+        // Regression: the card was missing fillMaxWidth and shrank to its
+        // widest row's intrinsic content width instead of the column's —
+        // "Never shared with other apps" alone is nowhere near 250dp.
+        composeRule.onNodeWithTag("trust-device-only-card").assertWidthIsAtLeast(250.dp)
     }
 }

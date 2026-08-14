@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -70,7 +71,7 @@ fun GuardianTrustScreen(
             verticalArrangement = Arrangement.spacedBy(26.dp),
         ) {
             Text(
-                "Every claim here points to a real record on this device — not a promise.",
+                "Every claim here points to a real record on this device. Not a promise.",
                 // .tr-intro: 13px/19px, vs bodyMedium's 14sp/20sp.
                 style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
                 color = GuardianColor.OnSurfaceVariant,
@@ -78,8 +79,16 @@ fun GuardianTrustScreen(
 
             // .tr-card: border-radius 24px, padding 18px, gap 14px — was the
             // shared default (26dp radius, 20dp padding), close enough to pass
-            // an eyeball check but not the exact spec.
-            GuardianFloatingCard(cornerRadius = 24, contentPadding = PaddingValues(18.dp)) {
+            // an eyeball check but not the exact spec. Also missing
+            // fillMaxWidth, unlike every other card on this screen and on
+            // Home — it sized to its widest row's intrinsic width instead of
+            // the full column, leaving it narrower and off-center-looking
+            // against the full-width text/section-label siblings around it.
+            GuardianFloatingCard(
+                modifier = Modifier.fillMaxWidth().testTag("trust-device-only-card"),
+                cornerRadius = 24,
+                contentPadding = PaddingValues(18.dp),
+            ) {
                 Text(
                     "On this device only",
                     // .tr-card-title: 14.5px, weight 600 — titleMedium is
