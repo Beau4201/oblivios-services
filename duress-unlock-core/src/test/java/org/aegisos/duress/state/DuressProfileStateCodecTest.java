@@ -38,4 +38,22 @@ class DuressProfileStateCodecTest {
         assertThrows(IllegalArgumentException.class,
                 () -> DuressProfileStateCodec.decode("not-a-valid-line"));
     }
+
+
+    @Test
+    void encodesAndDecodesProfileIdContainingCommasRoundTrip() {
+        byte[] hash = {1, 2, 3};
+        byte[] salt = {4, 5, 6};
+        DuressProfileState.Registered original =
+                new DuressProfileState.Registered("profile,with,commas", hash, salt);
+
+        String line = DuressProfileStateCodec.encode(original);
+        DuressProfileState decoded = DuressProfileStateCodec.decode(line);
+
+        DuressProfileState.Registered registered =
+                assertInstanceOf(DuressProfileState.Registered.class, decoded);
+        assertEquals("profile,with,commas", registered.profileId());
+        assertArrayEquals(hash, registered.credentialHash());
+        assertArrayEquals(salt, registered.salt());
+    }
 }

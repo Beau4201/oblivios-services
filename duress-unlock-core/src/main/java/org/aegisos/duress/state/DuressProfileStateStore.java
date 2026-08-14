@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 
@@ -32,14 +33,20 @@ public final class DuressProfileStateStore {
     }
 
     public void save(DuressProfileState state) {
+        Path tempPath = path.resolveSibling(path.getFileName() + ".tmp");
         try {
             Files.writeString(
-                    path,
+                    tempPath,
                     DuressProfileStateCodec.encode(state) + System.lineSeparator(),
                     StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.TRUNCATE_EXISTING);
+            Files.move(
+                    tempPath,
+                    path,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
