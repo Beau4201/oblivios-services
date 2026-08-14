@@ -1,12 +1,17 @@
 package org.aegisos.guardianui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -14,6 +19,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -179,19 +185,78 @@ fun GuardianStatusChip(
     }
 }
 
+/**
+ * The design's own exact track/thumb geometry (.m3-switch): a 44x25 pill,
+ * not Material 3's stock ~52x32 default, which is why [Switch] was replaced
+ * here rather than just recolored. The size difference is deliberate, not
+ * arbitrary: this is real Material 3 thumb behavior (a smaller, outline-
+ * colored thumb when off; a larger, filled, shadowed thumb when on) at the
+ * design's own smaller track dimensions, not an invented animation.
+ *
+ * .m3-switch { width:44px; height:25px; border-radius:999px }
+ * .on { background: primary } / .off { background: transparent; border: 2px outline }
+ * .thumb { top:3px; width:19px; height:19px }
+ * .on .thumb { left:22px; background:#fff; shadow }
+ * .off .thumb { left:3px; top:3.5px; width:16px; height:16px; background: outline }
+ */
+private val SwitchTrackWidth = 44.dp
+private val SwitchTrackHeight = 25.dp
+private val SwitchThumbOnSize = 19.dp
+private val SwitchThumbOffSize = 16.dp
+private val SwitchThumbOnOffset = 22.dp
+private val SwitchThumbOffOffset = 3.dp
+private val SwitchThumbOnTop = 3.dp
+private val SwitchThumbOffTop = 3.5.dp
+
 @Composable
 fun GuardianSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Switch(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = Color.White,
-            checkedTrackColor = GuardianColor.Primary,
-            uncheckedThumbColor = GuardianColor.Outline,
-            uncheckedTrackColor = Color.Transparent,
-            uncheckedBorderColor = GuardianColor.Outline,
-        ),
-    )
+    val trackColor by animateColorAsState(if (checked) GuardianColor.Primary else Color.Transparent, label = "switch-track")
+    val thumbColor by animateColorAsState(if (checked) Color.White else GuardianColor.Outline, label = "switch-thumb-color")
+    val thumbSize by animateDpAsState(if (checked) SwitchThumbOnSize else SwitchThumbOffSize, label = "switch-thumb-size")
+    val thumbStart by animateDpAsState(if (checked) SwitchThumbOnOffset else SwitchThumbOffOffset, label = "switch-thumb-start")
+    val thumbTop by animateDpAsState(if (checked) SwitchThumbOnTop else SwitchThumbOffTop, label = "switch-thumb-top")
+
+    Box(
+        // The 44x25 visual track is well under Android's 48dp minimum touch
+        // target; enforced here the same way as the topbar icon buttons and
+        // Trust's retention pills — an invisible minimum-size, semantics-
+        // merged touch area around the exact-sized visual track, rather than
+        // inflating the track itself.
+        modifier = Modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics(mergeDescendants = true) {}
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(SwitchTrackWidth, SwitchTrackHeight)
+                .clip(RoundedCornerShape(999.dp))
+                .background(trackColor)
+                .then(
+                    if (!checked) {
+                        Modifier.border(2.dp, GuardianColor.Outline, RoundedCornerShape(999.dp))
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(start = thumbStart, top = thumbTop)
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(thumbColor)
+                    .then(
+                        if (checked) {
+                            Modifier.shadow(elevation = 1.dp, shape = CircleShape, clip = false)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            )
+        }
+    }
 }
 
 data class GuardianNavItem(
