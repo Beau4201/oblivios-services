@@ -119,7 +119,14 @@ fun GuardianFirstRunScreen(onGetStarted: () -> Unit) {
 
         Spacer(Modifier.weight(0.9f))
 
-        GuardianPrimaryButton(text = "Get started", onClick = onGetStarted)
+        // .fr-cta-wrap .m3-btn-filled: padding 15px, font-size 14.5px —
+        // overrides the shared button's base 12px/14px.
+        GuardianPrimaryButton(
+            text = "Get started",
+            onClick = onGetStarted,
+            contentPadding = 15.dp,
+            fontSize = 14.5.sp,
+        )
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(GuardianIcons.Lock, contentDescription = null, tint = GuardianColor.OnSurfaceVariant, modifier = Modifier.size(13.dp))

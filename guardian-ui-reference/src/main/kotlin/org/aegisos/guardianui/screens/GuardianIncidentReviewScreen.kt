@@ -79,10 +79,13 @@ fun GuardianIncidentReviewScreen(
             modifier = Modifier.weight(1f).padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // .m3-app-row: icon 48x48, radius 16, inner glyph 26x26; name
-            // 16.5px/600; perm 11.5px. Was 44dp/radius 12 with shared
-            // titleMedium/bodyMedium text.
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // .m3-app-row: padding 4px 4px 8px; icon 48x48, radius 16, inner
+            // glyph 26x26; name 16.5px/600; perm 11.5px. Was 44dp/radius 12
+            // with shared titleMedium/bodyMedium text and no row padding.
+            Row(
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp, end = 4.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Box(
                     modifier = Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)),
                     contentAlignment = Alignment.Center,

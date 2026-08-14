@@ -1,6 +1,7 @@
 package org.aegisos.guardianui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -92,10 +93,16 @@ fun GuardianHomeScreen(
                     Box {
                         GuardianMark(modifier = Modifier.size(112.dp))
                         Box(
+                            // .m3-shield-badge .check: a 4px ring in the
+                            // card's own surface color separates the badge
+                            // from the mark underneath it — was a bare
+                            // circle with no ring, reading as if it overlaps
+                            // the mark rather than sitting on top of it.
                             modifier = Modifier
                                 .size(36.dp)
                                 .align(Alignment.BottomEnd)
-                                .background(GuardianColor.SuccessContainer, shape = androidx.compose.foundation.shape.CircleShape),
+                                .background(GuardianColor.SuccessContainer, shape = androidx.compose.foundation.shape.CircleShape)
+                                .border(4.dp, GuardianColor.SurfaceContainerLowest, androidx.compose.foundation.shape.CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -124,11 +131,12 @@ fun GuardianHomeScreen(
                     state.attentionLine?.let { line ->
                         Text(
                             line,
-                            // .m3-hero .supporting: 13.5px/19px, vs bodyMedium's
-                            // 14sp/20sp.
+                            // .m3-hero .supporting: 13.5px/19px, max-width
+                            // 230px — vs bodyMedium's 14sp/20sp, unconstrained.
                             style = androidx.compose.ui.text.TextStyle(fontSize = 13.5.sp, lineHeight = 19.sp),
                             color = GuardianColor.OnSurfaceVariant,
                             textAlign = TextAlign.Center,
+                            modifier = Modifier.widthIn(max = 230.dp),
                         )
                     }
                 }

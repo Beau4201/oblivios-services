@@ -24,6 +24,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.aegisos.guardianui.icons.GuardianIcons
 import org.aegisos.guardianui.theme.GuardianColor
@@ -78,7 +79,8 @@ fun GuardianListItem(
             )
             .clip(shape)
             .background(GuardianColor.SurfaceContainerLowest)
-            .padding(14.dp),
+            // .m3-item: padding 12px 14px — was uniform 14dp.
+            .padding(vertical = 12.dp, horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -92,14 +94,19 @@ fun GuardianListItem(
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = GuardianColor.OnSurface)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = GuardianColor.OnSurfaceVariant)
+            // .t: 14px/20px/500 — titleMedium is 16sp/24sp/Medium, visibly
+            // larger. .d: 12px/16px, margin-top 1px — bodyMedium is
+            // 14sp/20sp/Normal with no gap from the title.
+            Text(title, style = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = GuardianColor.OnSurface)
+            Spacer(Modifier.height(1.dp))
+            Text(subtitle, style = TextStyle(fontSize = 12.sp, lineHeight = 16.sp), color = GuardianColor.OnSurfaceVariant)
         }
+        // .m3-item .trailing svg: 16x16 — was 18dp.
         trailing?.invoke() ?: Icon(
             GuardianIcons.ChevronRight,
             contentDescription = null,
             tint = GuardianColor.Outline,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
     }
 }
@@ -114,13 +121,30 @@ fun GuardianTopBar(
     title: String,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    // .m3-topbar: padding 14px 16px 12px — was uniform 16dp. .app-mark: 26x26
+    // dark (#121318) tile, radius 8, a 1px ring at 14% alpha — was the bare
+    // shield mark with no tile. .m3-topbar .title: 20px/26px/500 — titleLarge
+    // is 22sp/28sp/Normal(400), reads bigger and lighter than the design.
     Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GuardianMark(modifier = Modifier.size(26.dp))
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(GuardianColor.Surface)
+                .border(1.dp, GuardianColor.OnSurface.copy(alpha = 0.14f), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            GuardianMark(modifier = Modifier.size(17.dp))
+        }
         Spacer(Modifier.width(10.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge, color = GuardianColor.OnSurface)
+        Text(
+            title,
+            style = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
+            color = GuardianColor.OnSurface,
+        )
         if (trailing != null) {
             Spacer(Modifier.weight(1f))
             trailing()
@@ -136,9 +160,11 @@ fun GuardianTopBar(
  */
 @Composable
 fun GuardianSectionLabel(text: String) {
+    // .m3-section-label: 11px/600, letter-spacing 0.08em — labelLarge is
+    // 14sp, noticeably larger than this design's small-caps label.
     Text(
         text,
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
         color = GuardianColor.OnSurfaceVariant,
     )
 }
@@ -149,19 +175,43 @@ fun GuardianSectionLabel(text: String) {
  * modifier chains before this extraction.
  */
 @Composable
-fun GuardianPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = GuardianColor.OnPrimary,
-        textAlign = TextAlign.Center,
+fun GuardianPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    // .m3-btn-filled: font-size 14px/500, letter-spacing 0.01em, padding
+    // 12px. First Run's own CTA overrides this (.fr-cta-wrap .m3-btn-filled)
+    // to padding 15px / font-size 14.5px — was hardcoded to the First-Run
+    // override for every caller, inflating Incident Review's "Restrict ..."
+    // button past its own spec.
+    contentPadding: androidx.compose.ui.unit.Dp = 12.dp,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+) {
+    // Base padding (12dp) + 14sp text falls under Android's 48dp touch-target
+    // minimum — same tension as the switch/retention-pill/back-button cases,
+    // reconciled the same way: an outer, height-enforced, semantics-merged
+    // Box carries the click target; the exact-sized pill inside carries only
+    // the visual shape/color/padding.
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(999.dp))
-            .background(GuardianColor.Primary)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(15.dp),
-    )
+            .defaultMinSize(minHeight = 48.dp)
+            .semantics(mergeDescendants = true) {}
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Medium, letterSpacing = 0.01.em),
+            color = GuardianColor.OnPrimary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(999.dp))
+                .background(GuardianColor.Primary)
+                .padding(contentPadding),
+        )
+    }
 }
 
 @Composable

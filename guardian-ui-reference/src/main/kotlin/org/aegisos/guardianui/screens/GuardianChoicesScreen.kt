@@ -46,12 +46,16 @@ fun GuardianChoicesScreen(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            // .m3-body { gap: 26px }, matching Home/Trust.
-            verticalArrangement = Arrangement.spacedBy(26.dp),
+            // .m3-choices .m3-body overrides the shared .m3-body gap to
+            // 16px — Choices is NOT 26px like Home/Trust, despite sharing
+            // the same body/card structure otherwise.
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
                 "What Guardian pays attention to, and how it tells you.",
-                style = MaterialTheme.typography.bodyMedium,
+                // .tr-intro (reused on Choices): 13px/19px, vs bodyMedium's
+                // 14sp/20sp.
+                style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
                 color = GuardianColor.OnSurfaceVariant,
             )
 

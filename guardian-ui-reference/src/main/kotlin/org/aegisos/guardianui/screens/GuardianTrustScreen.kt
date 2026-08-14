@@ -71,7 +71,8 @@ fun GuardianTrustScreen(
         ) {
             Text(
                 "Every claim here points to a real record on this device — not a promise.",
-                style = MaterialTheme.typography.bodyMedium,
+                // .tr-intro: 13px/19px, vs bodyMedium's 14sp/20sp.
+                style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
                 color = GuardianColor.OnSurfaceVariant,
             )
 
@@ -118,7 +119,8 @@ fun GuardianTrustScreen(
                             title = entry.appName,
                             subtitle = entry.description,
                             trailing = {
-                                Text(entry.timeLabel, style = MaterialTheme.typography.bodyMedium, color = GuardianColor.OnSurfaceVariant)
+                                // .m3-item .trailing: inline font-size:11px.
+                                Text(entry.timeLabel, style = androidx.compose.ui.text.TextStyle(fontSize = 11.sp), color = GuardianColor.OnSurfaceVariant)
                             },
                         )
                     }
