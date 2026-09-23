@@ -5,6 +5,6 @@ plugins {
 }
 
 allprojects {
-    group = "org.aegisos"
+    group = "org.sovereignos"
     version = "0.1.0-SNAPSHOT"
 }

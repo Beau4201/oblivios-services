@@ -13,7 +13,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("org.aegisos.guardian.reference.GuardianReferenceApplication")
+    mainClass.set("org.sovereignos.guardian.reference.GuardianReferenceApplication")
 }
 
 tasks.test { useJUnitPlatform() }

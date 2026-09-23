@@ -1,4 +1,4 @@
-# AGENTS.md — aegisos-services
+# AGENTS.md — sovereignos-services
 
 This file is self-contained (don't assume it merges with a global AGENTS.md —
 override behavior isn't guaranteed, so everything that matters lives here).
@@ -10,12 +10,12 @@ A localhost-only reference implementation of Guardian: `guardian-core`
 `guardian-reference` (CLI scenario), `guardian-ui-reference` (Compose Desktop
 UI). It simulates platform effects for deterministic local testing. It is not
 Android enforcement, contains no GrapheneOS/AOSP source, and must never claim
-device-wide protection. Real Android integration belongs in `aegisos-platform`
-(ADR-013 in `aegisos-foundation`).
+device-wide protection. Real Android integration belongs in `sovereignos-platform`
+(ADR-013 in `sovereignos-foundation`).
 
 ## Binding governance — read before implementing anything
 
-`aegisos-foundation` (sibling repo) is the authoritative source of truth.
+`sovereignos-foundation` (sibling repo) is the authoritative source of truth.
 Before adding or changing any Guardian behavior, contract, or capability:
 
 1. Read `docs/governance/decision-log.md` — every accepted ADR.
@@ -45,7 +45,7 @@ Before adding or changing any Guardian behavior, contract, or capability:
   analytics, backups, or other apps.
 - No telemetry, analytics, crash reporting, or phone-home behavior of any
   kind, ever, without explicit sign-off — this is a hard project invariant
-  inherited from `aegisos-foundation`, not a style preference.
+  inherited from `sovereignos-foundation`, not a style preference.
 - No partial implementations presented as done. If something can't be fully
   completed or verified, say so explicitly and state exactly what's missing.
 

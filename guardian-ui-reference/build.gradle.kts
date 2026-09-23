@@ -31,7 +31,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("org.aegisos.guardian.ui.GuardianReferenceDesktopApplicationKt")
+    mainClass.set("org.sovereignos.guardian.ui.GuardianReferenceDesktopApplicationKt")
 }
 
 tasks.test { useJUnitPlatform() }

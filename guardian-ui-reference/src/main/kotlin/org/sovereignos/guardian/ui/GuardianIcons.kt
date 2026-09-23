@@ -1,0 +1,119 @@
+package org.sovereignos.guardian.ui
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.unit.dp
+
+// Every path below is copied verbatim from guardian-quiet-authority.html's inline
+// 24x24 stroke icons (stroke-width 2, round cap/join throughout the mockup).
+private const val ICON_VIEWPORT = 24f
+
+private fun ImageVector.Builder.strokePath(pathData: String, color: Color) {
+    addPath(
+        pathData = PathParser().parsePathString(pathData).toNodes(),
+        fill = null,
+        stroke = SolidColor(color),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    )
+}
+
+@Composable
+fun rememberGuardianBlockedDataIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("BlockedData", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M2 8.82a15 15 0 0 1 20 0", color)
+        strokePath("M5 12.86a10 10 0 0 1 14 0", color)
+        strokePath("M8.5 16.9a5 5 0 0 1 7 0", color)
+        strokePath("M4 4L20 20", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianSettingsIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("Settings", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M15 12A3 3 0 1 1 9 12A3 3 0 1 1 15 12", color)
+        strokePath(
+            "M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21" +
+                "a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1" +
+                "a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9" +
+                "l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1" +
+                "a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9" +
+                "a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z",
+            color,
+        )
+    }.build()
+}
+
+@Composable
+fun rememberGuardianAlertTriangleIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("AlertTriangle", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M12 9v4", color)
+        strokePath("M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianCheckIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("Check", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M20 6 9 17l-5-5", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianChevronDownIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("ChevronDown", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M6 9l6 6 6-6", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianChevronLeftIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("ChevronLeft", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M15 18l-6-6 6-6", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianChevronRightIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("ChevronRight", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M9 6l6 6-6 6", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianEyeOffIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("EyeOff", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z", color)
+        strokePath("M3 3L21 21", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianLockIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("Lock", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M5 11H19A2 2 0 0 1 21 13V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V13A2 2 0 0 1 5 11Z", color)
+        strokePath("M7 11V7a5 5 0 0 1 10 0v4", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianUndoIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("Undo", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M9 14 4 9l5-5", color)
+        strokePath("M4 9h10.5a5.5 5.5 0 0 1 0 11H11", color)
+    }.build()
+}
+
+@Composable
+fun rememberGuardianActivityIcon(color: Color): ImageVector = remember(color) {
+    ImageVector.Builder("Activity", 24.dp, 24.dp, ICON_VIEWPORT, ICON_VIEWPORT).apply {
+        strokePath("M22 12h-4l-3 9L9 3l-3 9H2", color)
+    }.build()
+}
