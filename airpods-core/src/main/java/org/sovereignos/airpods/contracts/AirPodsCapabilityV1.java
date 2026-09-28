@@ -10,6 +10,10 @@ public record AirPodsCapabilityV1(
     String registryRevision,
     Map<String, CapabilityState> capabilityStates) {
 
+    public AirPodsCapabilityV1 {
+        capabilityStates = Map.copyOf(capabilityStates);
+    }
+
     public enum CapabilityState {
         SUPPORTED,
         APPLE_ONLY,
