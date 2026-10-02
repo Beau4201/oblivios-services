@@ -73,6 +73,8 @@ final class AapCodecTest {
         assertArrayEquals(hex("04 00 04 00 09 00 28 02 00 00 00"), AapCodec.setConversationAwareness(false));
         assertArrayEquals(hex("04 00 04 00 09 00 0A 01 00 00 00"), AapCodec.setEarDetection(true));
         assertArrayEquals(hex("04 00 04 00 09 00 0A 02 00 00 00"), AapCodec.setEarDetection(false));
+        assertArrayEquals(hex("04 00 04 00 09 00 34 01 00 00 00"), AapCodec.setAllowOffOption(true));
+        assertArrayEquals(hex("04 00 04 00 09 00 34 02 00 00 00"), AapCodec.setAllowOffOption(false));
     }
 
     @Test

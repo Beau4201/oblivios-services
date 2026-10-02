@@ -52,8 +52,10 @@ final class AapCodecCaptureTest {
     @Test
     void listeningModeAndTheDevicesAnswerToAnOffRequest() {
         assertEquals(new ListeningModeState(ListeningMode.TRANSPARENCY), AapCodec.decode(hex("04 00 04 00 09 00 0D 03 00 00 00")));
-        // The pair refused "off" (request 04 00 04 00 09 00 0D 01 ...) and answered with noise cancel.
+        // Before "allow off" was enabled the pair refused "off" (request 04 00 04 00 09 00 0D 01 ...)
+        // and answered with noise cancel; after 04 00 04 00 09 00 34 01 00 00 00 it answered off.
         assertEquals(new ListeningModeState(ListeningMode.ANC), AapCodec.decode(hex("04 00 04 00 09 00 0D 02 00 00 00")));
+        assertEquals(new ListeningModeState(ListeningMode.OFF), AapCodec.decode(hex("04 00 04 00 09 00 0D 01 00 00 00")));
     }
 
     @Test

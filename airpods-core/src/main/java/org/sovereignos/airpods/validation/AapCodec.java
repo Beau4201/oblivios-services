@@ -24,6 +24,7 @@ public final class AapCodec {
     private static final int OPCODE_CONTROL = 0x0009;
     private static final int CONTROL_FRAME_LENGTH = 11;
     private static final int ID_EAR_DETECTION = 0x0A;
+    private static final int ID_ALLOW_OFF_OPTION = 0x34;
     private static final int ID_LISTENING_MODE = 0x0D;
     private static final int ID_CONVERSATION_AWARENESS = 0x28;
 
@@ -56,6 +57,15 @@ public final class AapCodec {
 
     public static byte[] setConversationAwareness(boolean enabled) {
         return control(ID_CONVERSATION_AWARENESS, enabled ? 1 : 2);
+    }
+
+    /**
+     * "Allow Off option for the listening mode": a pair that has it disabled refuses a request for
+     * off and answers with another mode (seen on the owner's pair, AIR-123); with it enabled the same
+     * request is accepted. The AirPods answer this frame with the current listening mode.
+     */
+    public static byte[] setAllowOffOption(boolean enabled) {
+        return control(ID_ALLOW_OFF_OPTION, enabled ? 1 : 2);
     }
 
     public static byte[] setEarDetection(boolean enabled) {
