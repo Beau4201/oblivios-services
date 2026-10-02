@@ -6,6 +6,8 @@ public sealed interface AirPodsMessage
                 ListeningModeState,
                 EarDetectionSetting,
                 ConversationAwarenessSetting,
+                ConversationAwarenessLevel,
+                AdaptiveLevelSetting,
                 EarState,
                 UnrecognisedMessage {
 }

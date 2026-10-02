@@ -22,11 +22,13 @@ public final class AapCodec {
     private static final int OPCODE_BATTERY = 0x0004;
     private static final int OPCODE_EAR_STATE = 0x0006;
     private static final int OPCODE_CONTROL = 0x0009;
+    private static final int OPCODE_CONVERSATION_LEVEL = 0x004B;
     private static final int CONTROL_FRAME_LENGTH = 11;
     private static final int ID_EAR_DETECTION = 0x0A;
     private static final int ID_ALLOW_OFF_OPTION = 0x34;
     private static final int ID_LISTENING_MODE = 0x0D;
     private static final int ID_CONVERSATION_AWARENESS = 0x28;
+    private static final int ID_ADAPTIVE_LEVEL = 0x2E;
 
     private AapCodec() {}
 
@@ -94,6 +96,7 @@ public final class AapCodec {
             case OPCODE_BATTERY -> decodeBattery(frame);
             case OPCODE_EAR_STATE -> decodeEarState(frame);
             case OPCODE_CONTROL -> decodeControl(frame);
+            case OPCODE_CONVERSATION_LEVEL -> decodeConversationLevel(frame);
             default -> new UnrecognisedMessage(opcode, -1);
         };
     }
@@ -175,8 +178,25 @@ public final class AapCodec {
             });
             case ID_EAR_DETECTION -> new EarDetectionSetting(enabled(value));
             case ID_CONVERSATION_AWARENESS -> new ConversationAwarenessSetting(enabled(value));
+            case ID_ADAPTIVE_LEVEL -> new AdaptiveLevelSetting(percent(value));
             default -> new UnrecognisedMessage(OPCODE_CONTROL, identifier);
         };
+    }
+
+    private static AirPodsMessage decodeConversationLevel(byte[] f) {
+        // 04 00 04 00 4B 00 | 02 00 01 | level. The three bytes in the middle were identical in every
+        // captured frame; a frame of another shape is not one we act on.
+        if (f.length != 10 || f[6] != 2 || f[7] != 0 || f[8] != 1) {
+            throw new AirPodsValidationException("conversation awareness frame");
+        }
+        return new ConversationAwarenessLevel(u8(f[9]));
+    }
+
+    private static int percent(int value) {
+        if (value > 100) {
+            throw new AirPodsValidationException("adaptive level " + value);
+        }
+        return value;
     }
 
     private static boolean enabled(int value) {

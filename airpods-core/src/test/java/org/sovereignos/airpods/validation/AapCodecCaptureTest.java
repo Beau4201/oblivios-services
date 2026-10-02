@@ -67,7 +67,7 @@ final class AapCodecCaptureTest {
     @Test
     void theHandshakeAnswerAndTheOtherControlSettingsAreReportedNotActedOn() {
         assertEquals(new UnrecognisedMessage(-1, -1), AapCodec.decode(hex("01 00 04 00 00 00 01 00 03 00 00 00 00 00 00 00 00 00")));
-        for (int id : new int[] {0x17, 0x18, 0x1B, 0x1F, 0x23, 0x24, 0x25, 0x26, 0x29, 0x2C, 0x2E, 0x2F, 0x33, 0x35, 0x3E}) {
+        for (int id : new int[] {0x17, 0x18, 0x1B, 0x1F, 0x23, 0x24, 0x25, 0x26, 0x29, 0x2C, 0x2F, 0x33, 0x35, 0x3E}) {
             byte[] f = hex("04 00 04 00 09 00 00 00 00 00 00");
             f[6] = (byte) id;
             assertEquals(new UnrecognisedMessage(9, id), AapCodec.decode(f));
