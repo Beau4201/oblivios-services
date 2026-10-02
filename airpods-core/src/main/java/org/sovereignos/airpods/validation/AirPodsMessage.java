@@ -1,4 +1,11 @@
 package org.sovereignos.airpods.validation;
 
-public sealed interface AirPodsMessage permits BatteryReport, ListeningModeState, WearState {
+/** A frame from the AirPods, decoded and range-checked by {@link AapCodec}. */
+public sealed interface AirPodsMessage
+        permits BatteryStatus,
+                ListeningModeState,
+                EarDetectionSetting,
+                ConversationAwarenessSetting,
+                EarState,
+                UnrecognisedMessage {
 }

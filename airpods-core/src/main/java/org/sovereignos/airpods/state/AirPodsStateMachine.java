@@ -7,24 +7,24 @@ import org.sovereignos.airpods.contracts.AirPodsComponentId;
 import org.sovereignos.airpods.contracts.AirPodsComponentStateV1;
 import org.sovereignos.airpods.contracts.AirPodsEvidenceState;
 import org.sovereignos.airpods.validation.AirPodsMessage;
-import org.sovereignos.airpods.validation.BatteryReport;
-import org.sovereignos.airpods.validation.WearState;
+import org.sovereignos.airpods.validation.BatteryStatus;
 
 public final class AirPodsStateMachine {
-    private static final int BATTERY_NOT_PRESENT = 0xFF;
 
     private final Map<AirPodsComponentId, AirPodsComponentStateV1> states = new EnumMap<>(AirPodsComponentId.class);
 
     public void apply(AirPodsMessage message, Instant observedAt) {
-        if (message instanceof BatteryReport report) {
-            markIfPresent(AirPodsComponentId.LEFT_EARBUD, report.leftPercent(), observedAt);
-            markIfPresent(AirPodsComponentId.RIGHT_EARBUD, report.rightPercent(), observedAt);
-            markIfPresent(AirPodsComponentId.CASE, report.casePercent(), observedAt);
-        } else if (message instanceof WearState) {
-            markConnected(AirPodsComponentId.LEFT_EARBUD, observedAt);
-            markConnected(AirPodsComponentId.RIGHT_EARBUD, observedAt);
+        if (message instanceof BatteryStatus status) {
+            for (BatteryStatus.Entry entry : status.entries()) {
+                if (entry.charge() == BatteryStatus.Charge.DISCONNECTED) {
+                    onDisconnected(entry.component());
+                } else {
+                    markConnected(entry.component(), observedAt);
+                }
+            }
         }
-        // ListeningModeState is a pair-level setting, not per-component evidence: no state change here.
+        // Listening mode, settings and the placement of the pods are pair-level state, not
+        // per-component evidence: no change here.
     }
 
     public void onDisconnected(AirPodsComponentId componentId) {
@@ -41,13 +41,6 @@ public final class AirPodsStateMachine {
         return states.getOrDefault(
             componentId,
             new AirPodsComponentStateV1(componentId, AirPodsEvidenceState.LOCATION_UNKNOWN, null));
-    }
-
-    private void markIfPresent(AirPodsComponentId componentId, int percent, Instant observedAt) {
-        if (percent == BATTERY_NOT_PRESENT) {
-            return;
-        }
-        markConnected(componentId, observedAt);
     }
 
     private void markConnected(AirPodsComponentId componentId, Instant observedAt) {

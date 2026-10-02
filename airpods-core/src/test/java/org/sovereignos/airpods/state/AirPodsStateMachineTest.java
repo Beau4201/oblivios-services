@@ -3,63 +3,72 @@ package org.sovereignos.airpods.state;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sovereignos.airpods.contracts.AirPodsComponentId;
 import org.sovereignos.airpods.contracts.AirPodsEvidenceState;
-import org.sovereignos.airpods.validation.BatteryReport;
+import org.sovereignos.airpods.validation.BatteryStatus;
+import org.sovereignos.airpods.validation.BatteryStatus.Charge;
+import org.sovereignos.airpods.validation.ListeningModeState;
+import org.sovereignos.airpods.validation.ListeningModeState.ListeningMode;
 
 final class AirPodsStateMachineTest {
-    private static final int BATTERY_NOT_PRESENT = 0xFF;
+    private static final Instant T0 = Instant.parse("2026-09-28T10:00:00Z");
+
+    private static BatteryStatus left(int level, Charge charge) {
+        return new BatteryStatus(List.of(new BatteryStatus.Entry(AirPodsComponentId.LEFT_EARBUD, level, charge)));
+    }
 
     @Test
     void unobservedComponentStartsAsLocationUnknown() {
         AirPodsStateMachine machine = new AirPodsStateMachine();
-
-        assertEquals(
-            AirPodsEvidenceState.LOCATION_UNKNOWN,
-            machine.currentState(AirPodsComponentId.CASE).evidenceState());
+        assertEquals(AirPodsEvidenceState.LOCATION_UNKNOWN, machine.currentState(AirPodsComponentId.CASE).evidenceState());
     }
 
     @Test
     void observedComponentIsMarkedConnectedNow() {
         AirPodsStateMachine machine = new AirPodsStateMachine();
-        Instant observedAt = Instant.parse("2026-09-28T10:00:00Z");
-
-        machine.apply(new BatteryReport(80, BATTERY_NOT_PRESENT, BATTERY_NOT_PRESENT), observedAt);
-
+        machine.apply(left(80, Charge.DISCHARGING), T0);
         assertEquals(AirPodsEvidenceState.CONNECTED_NOW, machine.currentState(AirPodsComponentId.LEFT_EARBUD).evidenceState());
+        assertEquals(T0, machine.currentState(AirPodsComponentId.LEFT_EARBUD).timestamp());
     }
 
     @Test
-    void notPresentComponentIsNotFabricatedOrCrossAssigned() {
+    void aComponentThatIsNotInTheFrameIsNotFabricated() {
         AirPodsStateMachine machine = new AirPodsStateMachine();
-        Instant observedAt = Instant.parse("2026-09-28T10:00:00Z");
-
-        // Only the left earbud is present in this report; right and case are not.
-        machine.apply(new BatteryReport(80, BATTERY_NOT_PRESENT, BATTERY_NOT_PRESENT), observedAt);
-
+        machine.apply(left(80, Charge.DISCHARGING), T0);
         assertEquals(AirPodsEvidenceState.LOCATION_UNKNOWN, machine.currentState(AirPodsComponentId.RIGHT_EARBUD).evidenceState());
         assertEquals(AirPodsEvidenceState.LOCATION_UNKNOWN, machine.currentState(AirPodsComponentId.CASE).evidenceState());
     }
 
     @Test
-    void disconnectExpiresToLastSeenPreservingObservationTimestamp() {
+    void aDisconnectedEntryExpiresToLastSeenKeepingTheTimestamp() {
         AirPodsStateMachine machine = new AirPodsStateMachine();
-        Instant observedAt = Instant.parse("2026-09-28T10:00:00Z");
-        machine.apply(new BatteryReport(80, BATTERY_NOT_PRESENT, BATTERY_NOT_PRESENT), observedAt);
-
-        machine.onDisconnected(AirPodsComponentId.LEFT_EARBUD);
-
+        machine.apply(left(80, Charge.DISCHARGING), T0);
+        machine.apply(left(-1, Charge.DISCONNECTED), T0.plusSeconds(60));
         assertEquals(AirPodsEvidenceState.LAST_SEEN, machine.currentState(AirPodsComponentId.LEFT_EARBUD).evidenceState());
-        assertEquals(observedAt, machine.currentState(AirPodsComponentId.LEFT_EARBUD).timestamp());
+        assertEquals(T0, machine.currentState(AirPodsComponentId.LEFT_EARBUD).timestamp());
     }
 
     @Test
-    void disconnectingAnUnobservedComponentDoesNotFabricateARecord() {
+    void aDisconnectedEntryForAnUnobservedComponentFabricatesNothing() {
         AirPodsStateMachine machine = new AirPodsStateMachine();
+        machine.apply(left(-1, Charge.DISCONNECTED), T0);
+        assertEquals(AirPodsEvidenceState.LOCATION_UNKNOWN, machine.currentState(AirPodsComponentId.LEFT_EARBUD).evidenceState());
+    }
 
-        machine.onDisconnected(AirPodsComponentId.CASE);
+    @Test
+    void explicitDisconnectExpiresToLastSeen() {
+        AirPodsStateMachine machine = new AirPodsStateMachine();
+        machine.apply(left(80, Charge.CHARGING), T0);
+        machine.onDisconnected(AirPodsComponentId.LEFT_EARBUD);
+        assertEquals(AirPodsEvidenceState.LAST_SEEN, machine.currentState(AirPodsComponentId.LEFT_EARBUD).evidenceState());
+    }
 
-        assertEquals(AirPodsEvidenceState.LOCATION_UNKNOWN, machine.currentState(AirPodsComponentId.CASE).evidenceState());
+    @Test
+    void pairLevelMessagesChangeNothing() {
+        AirPodsStateMachine machine = new AirPodsStateMachine();
+        machine.apply(new ListeningModeState(ListeningMode.ANC), T0);
+        assertEquals(AirPodsEvidenceState.LOCATION_UNKNOWN, machine.currentState(AirPodsComponentId.LEFT_EARBUD).evidenceState());
     }
 }
