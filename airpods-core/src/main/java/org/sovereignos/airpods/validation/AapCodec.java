@@ -33,6 +33,7 @@ public final class AapCodec {
     private static final int OPCODE_DEVICE_INFORMATION = 0x001D;
     private static final int OPCODE_RENAME = 0x001A;
     private static final int ID_PRESS_AND_HOLD_MODES = 0x1A;
+    private static final int ID_CALL_MANAGEMENT = 0x24;
     private static final String VENDOR = "Apple Inc.";
     private static final int MAX_INFO_FIELDS = 16;
     private static final int MAX_INFO_FIELD_LENGTH = 64;
@@ -117,6 +118,26 @@ public final class AapCodec {
             };
         }
         return control(ID_PRESS_AND_HOLD_MODES, mask);
+    }
+
+    /**
+     * One of the settings of {@link AirPodsControl}: the identifier and one value byte inside the range
+     * of the control. The pair reports most of them again only in the connection burst of a later
+     * session (AIR-180), and some it never reports (Plan 9 facts record).
+     */
+    public static byte[] setControl(AirPodsControl control, int value) {
+        if (control == null || !control.accepts(value)) {
+            throw new IllegalArgumentException("control value");
+        }
+        return control(control.identifier(), value);
+    }
+
+    /** The call management setting: two data bytes, both 0 to 255 (the meaning is measured, AIR-186). */
+    public static byte[] setCallManagement(int first, int second) {
+        if (first < 0 || first > 255 || second < 0 || second > 255) {
+            throw new IllegalArgumentException("call management");
+        }
+        return new byte[] {4, 0, 4, 0, 9, 0, (byte) ID_CALL_MANAGEMENT, (byte) first, (byte) second, 0, 0};
     }
 
     /** True for a name we are willing to send: 1 to {@link #MAX_NAME_BYTES} UTF-8 bytes of visible text. */
@@ -261,8 +282,22 @@ public final class AapCodec {
             case ID_EAR_DETECTION -> new EarDetectionSetting(enabled(value));
             case ID_CONVERSATION_AWARENESS -> new ConversationAwarenessSetting(enabled(value));
             case ID_ADAPTIVE_LEVEL -> new AdaptiveLevelSetting(percent(value));
-            default -> new UnrecognisedMessage(OPCODE_CONTROL, identifier);
+            case ID_CALL_MANAGEMENT -> new CallManagementReport(value, u8(f[8]));
+            default -> decodeOtherControl(identifier, value);
         };
+    }
+
+    /**
+     * A setting of {@link AirPodsControl}. A value outside the range we know is not an error: the
+     * ranges of the controls the pair never reported to us are third-party notes, and a malformed
+     * frame ends the session after a few in a row.
+     */
+    private static AirPodsMessage decodeOtherControl(int identifier, int value) {
+        var control = AirPodsControl.ofIdentifier(identifier);
+        if (control.isEmpty() || !control.get().accepts(value)) {
+            return new UnrecognisedMessage(OPCODE_CONTROL, identifier);
+        }
+        return new ControlReport(control.get(), value);
     }
 
     private static AirPodsMessage decodeConversationLevel(byte[] f) {

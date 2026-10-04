@@ -10,5 +10,7 @@ public sealed interface AirPodsMessage
                 AdaptiveLevelSetting,
                 EarState,
                 DeviceInformation,
+                ControlReport,
+                CallManagementReport,
                 UnrecognisedMessage {
 }

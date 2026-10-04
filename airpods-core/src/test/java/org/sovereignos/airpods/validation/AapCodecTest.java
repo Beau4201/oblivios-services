@@ -98,7 +98,7 @@ final class AapCodecTest {
     @Test
     void unknownKindsAreReportedNotActedOn() {
         assertEquals(new UnrecognisedMessage(0x1D, -1), AapCodec.decode(hex("04 00 04 00 1D 00 00 02 D5 00")));
-        assertEquals(new UnrecognisedMessage(9, 0x2F), AapCodec.decode(hex("04 00 04 00 09 00 2F 00 00 00 00")));
+        assertEquals(new UnrecognisedMessage(9, 0x29), AapCodec.decode(hex("04 00 04 00 09 00 29 00 00 00 00")));
         assertEquals(new UnrecognisedMessage(-1, -1), AapCodec.decode(hex("01 00 04 00 00 00 00 00")));
         assertEquals(new UnrecognisedMessage(-1, -1), AapCodec.decode(new byte[0]));
         assertEquals(new UnrecognisedMessage(-1, -1), AapCodec.decode(hex("04 00 04 00 04")));
