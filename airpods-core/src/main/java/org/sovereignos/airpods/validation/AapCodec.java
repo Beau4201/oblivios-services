@@ -1,5 +1,6 @@
 package org.sovereignos.airpods.validation;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -29,6 +30,15 @@ public final class AapCodec {
     private static final int ID_LISTENING_MODE = 0x0D;
     private static final int ID_CONVERSATION_AWARENESS = 0x28;
     private static final int ID_ADAPTIVE_LEVEL = 0x2E;
+    private static final int OPCODE_DEVICE_INFORMATION = 0x001D;
+    private static final int OPCODE_RENAME = 0x001A;
+    private static final int ID_PRESS_AND_HOLD_MODES = 0x1A;
+    private static final String VENDOR = "Apple Inc.";
+    private static final int MAX_INFO_FIELDS = 16;
+    private static final int MAX_INFO_FIELD_LENGTH = 64;
+
+    /** Longest name we send, in UTF-8 bytes: a conservative choice, the pair's own limit was not measured. */
+    public static final int MAX_NAME_BYTES = 32;
 
     private AapCodec() {}
 
@@ -74,6 +84,77 @@ public final class AapCodec {
         return control(ID_EAR_DETECTION, enabled ? 1 : 2);
     }
 
+    /**
+     * The strength of adaptive mode, 0 to 100. The pair rounds it to the nearest of 0, 50 and 100 and
+     * reports it only in the connection burst of a later session (AIR-164).
+     */
+    public static byte[] setAdaptiveLevel(int percent) {
+        if (percent < 0 || percent > 100) {
+            throw new IllegalArgumentException("percent");
+        }
+        return control(ID_ADAPTIVE_LEVEL, percent);
+    }
+
+    /**
+     * Which listening modes the stem press and hold cycles through (AIR-163): a mask of Off 1, Noise
+     * cancel 2, Transparency 4, Adaptive 8. At least two modes, as on the iPhone. The pair does not
+     * report this setting back.
+     */
+    public static byte[] setPressAndHoldModes(Set<ListeningMode> modes) {
+        if (modes == null || modes.size() < 2) {
+            throw new IllegalArgumentException("modes");
+        }
+        int mask = 0;
+        for (ListeningMode mode : modes) {
+            if (mode == null) {
+                throw new IllegalArgumentException("modes");
+            }
+            mask |= switch (mode) {
+                case OFF -> 1;
+                case ANC -> 2;
+                case TRANSPARENCY -> 4;
+                case ADAPTIVE -> 8;
+            };
+        }
+        return control(ID_PRESS_AND_HOLD_MODES, mask);
+    }
+
+    /** True for a name we are willing to send: 1 to {@link #MAX_NAME_BYTES} UTF-8 bytes of visible text. */
+    public static boolean isValidName(String name) {
+        if (name == null) {
+            return false;
+        }
+        int bytes = name.getBytes(StandardCharsets.UTF_8).length;
+        if (bytes < 1 || bytes > MAX_NAME_BYTES || !name.equals(name.strip())) {
+            return false;
+        }
+        for (int i = 0; i < name.length(); i += Character.charCount(name.codePointAt(i))) {
+            int type = Character.getType(name.codePointAt(i));
+            if (type == Character.CONTROL || type == Character.FORMAT || type == Character.PRIVATE_USE
+                    || type == Character.SURROGATE || type == Character.UNASSIGNED
+                    || type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Renames the AirPods (AIR-162): header, opcode 0x001A, 01, the length, 00, the UTF-8 name. */
+    public static byte[] rename(String name) {
+        if (!isValidName(name)) {
+            throw new IllegalArgumentException("name");
+        }
+        byte[] utf8 = name.getBytes(StandardCharsets.UTF_8);
+        byte[] frame = new byte[9 + utf8.length];
+        frame[0] = 4;
+        frame[2] = 4;
+        frame[4] = (byte) OPCODE_RENAME;
+        frame[6] = 1;
+        frame[7] = (byte) utf8.length;
+        System.arraycopy(utf8, 0, frame, 9, utf8.length);
+        return frame;
+    }
+
     private static byte[] control(int identifier, int value) {
         return new byte[] {4, 0, 4, 0, 9, 0, (byte) identifier, (byte) value, 0, 0, 0};
     }
@@ -97,6 +178,7 @@ public final class AapCodec {
             case OPCODE_EAR_STATE -> decodeEarState(frame);
             case OPCODE_CONTROL -> decodeControl(frame);
             case OPCODE_CONVERSATION_LEVEL -> decodeConversationLevel(frame);
+            case OPCODE_DEVICE_INFORMATION -> decodeDeviceInformation(frame);
             default -> new UnrecognisedMessage(opcode, -1);
         };
     }
@@ -190,6 +272,54 @@ public final class AapCodec {
             throw new AirPodsValidationException("conversation awareness frame");
         }
         return new ConversationAwarenessLevel(u8(f[9]));
+    }
+
+    /**
+     * Opcode 0x001D (AIR-161): after the header, NUL-terminated printable strings in the order name,
+     * model number, vendor, serial, version, version, and more. Only the model number and the firmware
+     * are kept. The decoder does not trust positions from the start (a non-ASCII name splits into
+     * several runs): it collects short printable runs and anchors on the vendor field, which must come
+     * at index 1 or later; the model number is the field before it and the firmware the field two
+     * after it. When an anchor or a pattern fails the frame is unrecognised, never an error, and the
+     * name and the serial numbers are never kept.
+     */
+    private static AirPodsMessage decodeDeviceInformation(byte[] f) {
+        List<String> fields = new ArrayList<>();
+        int i = HEADER_LENGTH + 2;
+        while (i < f.length && fields.size() < MAX_INFO_FIELDS) {
+            if (!printable(f[i])) {
+                i++;
+                continue;
+            }
+            int j = i;
+            while (j < f.length && printable(f[j])) {
+                j++;
+            }
+            if (j - i <= MAX_INFO_FIELD_LENGTH) {
+                fields.add(new String(f, i, j - i, StandardCharsets.US_ASCII));
+            }
+            i = j + 1;
+        }
+        int vendor = -1;
+        for (int k = 1; k < fields.size(); k++) {
+            if (VENDOR.equals(fields.get(k))) {
+                vendor = k;
+                break;
+            }
+        }
+        if (vendor < 1 || vendor + 2 >= fields.size()) {
+            return new UnrecognisedMessage(OPCODE_DEVICE_INFORMATION, -1);
+        }
+        String model = fields.get(vendor - 1);
+        String firmware = fields.get(vendor + 2);
+        if (!DeviceInformation.MODEL.matcher(model).matches() || !DeviceInformation.FIRMWARE.matcher(firmware).matches()) {
+            return new UnrecognisedMessage(OPCODE_DEVICE_INFORMATION, -1);
+        }
+        return new DeviceInformation(model, firmware);
+    }
+
+    private static boolean printable(byte b) {
+        return b >= 0x20 && b <= 0x7E;
     }
 
     private static int percent(int value) {

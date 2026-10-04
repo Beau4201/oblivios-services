@@ -9,5 +9,6 @@ public sealed interface AirPodsMessage
                 ConversationAwarenessLevel,
                 AdaptiveLevelSetting,
                 EarState,
+                DeviceInformation,
                 UnrecognisedMessage {
 }
