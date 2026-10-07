@@ -90,6 +90,13 @@ final class AapCodecPlan7bTest {
         assertFalse(AapCodec.isValidName("bidi‮evil"), "format character");
         assertFalse(AapCodec.isValidName("line break"));
         assertFalse(AapCodec.isValidName("lone\uD800surrogate"));
+        assertFalse(AapCodec.isValidName(" "), "only a no-break space");
+        assertFalse(AapCodec.isValidName("name "), "trailing no-break space");
+        assertFalse(AapCodec.isValidName(" name"), "leading no-break space");
+        assertFalse(AapCodec.isValidName("ㅤ"), "Hangul filler");
+        assertFalse(AapCodec.isValidName("⠀"), "Braille blank");
+        assertFalse(AapCodec.isValidName("aㅤb"), "a filler inside");
+        assertTrue(AapCodec.isValidName("Beau’s AirPods"), "a visible apostrophe and an inner space stay valid");
         assertFalse(AapCodec.isValidName("privateuse"));
         assertThrows(IllegalArgumentException.class, () -> AapCodec.rename("tab\there"));
         assertThrows(IllegalArgumentException.class, () -> AapCodec.rename(""));

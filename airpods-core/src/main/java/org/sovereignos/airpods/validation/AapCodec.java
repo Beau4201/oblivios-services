@@ -149,15 +149,27 @@ public final class AapCodec {
         if (bytes < 1 || bytes > MAX_NAME_BYTES || !name.equals(name.strip())) {
             return false;
         }
+        // strip() leaves a no-break space and the other Zs separators in place: an invisible end is not "visible text".
+        if (Character.getType(name.codePointAt(0)) == Character.SPACE_SEPARATOR
+                || Character.getType(name.codePointBefore(name.length())) == Character.SPACE_SEPARATOR) {
+            return false;
+        }
         for (int i = 0; i < name.length(); i += Character.charCount(name.codePointAt(i))) {
-            int type = Character.getType(name.codePointAt(i));
+            int cp = name.codePointAt(i);
+            int type = Character.getType(cp);
             if (type == Character.CONTROL || type == Character.FORMAT || type == Character.PRIVATE_USE
                     || type == Character.SURROGATE || type == Character.UNASSIGNED
-                    || type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR) {
+                    || type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR
+                    || isBlankLooking(cp)) {
                 return false;
             }
         }
         return true;
+    }
+
+    /** Letters and symbols that draw nothing (Hangul fillers, Khmer inherent vowels, the Braille blank). */
+    private static boolean isBlankLooking(int cp) {
+        return cp == 0x115F || cp == 0x1160 || cp == 0x17B4 || cp == 0x17B5 || cp == 0x2800 || cp == 0x3164 || cp == 0xFFA0;
     }
 
     /** Renames the AirPods (AIR-162): header, opcode 0x001A, 01, the length, 00, the UTF-8 name. */
