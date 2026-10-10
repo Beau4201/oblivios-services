@@ -6,3 +6,4 @@ out/
 .worktrees/
 **/bin/
 .superpowers/
+.vscode/
