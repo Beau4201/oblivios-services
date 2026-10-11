@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.guardian.application;
 
 import org.sovereignos.guardian.contracts.GuardianIncidentV1;

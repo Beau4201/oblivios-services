@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.duress.setup;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

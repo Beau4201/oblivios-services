@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.validation;
 
 /** A frame from the AirPods, decoded and range-checked by {@link AapCodec}. */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.guardian.evidence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 plugins {
     kotlin("jvm") version "2.3.20" apply false
     kotlin("plugin.compose") version "2.3.20" apply false

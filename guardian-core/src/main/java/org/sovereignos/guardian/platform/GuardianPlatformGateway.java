@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.guardian.platform;
 
 import org.sovereignos.guardian.remediation.RemediationActionId;

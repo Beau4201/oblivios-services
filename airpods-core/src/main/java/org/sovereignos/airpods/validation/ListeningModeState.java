@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.validation;
 
 public record ListeningModeState(ListeningMode mode) implements AirPodsMessage {

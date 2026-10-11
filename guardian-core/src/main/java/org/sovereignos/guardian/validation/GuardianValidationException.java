@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.guardian.validation;
 
 public final class GuardianValidationException extends RuntimeException {

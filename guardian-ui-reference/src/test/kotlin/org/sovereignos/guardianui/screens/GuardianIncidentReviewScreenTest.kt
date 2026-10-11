@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.guardianui.screens
 
 import androidx.compose.material3.Text

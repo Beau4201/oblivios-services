@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.validation;
 
 /** The "automatic ear detection" setting (control identifier 0x0A), not the sensor state. */

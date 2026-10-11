@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package org.sovereignos.airpods.validation;
 
 /** The value the pair reports for one of the {@link AirPodsControl} settings, always inside its range. */
