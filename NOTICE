@@ -1,5 +1,5 @@
 SovereignOS services
-Copyright 2026 The SovereignOS authors
+Copyright 2026 Beau ten Berge
 
 LICENCE
 
@@ -39,3 +39,9 @@ Tests only (31 artifacts), not part of any runtime classpath:
 | GPL-2.0 with classpath exception, or MIT (checker-compat-qual) | 1 |
 
 Licences of the last five rows come from the artifact's POM or its parent POM.
+
+TRADEMARKS
+
+The name SovereignOS and its logo are not licensed; section 6 of the Apache
+License grants no right to use them. This project is not affiliated with
+GrapheneOS, Google, or any other product that uses a similar name.
