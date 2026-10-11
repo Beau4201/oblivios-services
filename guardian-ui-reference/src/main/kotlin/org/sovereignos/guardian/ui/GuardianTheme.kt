@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Color
 /**
  * Exact tokens ported from the approved "Quiet Authority" mockup
  * (guardian-quiet-authority.html, .app / .app.dark). Light is the default scheme;
- * dark-mode wiring is not implemented yet (see AGENTS.md: no partial work presented
+ * dark-mode wiring is not implemented yet (see CONTRIBUTING.md: no partial work presented
  * as more than it is — this file intentionally keeps [GuardianDarkPalette] unused
  * for now rather than half-wiring a theme switch).
  */
