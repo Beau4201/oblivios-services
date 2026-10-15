@@ -4,7 +4,7 @@ package org.sovereignos.guardianui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Dark-only. Every value is measured from the real SovereignOS boot-identity
+ * Dark-only. Every value is measured from the real FreeholdOS boot-identity
  * asset (ADR-019) or derived from it — see
  * docs/superpowers/specs/2026-08-13-guardian-visual-identity-design.md.
  * Success/warning/error are a deliberately unbranded universal triad —

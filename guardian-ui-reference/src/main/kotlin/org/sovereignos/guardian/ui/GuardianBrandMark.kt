@@ -9,8 +9,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
-// Path data mirrors the SovereignOS shield mark in
-// sovereignos-platform/branding/boot/source/sovereignos-boot-lockup.svg (viewBox 0 0 100 115):
+// Path data mirrors the FreeholdOS shield mark in
+// freeholdos-platform/branding/boot/source/freeholdos-boot-lockup.svg (viewBox 0 0 100 115):
 // a shield plate with a duotone "A" glyph, including its offset drop-shadow duplicate.
 private const val SHIELD_VIEWPORT_WIDTH = 100f
 private const val SHIELD_VIEWPORT_HEIGHT = 115f
@@ -22,7 +22,7 @@ private const val SHIELD_GLYPH_SHADOW_PATH = "M50 35L76 83H66.5L50 51.5L33.5 83H
 private const val SHIELD_GLYPH_PATH = "M50 28L78 78H67L50 47L33 78H22L50 28Z"
 
 /**
- * Builds the SovereignOS shield mark as a duotone [ImageVector]: a plate color, a solid glyph
+ * Builds the FreeholdOS shield mark as a duotone [ImageVector]: a plate color, a solid glyph
  * color, and the glyph's own offset drop-shadow duplicate underneath it at [shadowAlpha].
  * Render with `tint = Color.Unspecified` so Icon doesn't flatten the two glyph colors.
  */

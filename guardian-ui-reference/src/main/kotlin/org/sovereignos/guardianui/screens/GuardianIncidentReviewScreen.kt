@@ -156,7 +156,7 @@ private fun FactRow(key: String, value: String) {
     // row's full measurement pass for a short sentence, squeezing the
     // weighted key Text down to a few pixels, wrapping it one character
     // per line. Confirmed live on a real Android build of this exact
-    // FactRow (sovereignos-platform's guardian/SOURCE.md deviation #8) before
+    // FactRow (freeholdos-platform's guardian/SOURCE.md deviation #8) before
     // being traced back to this shared origin.
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Text(key, style = androidx.compose.ui.text.TextStyle(fontSize = 12.5.sp), color = GuardianColor.OnSurfaceVariant)

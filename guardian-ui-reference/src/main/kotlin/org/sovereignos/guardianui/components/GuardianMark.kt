@@ -12,7 +12,7 @@ import androidx.compose.ui.res.useResource
 import org.jetbrains.skia.Image as SkiaImage
 
 /**
- * The real SovereignOS shield mark — a transparent-background crop of the
+ * The real FreeholdOS shield mark — a transparent-background crop of the
  * actual, ADR-019-approved boot asset (see Task 5 for the exact
  * regeneration recipe). Never replace this with a hand-drawn vector; two
  * attempts at that were both visibly wrong in review.
@@ -26,7 +26,7 @@ fun GuardianMark(modifier: Modifier = Modifier) {
     }
     Image(
         painter = BitmapPainter(bitmap),
-        contentDescription = "SovereignOS shield mark",
+        contentDescription = "FreeholdOS shield mark",
         modifier = modifier.aspectRatio(1f),
     )
 }

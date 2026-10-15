@@ -34,7 +34,7 @@ const val trustNeverSeesLabel = "Guardian never sees"
 const val trustLockCopy = "This is a hard rule, not a setting. It can't be turned off."
 
 // This screen answers the trust question once, in the product itself. Its two
-// lists are not derived from any per-app data; they state SovereignOS Guardian's
+// lists are not derived from any per-app data; they state FreeholdOS Guardian's
 // actual, fixed privacy invariants (event-driven technical metadata only, never
 // personal content, never precise location) rather than a per-instance status.
 private val CAN_SEE = listOf(

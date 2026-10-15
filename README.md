@@ -1,8 +1,8 @@
-# SovereignOS Guardian Services
+# FreeholdOS Guardian Services
 
-This repository contains the localhost-only SovereignOS Guardian reference
+This repository contains the localhost-only FreeholdOS Guardian reference
 application and reusable Guardian core. It simulates platform effects for
-deterministic local testing; `sovereignos-platform` is required for real Android
+deterministic local testing; `freeholdos-platform` is required for real Android
 enforcement.
 
 Run the complete test entry point with:
@@ -18,5 +18,5 @@ supported. See `CONTRIBUTING.md` for the invariants a change has to respect.
 
 ## Licence
 
-Apache-2.0, see `LICENSE` and `NOTICE`. The name SovereignOS and its logo are
+Apache-2.0, see `LICENSE` and `NOTICE`. The name FreeholdOS and its logo are
 not licensed.

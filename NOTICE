@@ -1,4 +1,4 @@
-SovereignOS services
+FreeholdOS services
 Copyright 2026 Beau ten Berge
 
 LICENCE
@@ -42,6 +42,6 @@ Licences of the last five rows come from the artifact's POM or its parent POM.
 
 TRADEMARKS
 
-The name SovereignOS and its logo are not licensed; section 6 of the Apache
+The name FreeholdOS and its logo are not licensed; section 6 of the Apache
 License grants no right to use them. This project is not affiliated with
 GrapheneOS, Google, or any other product that uses a similar name.

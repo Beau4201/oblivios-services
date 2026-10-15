@@ -12,10 +12,10 @@ class GuardianMarkTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `renders with the SovereignOS mark content description`() {
+    fun `renders with the FreeholdOS mark content description`() {
         composeRule.setContent {
             GuardianTheme { GuardianMark() }
         }
-        composeRule.onNodeWithContentDescription("SovereignOS shield mark").assertExists()
+        composeRule.onNodeWithContentDescription("FreeholdOS shield mark").assertExists()
     }
 }
