@@ -32,7 +32,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("org.sovereignos.guardian.ui.GuardianReferenceDesktopApplicationKt")
+    mainClass.set("org.freeholdos.guardian.ui.GuardianReferenceDesktopApplicationKt")
 }
 
 tasks.test { useJUnitPlatform() }
