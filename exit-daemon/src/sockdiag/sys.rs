@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The only `unsafe` of the crate: one netlink `sock_diag` socket, one request sent, one reply received. Nothing here
-//! interprets a byte of either; `super` builds the request and parses the reply with bounds-checked slices.
+//! The only `unsafe` of the crate: one netlink `sock_diag` socket, one request sent, one reply received, and the
+//! `SO_PEERCRED` read of the control socket (the standard library's `peer_cred` is not stable). Nothing here interprets a
+//! byte of a request or a reply; `super` builds the request and parses the reply with bounds-checked slices.
 #![allow(unsafe_code)]
 
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 
 /// A reply to one exact-socket lookup is about 90 bytes; anything larger is not an answer to this request.
 const REPLY_MAX: usize = 8192;
@@ -75,4 +76,18 @@ pub fn query(request: &[u8]) -> io::Result<Vec<u8>> {
         buf.truncate(n);
         return Ok(buf);
     }
+}
+
+/// The uid of the process on the other end of a connected Unix socket, as the kernel recorded it at `connect`.
+pub fn peer_uid(fd: BorrowedFd<'_>) -> io::Result<u32> {
+    let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };
+    let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+    // SAFETY: the pointers describe `cred` and `len`, which outlive the call; `fd` is a valid descriptor.
+    cvt(unsafe {
+        libc::getsockopt(fd.as_raw_fd(), libc::SOL_SOCKET, libc::SO_PEERCRED, (&mut cred as *mut libc::ucred).cast(), &mut len)
+    })?;
+    if len as usize != std::mem::size_of::<libc::ucred>() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "short SO_PEERCRED"));
+    }
+    Ok(cred.uid)
 }

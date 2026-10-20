@@ -1321,13 +1321,13 @@ name = "exit-daemon"
 version = "0.1.0"
 dependencies = [
  "arti-client",
+ "futures",
  "libc",
  "onion-tunnel",
  "rustls",
  "smoltcp",
  "tokio",
  "tor-config",
- "tor-memquota",
 ]
 
 [[package]]

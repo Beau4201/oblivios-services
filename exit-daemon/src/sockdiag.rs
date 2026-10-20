@@ -138,6 +138,12 @@ pub fn parse_reply(buf: &[u8]) -> Result<Reply, ParseError> {
     }
 }
 
+/// The uid of the process on the other end of a connected Unix socket (`SO_PEERCRED`). It lives in `sys` with the rest
+/// of the `unsafe`, so that the crate has one place to review for it.
+pub fn peer_uid(fd: std::os::fd::BorrowedFd<'_>) -> io::Result<u32> {
+    sys::peer_uid(fd)
+}
+
 /// The uid that owns the socket with this local and remote end, `Ok(None)` when the kernel knows no such socket.
 pub fn owner_uid(proto: Proto, local: SocketAddr, remote: SocketAddr) -> io::Result<Option<u32>> {
     let request = build_request(proto, local, remote)?;

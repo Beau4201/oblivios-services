@@ -24,10 +24,10 @@ onion-tunnel = { path = "third_party/onionmasq/crates/onion-tunnel" }
 # Same feature set as onion-tunnel, so that nothing is added to the lock file.
 arti-client = { version = "0.46.0", default-features = false, features = ["tokio", "rustls", "static", "geoip", "onion-service-client", "experimental-api", "bridge-client", "pt-client", "keymgr"] }
 tor-config = "0.46.0"
-tor-memquota = "0.46.0"
 smoltcp = { version = "0.13.1", default-features = false, features = ["proto-ipv4", "proto-ipv6", "medium-ip"] }
 tokio = { version = "1.37.0", features = ["macros", "rt", "rt-multi-thread", "net", "signal", "time", "sync", "io-util"] }
 libc = "0.2"
+futures = "0.3"
 # The default crypto provider, installed once in main as upstream does (D-L stays open: aws-lc is C code).
 rustls = { version = "0.23.35", default-features = false, features = ["aws_lc_rs", "std"] }
 
