@@ -4,6 +4,7 @@
 # with panic = "abort") and then checks THE BINARY, not the exit code: the first build of 2026-10-20 exited 0 with a
 # 1.7 MB file that held no Tor code (docs/research/network-exit-options.md section 2.1 of freeholdos-foundation).
 #   EXIT_BUILD_SSH    user@host of the build server
+#   EXIT_TARGET_DIR   optional: another cargo target directory (two builds into two directories must give the same hash)
 #   EXIT_FETCH_DIR    optional: copy the verified binary into this local directory and check its hash there
 # Run on the workstation; it copies the tree to the server and runs itself there.
 set -o errexit -o nounset -o pipefail
@@ -17,7 +18,7 @@ if [[ "${EXIT_REMOTE:-}" != 1 ]]; then
   # cargo sees it as newer than the last build. With -t an older local file would replace a newer mutated one and cargo would
   # keep using the stale build (found after the first mutation run).
   rsync -rlpgoD --checksum --delete --exclude target --exclude .git -e "ssh -o BatchMode=yes" "$SRC"/ "$EXIT_BUILD_SSH:$WORK/src/"
-  ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "EXIT_REMOTE=1 EXIT_WORK=$WORK bash $WORK/src/tools/build-android.sh"
+  ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "EXIT_REMOTE=1 EXIT_WORK=$WORK EXIT_TARGET_DIR=${EXIT_TARGET_DIR:-} bash $WORK/src/tools/build-android.sh"
   if [[ -n "${EXIT_FETCH_DIR:-}" ]]; then
     mkdir -p "$EXIT_FETCH_DIR"
     scp -q "$EXIT_BUILD_SSH:$WORK/out/exitd" "$EXIT_FETCH_DIR/exitd"
@@ -34,8 +35,10 @@ cd "$WORK/src"
 if [[ ! -d "$CARGO_HOME/registry" ]]; then
   cargo fetch --locked --target aarch64-linux-android
 fi
-cargo build --release --locked --offline --target aarch64-linux-android --bin exitd --target-dir "$WORK/target-android"
-BIN="$WORK/target-android/aarch64-linux-android/release/exitd"
+TARGET="${EXIT_TARGET_DIR:-}"
+[[ -n "$TARGET" ]] || TARGET="$WORK/target-android"
+cargo build --release --locked --offline --target aarch64-linux-android --bin exitd --target-dir "$TARGET"
+BIN="$TARGET/aarch64-linux-android/release/exitd"
 mkdir -p "$WORK/out"
 cp -f "$BIN" "$WORK/out/exitd"
 BIN="$WORK/out/exitd"
@@ -61,6 +64,11 @@ for sym in tor-proto smoltcp aws_lc exitd; do
   [[ "$n" -ge 1 ]] || bad "no '$sym' in the binary (a build without the Tor code exits 0 too)"
   check "'$sym' found on $n lines"
 done
+for root in "$WORK" "$T"; do
+  n="$(grep -a -c -F "$root" "$BIN" || true)"
+  [[ "$n" -eq 0 ]] || bad "$n lines of the binary hold the build path $root (reproducible builds: no absolute build-machine path)"
+done
+check "no build-machine path in the binary"
 size="$(stat -c %s "$BIN")"
 (( size > 5000000 )) || bad "only $size bytes: far too small to hold the Tor client"
 check "$size bytes"

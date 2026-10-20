@@ -50,6 +50,14 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$WORK/toolchain/android-clang"
 # rustc links with -nodefaultlibs, so the compiler runtime must be named: the C code of aws-lc-sys is compiled with outline
 # atomics and calls __aarch64_cas4_acq_rel and its siblings, which only libclang_rt.builtins provides.
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=$CL/lib/clang/22/lib/linux/libclang_rt.builtins-aarch64-android.a"
+# Reproducible output: no build-machine path may end up in the binary (panic locations, __FILE__ of the C code). The
+# three roots are the source copy, the cargo home with the crates and the AOSP tree (toolchain and its standard library).
+REMAP="$WORK/src=exit-daemon $CARGO_HOME=cargo-home $T=aosp"
+for pair in $REMAP; do
+  CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="$CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS --remap-path-prefix=$pair"
+  CFLAGS_aarch64_linux_android="${CFLAGS_aarch64_linux_android:-} -ffile-prefix-map=$pair"
+done
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS CFLAGS_aarch64_linux_android
 export CC_aarch64_linux_android="$WORK/toolchain/android-clang" AR_aarch64_linux_android="$CL/bin/llvm-ar"
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$WORK/toolchain/host-clang"
 export CC_x86_64_unknown_linux_gnu="$WORK/toolchain/host-clang" AR_x86_64_unknown_linux_gnu="$CL/bin/llvm-ar"
