@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+# The exit daemon of Compartments (ADR-184): a Rust process that carries the traffic of the apps selected for the
+# Tor exit. Built with the AOSP Rust toolchain (1.93.1), `--locked`, from this tree only (tools/env.sh).
+[package]
+name = "exit-daemon"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+publish = false
+license = "Apache-2.0"
+description = "FreeholdOS per-app Tor exit daemon (ADR-184)"
+
+[lib]
+name = "exit_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "exitd"
+path = "src/main.rs"
+
+[dependencies]
+# The vendored library (third_party/onionmasq, SOURCE.md): tun to Tor streams, one isolation key per uid.
+onion-tunnel = { path = "third_party/onionmasq/crates/onion-tunnel" }
+# Same feature set as onion-tunnel, so that nothing is added to the lock file.
+arti-client = { version = "0.46.0", default-features = false, features = ["tokio", "rustls", "static", "geoip", "onion-service-client", "experimental-api", "bridge-client", "pt-client", "keymgr"] }
+tor-config = "0.46.0"
+tor-memquota = "0.46.0"
+smoltcp = { version = "0.13.1", default-features = false, features = ["proto-ipv4", "proto-ipv6", "medium-ip"] }
+tokio = { version = "1.37.0", features = ["macros", "rt", "rt-multi-thread", "net", "signal", "time", "sync", "io-util"] }
+libc = "0.2"
+# The default crypto provider, installed once in main as upstream does (D-L stays open: aws-lc is C code).
+rustls = { version = "0.23.35", default-features = false, features = ["aws_lc_rs", "std"] }
+
+[workspace]
+members = [
+    "third_party/onionmasq/crates/onion-tunnel",
+    "third_party/onionmasq/crates/onionmasq-device-testing",
+    "third_party/onionmasq/crates/simple-proc-net",
+]
+resolver = "2"
+
+[profile.release]
+# The Android standard library of the AOSP tree has no unwind strategy (network-exit-options.md section 2.1): every
+# panic ends the process, and the init service restarts it. A panic is never a way to carry on.
+panic = "abort"
+opt-level = "z"
+lto = true
+codegen-units = 1

@@ -1,0 +1,21 @@
+--- a/crates/onion-tunnel/Cargo.toml
++++ b/crates/onion-tunnel/Cargo.toml
+@@ -6,7 +6,9 @@
+ 
+ [features]
+ pluggable-transports = []
+-experimental-udp-tunnel = ["experimental-turn-tcp-client"]
++# FreeholdOS: the TURN client crate is not vendored (the exit daemon carries no UDP, ADR-184), so this feature cannot
++# be enabled: turning it on fails to compile instead of quietly building a UDP path.
++experimental-udp-tunnel = []
+ very-verbose = []
+ pcap = []
+ 
+@@ -33,7 +35,6 @@
+ tokio-util = { version = "0.7.10", features = ["compat"] }
+ thiserror = "2.0"
+ rand = "0.10.0"
+-experimental-turn-tcp-client = { path = "../experimental-turn-tcp-client", optional = true }
+ # Avoid having to link liblzma.
+ lzma-sys = { version = "0.1", features = ["static"] }
+ cached = "0.59.0"

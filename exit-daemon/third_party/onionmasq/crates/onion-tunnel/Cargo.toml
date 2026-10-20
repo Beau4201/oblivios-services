@@ -1,0 +1,42 @@
+[package]
+name = "onion-tunnel"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.91"
+
+[features]
+pluggable-transports = []
+# FreeholdOS: the TURN client crate is not vendored (the exit daemon carries no UDP, ADR-184), so this feature cannot
+# be enabled: turning it on fails to compile instead of quietly building a UDP path.
+experimental-udp-tunnel = []
+very-verbose = []
+pcap = []
+
+[dependencies]
+async-trait = "0.1"
+bytes = "1.6"
+dns-message-parser = "0.9"
+futures = "0.3"
+libc = "0.2"
+onionmasq-device-testing = { path = "../onionmasq-device-testing" }
+simple-proc-net = { path = "../simple-proc-net" }
+smoltcp = { version = "0.13.1", default-features = false, features = ["log", "phy-tuntap_interface", "medium-ip", "socket-udp", "socket-tcp", "proto-ipv4", "proto-ipv6", "socket", "async", "socket-tcp-pause-synack"] }
+tokio = { version = "1.37.0", features = ["net", "rt", "time", "sync", "io-util", "macros"] }
+tracing = "0.1.40"
+arti-client = { version = "0.46.0", default-features = false, features = ["tokio", "rustls", "static", "geoip", "onion-service-client", "experimental-api", "bridge-client", "pt-client", "keymgr"] }
+tor-chanmgr = { version = "0.46.0" }
+tor-config = { version = "0.46.0" }
+tor-rtcompat = { version = "0.46.0" }
+tor-linkspec = { version = "0.46.0" }
+tor-proto = { version = "0.46.0", features = ["experimental-api", "stream-ctrl"] }
+tor-llcrypto = { version = "0.46.0" }
+tor-geoip = { version = "0.46.0" }
+fs-mistrust = { version = "0.15.1" }
+tokio-util = { version = "0.7.10", features = ["compat"] }
+thiserror = "2.0"
+rand = "0.10.0"
+# Avoid having to link liblzma.
+lzma-sys = { version = "0.1", features = ["static"] }
+cached = "0.59.0"
+static_assertions = "1.1.0"
+safelog = "0.9.0"

@@ -1,0 +1,19 @@
+[package]
+name = "onionmasq-device-testing"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.91"
+
+[dependencies]
+smoltcp = { version = "0.13.1", default-features = false, features = ["log", "phy-tuntap_interface", "medium-ip", "socket-udp", "socket-tcp", "proto-ipv4", "proto-ipv6", "socket", "async"] }
+tokio = { version = "1.37.0", features = ["full"] }
+tracing = "0.1.40"
+bbqueue = "0.5"
+futures = "0.3"
+tokio-util = "0.7"
+
+[dev-dependencies]
+simple_logger = "5.0.0"
+tokio-tun = "0.15"
+anyhow = "1.0"
+
