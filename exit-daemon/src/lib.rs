@@ -5,3 +5,4 @@
 #![deny(unsafe_code)]
 
 pub mod control;
+pub mod sockdiag;
