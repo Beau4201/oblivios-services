@@ -10,7 +10,9 @@ use crate::scaffolding::ExitScaffolding;
 use crate::sockdiag::peer_uid as socket_peer_uid;
 use std::io::{self, Read, Write};
 use std::os::fd::AsFd;
-use std::os::unix::net::UnixStream;
+use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::Path;
 use std::time::Duration;
 
 /// The only protocol version this daemon speaks.
@@ -74,6 +76,20 @@ impl Control {
             }
         }
     }
+}
+
+/// Creates the control socket at `path` with mode 0600. A socket file left by an earlier run is replaced; anything else at
+/// that path (a regular file, a directory, a symlink even to a socket) is an error and is never removed.
+pub fn bind_control(path: &Path) -> io::Result<UnixListener> {
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.file_type().is_socket() => std::fs::remove_file(path)?,
+        Ok(_) => return Err(io::Error::new(io::ErrorKind::AlreadyExists, "control path exists and is not a socket")),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    let listener = UnixListener::bind(path)?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    Ok(listener)
 }
 
 fn invalid(e: DecodeError) -> io::Error {
@@ -317,6 +333,67 @@ mod tests {
         let mut c = Control::new(s.clone(), "exit0".into(), 64 * MIB);
         s.set_failed();
         assert_eq!(c.handle(ToDaemon::RefreshAll), Some(FromDaemon::State { state: DaemonState::Failed }));
+    }
+
+    /// A fresh 0700 directory for socket files.
+    fn sockdir(tag: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::DirBuilderExt;
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let d = std::env::temp_dir().join(format!("exit-daemon-sock-{tag}-{}-{nanos}", std::process::id()));
+        std::fs::DirBuilder::new().mode(0o700).create(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn the_control_socket_is_private_and_connectable() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = sockdir("bind");
+        let path = d.join("ctl");
+        let listener = bind_control(&path).unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        let _client = UnixStream::connect(&path).unwrap();
+        drop(listener);
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_stale_socket_file_is_replaced() {
+        let d = sockdir("stale");
+        let path = d.join("ctl");
+        drop(bind_control(&path).unwrap()); // leaves the socket file behind
+        assert!(path.exists());
+        let listener = bind_control(&path).unwrap();
+        assert!(UnixStream::connect(&path).is_ok());
+        drop(listener);
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_path_that_is_not_a_socket_is_never_removed() {
+        let d = sockdir("notsock");
+        let file = d.join("precious");
+        std::fs::write(&file, b"data").unwrap();
+        assert_eq!(bind_control(&file).unwrap_err().kind(), ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&file).unwrap(), b"data");
+        // A symlink is refused as well, also one that points to a socket, and its target is left alone.
+        let real = d.join("real");
+        let _l = bind_control(&real).unwrap();
+        let link = d.join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert_eq!(bind_control(&link).unwrap_err().kind(), ErrorKind::AlreadyExists);
+        assert!(UnixStream::connect(&real).is_ok());
+        // A directory is refused too.
+        let sub = d.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        assert_eq!(bind_control(&sub).unwrap_err().kind(), ErrorKind::AlreadyExists);
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_missing_directory_is_an_error() {
+        let d = sockdir("nodir");
+        assert!(bind_control(&d.join("absent").join("ctl")).is_err());
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]

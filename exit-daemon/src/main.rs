@@ -6,10 +6,9 @@ use exit_daemon::args::{parse_args, Args};
 use exit_daemon::config::{tunnel_config, DaemonConfig};
 use exit_daemon::control::DaemonState;
 use exit_daemon::scaffolding::ExitScaffolding;
-use exit_daemon::server::{serve, Control};
+use exit_daemon::server::{bind_control, serve, Control};
 use exit_daemon::sockdiag;
 use onion_tunnel::OnionTunnel;
-use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::process::ExitCode;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -47,19 +46,6 @@ fn control_loop(listener: UnixListener, peer_uid: u32, control: Arc<Mutex<Contro
     }
 }
 
-fn bind_control(path: &std::path::Path) -> Result<UnixListener, &'static str> {
-    // A socket file left by an earlier run would make bind fail; a file that is not ours to remove is an error.
-    match std::fs::remove_file(path) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err("control socket path is not usable"),
-    }
-    let listener = UnixListener::bind(path).map_err(|_| "control socket could not be created")?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-        .map_err(|_| "control socket could not be restricted")?;
-    Ok(listener)
-}
-
 fn run(a: Args) -> Result<(), &'static str> {
     let cfg = DaemonConfig {
         state_dir: a.state_dir.clone(),
@@ -84,7 +70,7 @@ fn run(a: Args) -> Result<(), &'static str> {
             .await
             .map_err(|_| "tunnel could not be created")?;
 
-        let listener = bind_control(&a.control)?;
+        let listener = bind_control(&a.control).map_err(|_| "control socket could not be created")?;
         let control = Arc::new(Mutex::new(Control::new(scaffolding.clone(), a.device.clone(), a.memory_max)));
         let shutdown = Arc::new(Notify::new());
         let (peer_uid, notify) = (a.peer_uid, shutdown.clone());

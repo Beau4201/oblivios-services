@@ -89,6 +89,8 @@ MUTATIONS = [
     ("server: shutdown does not end serve", V, "let shutdown = matches!(msg, ToDaemon::Shutdown);", "let shutdown = false;"),
     ("server: end inside a frame is fine", V, "if buf.is_empty() { Ok(()) } else { Err(io::ErrorKind::UnexpectedEof.into()) }", "Ok(())"),
     ("server: refresh app refreshes all", V, "self.scaffolding.refresh_app(uid);", "self.scaffolding.refresh_all();"),
+    ("server: bind removes any file", V, "Ok(m) if m.file_type().is_socket() => std::fs::remove_file(path)?,", "Ok(_) => std::fs::remove_file(path)?,"),
+    ("server: bind keeps default mode", V, "from_mode(0o600)", "from_mode(0o666)"),
     # args.rs
     ("args: duplicate allowed", A, "if slot.is_some() {", "if false {"),
     ("args: uid cast instead of checked", A, "let uid = u32::try_from(digits(name, value)?).map_err(|_| ArgError::Value(name))?;", "let uid = digits(name, value)? as u32;"),
