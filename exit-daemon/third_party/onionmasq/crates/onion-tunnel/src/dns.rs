@@ -523,26 +523,17 @@ where
             IpEndpoint::new(Self::V6_ADDRESS.into(), 53)
         };
 
-        // We try and get the isolation key, in order to isolate DNS per-app.
-        // If we can't, we store it in the fallback key, which the proxying code will check if it
-        // can't find the isolation key.
-        // This does kind of ruin the feature slightly, but it doesn't work properly on some
-        // Android platforms without this. Sigh.
-        let isolation_key = match self.scaffolding.isolate(from, dest, 17 /* UDP */) {
-            Ok(k) => Some(k),
-            Err(e) => {
-                trace!(
-                    "DNS query from {} failed due to isolate() call failure: {}",
-                    sensitive(from),
-                    e
-                );
-                None
-                /*
-                NOTE(eta): It would be nice if we could do this...
-                return Some(Self::make_answer(query, RCode::ServFail, vec![]));
-                 */
-            }
-        };
+        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL. Upstream falls back to a
+        // shared key here, which lets two apps share one DNS isolation (its own comment says so); the exit
+        // daemon attributes every flow to a uid or refuses it (ADR-184, finding F03).
+        let isolation_key = query_isolation(self.scaffolding.isolate(from, dest, 17 /* UDP */));
+        if isolation_key.is_none() {
+            trace!(
+                "DNS query from {} refused: its owner could not be found",
+                sensitive(from)
+            );
+            return Some(Self::make_answer(query, RCode::ServFail, vec![]));
+        }
 
         // For UDP tunnel pre-building, look up what the associated country code would be
         #[cfg(feature = "experimental-udp-tunnel")]
@@ -709,6 +700,11 @@ where
     }
 }
 
+/// The isolation key of a DNS query, or `None` when the scaffolding could not attribute it (the query is refused).
+fn query_isolation(result: std::io::Result<u64>) -> Option<u64> {
+    result.ok()
+}
+
 #[cfg(test)]
 mod test {
     use crate::dns::DnsCookies;
@@ -845,5 +841,17 @@ mod test {
                 }
             }
         }
+    }
+
+    // FreeholdOS: a query whose owner cannot be found is refused, not given a shared key (ADR-184, finding F03).
+    #[test]
+    fn isolation_failure_is_refused() {
+        use crate::dns::query_isolation;
+        assert_eq!(query_isolation(Ok(10231)), Some(10231));
+        assert_eq!(query_isolation(Ok(0)), Some(0));
+        assert_eq!(
+            query_isolation(Err(std::io::Error::from(std::io::ErrorKind::NotFound))),
+            None
+        );
     }
 }

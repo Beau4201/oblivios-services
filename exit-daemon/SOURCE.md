@@ -25,7 +25,7 @@ new upstream commit stays cheap.
 | Patch | Why it diverges from upstream |
 | --- | --- |
 | `third_party/patches/0001-onion-tunnel-drop-the-optional-turn-client-dependency.patch` | `onion-tunnel` names the TURN client crate as an optional path dependency; cargo needs the path to exist even when the feature is off. The daemon carries no UDP (ADR-184), so the dependency is removed and `experimental-udp-tunnel` becomes an empty feature: enabling it fails to compile instead of building a UDP path. |
-| `third_party/patches/0002-onion-tunnel-answer-servfail-when-the-owner-lookup-fails.patch` | Upstream gives a DNS query whose owner lookup fails the shared isolation key, which weakens the per-app DNS isolation (its own comment says so). The daemon answers SERVFAIL instead (ADR-184, finding F03). Added with the scaffolding task. |
+| `third_party/patches/0002-onion-tunnel-answer-servfail-when-the-owner-lookup-fails.patch` | Upstream gives a DNS query whose owner lookup fails the shared isolation key, which weakens the per-app DNS isolation (its own comment says so). The daemon answers SERVFAIL instead (ADR-184, finding F03). |
 
 A patch to the `cfg(target_os = "linux")` gates of `scaffolding.rs` and `onionmasq/src/main.rs` was not needed: it only
 enabled `scaffolding::linux::LinuxScaffolding`, which the daemon does not use (that scaffolding sets a socket mark, which
