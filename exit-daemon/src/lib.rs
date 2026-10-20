@@ -3,3 +3,5 @@
 //! (`sockdiag::sys`, the raw netlink socket) opts in with `#[allow(unsafe_code)]` and is the only place to review for
 //! it.
 #![deny(unsafe_code)]
+
+pub mod control;
