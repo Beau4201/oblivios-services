@@ -47,6 +47,9 @@ chmod +x "$WORK/toolchain/android-clang" "$WORK/toolchain/host-clang"
 export PATH="$T/prebuilts/rust-toolchain/linux-x86/1.93.1/bin:$PATH"
 export CARGO_HOME="$WORK/cargo-home" CARGO_INCREMENTAL=0
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$WORK/toolchain/android-clang"
+# rustc links with -nodefaultlibs, so the compiler runtime must be named: the C code of aws-lc-sys is compiled with outline
+# atomics and calls __aarch64_cas4_acq_rel and its siblings, which only libclang_rt.builtins provides.
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=$CL/lib/clang/22/lib/linux/libclang_rt.builtins-aarch64-android.a"
 export CC_aarch64_linux_android="$WORK/toolchain/android-clang" AR_aarch64_linux_android="$CL/bin/llvm-ar"
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$WORK/toolchain/host-clang"
 export CC_x86_64_unknown_linux_gnu="$WORK/toolchain/host-clang" AR_x86_64_unknown_linux_gnu="$CL/bin/llvm-ar"

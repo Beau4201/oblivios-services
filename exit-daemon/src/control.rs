@@ -115,7 +115,8 @@ fn split(buf: &[u8]) -> Result<(u8, &[u8], usize), DecodeError> {
         return Err(DecodeError::TooLong(len));
     }
     let end = 4 + len;
-    let body = buf.get(4..end).ok_or(if len == 0 { DecodeError::BadLength } else { DecodeError::Incomplete })?;
+    let body = buf.get(4..end).ok_or(DecodeError::Incomplete)?;
+    // A frame of length 0 has no tag byte.
     let (tag, payload) = body.split_first().ok_or(DecodeError::BadLength)?;
     Ok((*tag, payload, end))
 }
@@ -359,6 +360,19 @@ mod tests {
             decode_from_daemon(&frame(0x82, &[0])),
             Ok((FromDaemon::State { state: DaemonState::Bootstrapping }, 6))
         );
+    }
+
+    #[test]
+    fn the_limits_are_the_documented_values() {
+        // Wire-level contract with the app: a changed limit is a protocol change, not a refactoring.
+        assert_eq!(MAX_FRAME, 1024);
+        assert_eq!(IFNAME_MAX, 15);
+        assert_eq!(decode_from_daemon(&frame(0x81, &[b'a'; 16])), Err(DecodeError::BadIface));
+        assert!(decode_from_daemon(&frame(0x81, &[b'a'; 15])).is_ok());
+        let mut at_limit = 1024u32.to_be_bytes().to_vec();
+        at_limit.extend(vec![0x7f; 1024]);
+        assert_eq!(decode_to_daemon(&at_limit), Err(DecodeError::UnknownTag(0x7f)));
+        assert_eq!(decode_to_daemon(&1025u32.to_be_bytes()), Err(DecodeError::TooLong(1025)));
     }
 
     #[test]

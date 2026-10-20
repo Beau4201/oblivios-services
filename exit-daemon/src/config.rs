@@ -19,6 +19,9 @@ pub struct DaemonConfig {
     pub cache_dir: PathBuf,
     /// Arti's memory quota in bytes; checked against the control protocol's bounds.
     pub memory_max: u64,
+    /// Passed on to Arti. Off by default; a service whose directories Arti's check cannot accept (Android's `/data` is
+    /// group-writable) turns it on explicitly.
+    pub disable_fs_permission_checks: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,7 +113,7 @@ fn write_private(path: &Path, text: &str) -> Result<(), ConfigError> {
 }
 
 /// Writes the Arti configuration to `toml_path` (0600) and returns the tunnel configuration that points at it. The
-/// permission checks of Arti stay on.
+/// permission checks of Arti stay on unless the configuration turns them off.
 pub fn tunnel_config(c: &DaemonConfig, toml_path: &Path) -> Result<TunnelConfig, ConfigError> {
     validate_memory_max(c.memory_max).map_err(|_| ConfigError::MemoryMax)?;
     check_dir("state_dir", &c.state_dir)?;
@@ -119,6 +122,7 @@ pub fn tunnel_config(c: &DaemonConfig, toml_path: &Path) -> Result<TunnelConfig,
     check_quota(&load_arti(toml_path)?, c.memory_max)?;
     let mut t = TunnelConfig::default();
     t.arti_cfg_path = Some(toml_path.to_path_buf());
+    t.disable_fs_permission_checks = c.disable_fs_permission_checks;
     Ok(t)
 }
 
@@ -140,7 +144,7 @@ mod tests {
         for d in [&state, &cache] {
             std::fs::DirBuilder::new().mode(0o700).create(d).unwrap();
         }
-        (root, DaemonConfig { state_dir: state, cache_dir: cache, memory_max: 64 * MIB })
+        (root, DaemonConfig { state_dir: state, cache_dir: cache, memory_max: 64 * MIB, disable_fs_permission_checks: false })
     }
 
     #[test]
@@ -156,6 +160,15 @@ mod tests {
         assert!(all.contains(&format!("max: ByteQty({})", 64 * MIB)), "quota not applied: {all}");
         assert!(all.contains(c.state_dir.to_str().unwrap()), "state dir not applied: {all}");
         assert!(all.contains(c.cache_dir.to_str().unwrap()), "cache dir not applied: {all}");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn the_permission_checks_follow_the_configuration() {
+        let (root, mut c) = workdir("trust");
+        assert!(!tunnel_config(&c, &root.join("a.toml")).unwrap().disable_fs_permission_checks);
+        c.disable_fs_permission_checks = true;
+        assert!(tunnel_config(&c, &root.join("b.toml")).unwrap().disable_fs_permission_checks);
         std::fs::remove_dir_all(&root).unwrap();
     }
 

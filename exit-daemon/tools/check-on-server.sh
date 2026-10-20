@@ -17,7 +17,10 @@ if [[ "${EXIT_REMOTE:-}" != 1 ]]; then
   [[ -f "$SRC/Cargo.toml" ]] || { echo "no Cargo.toml in $SRC" >&2; exit 2; }
   ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "mkdir -p $WORK/src"
   # The vendored library is part of the tree under test; target directories and git data stay out.
-  rsync -a --delete --exclude target --exclude .git -e "ssh -o BatchMode=yes" "$SRC"/ "$EXIT_BUILD_SSH:$WORK/src/"
+  # rsync keeps no modification times (-t is left out on purpose): a file whose content changes gets the time of the copy, so
+  # cargo sees it as newer than the last build. With -t an older local file would replace a newer mutated one and cargo would
+  # keep using the stale build (found after the first mutation run).
+  rsync -rlpgoD --checksum --delete --exclude target --exclude .git -e "ssh -o BatchMode=yes" "$SRC"/ "$EXIT_BUILD_SSH:$WORK/src/"
   printf -v ARGS ' %q' "$@"
   exec ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "EXIT_REMOTE=1 EXIT_WORK=$WORK bash $WORK/src/tools/check-on-server.sh$ARGS"
 fi
