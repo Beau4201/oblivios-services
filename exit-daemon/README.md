@@ -33,3 +33,10 @@ it (milestone 3).
 Arti's memory quota (`system.memory.max`) is set explicitly from the configuration and the daemon refuses to start when
 that setting does not load; the library default is several GiB. The quota is approximate by design (`tor-memquota`): a
 hard limit is a job of the service definition, not of this crate.
+
+The key is `system.memory.max` with the quota as an integer number of bytes (the loader accepts it). After the file is
+written it is loaded the way the tunnel will load it and the quota is read back from the loaded configuration; Arti ignores
+an unknown key without an error, so this read-back is what keeps the default from staying in force. `tor_memquota::Config`
+has no public accessor (`system_memory()` needs arti-client's `testing` feature, which a production build must not enable),
+so the read-back matches the `Debug` text `max: ByteQty(<bytes>)`; a changed text fails closed, and the unit tests show it at
+the next Arti upgrade.
