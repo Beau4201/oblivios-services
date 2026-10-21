@@ -5,6 +5,8 @@
 #![deny(unsafe_code)]
 
 pub mod control;
+#[cfg(test)]
+mod fuzz;
 pub mod ladder;
 pub mod masklist;
 pub mod ratelimit;

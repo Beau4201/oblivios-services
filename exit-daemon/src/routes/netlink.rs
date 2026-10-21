@@ -56,6 +56,7 @@ const RTN_UNICAST: u8 = 1;
 const RTPROT_STATIC: u8 = 4;
 const RT_SCOPE_UNIVERSE: u8 = 0;
 const RT_SCOPE_LINK: u8 = 253;
+#[cfg(test)]
 const RTMSG_HDR: usize = 12;
 
 // if_addr.h, if_link.h

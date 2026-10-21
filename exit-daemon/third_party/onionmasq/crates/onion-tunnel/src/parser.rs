@@ -705,4 +705,62 @@ mod test {
 
         assert!(Parser::parse(&ip4).is_none());
     }
+
+    // FreeholdOS patch 0005: the parser reads packets that an app controls; no packet may make it panic. Seeds are valid
+    // packets (IPv4 and IPv6, with and without a hop-by-hop header), mutated at a few bytes, cut, or extended; the rest are
+    // random bytes with the version nibble of IPv4 or IPv6.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+    }
+
+    #[test]
+    fn no_packet_makes_the_parser_panic() {
+        let seeds: Vec<Vec<u8>> = vec![
+            ip4_tcp(tcp(b"", true, false)),
+            ip4_tcp(tcp(b"payload", false, true)),
+            ip6_tcp(tcp(b"", true, false)),
+            ip6_tcp(tcp(b"hello", true, true)),
+            ip6_hop_by_hop(ip6_tcp(tcp(b"", true, false))),
+            ip6_hop_by_hop(vec![6, 0, 1, 4, 0, 0, 0, 0]),
+            ip6_hop_by_hop(vec![17, 0, 0xc2, 4, 0, 0, 0, 0]),
+        ];
+        for seed in [1u64, 3, 0x9e37_79b9_7f4a_7c15, 0xcafe_f00d] {
+            let mut g = Rng(seed);
+            for _ in 0..30_000 {
+                let pkt: Vec<u8> = if g.below(5) == 0 {
+                    let n = g.below(160) as usize;
+                    let mut v: Vec<u8> = (0..n).map(|_| g.below(256) as u8).collect();
+                    if let Some(first) = v.first_mut() {
+                        *first = if g.below(2) == 0 { 0x45 } else { 0x60 };
+                    }
+                    v
+                } else {
+                    let mut v = seeds[g.below(seeds.len() as u64) as usize].clone();
+                    for _ in 0..g.below(5) {
+                        if !v.is_empty() {
+                            let at = g.below(v.len() as u64) as usize;
+                            v[at] = g.below(256) as u8;
+                        }
+                    }
+                    match g.below(4) {
+                        0 => v.truncate(g.below(v.len() as u64 + 1) as usize),
+                        1 => v.extend((0..g.below(40)).map(|_| g.below(256) as u8)),
+                        _ => {}
+                    }
+                    v
+                };
+                let _ = Parser::parse(&pkt);
+            }
+        }
+    }
 }

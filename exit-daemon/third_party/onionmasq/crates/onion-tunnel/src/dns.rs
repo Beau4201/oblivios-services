@@ -639,6 +639,17 @@ where
         isolation_key: u64,
     ) -> dns_message_parser::Dns {
         let _ = (from, dest);
+        Self::answer_names(&self.cookies, Some(&self.arti), query, isolation_key)
+    }
+
+    /// The fake-address answer for the questions of a query. It reads nothing but its arguments, so a test can run it on
+    /// any query without a tunnel.
+    fn answer_names(
+        cookies: &LockedDnsCookies,
+        arti: Option<&Arc<TorClient<OnionTunnelArtiRuntime<S>>>>,
+        query: &dns_message_parser::Dns,
+        isolation_key: u64,
+    ) -> dns_message_parser::Dns {
         let mut answers = vec![];
 
         for question in query.questions.iter() {
@@ -646,8 +657,8 @@ where
             let rr = match &question.q_type {
                 &QType::A => {
                     #[allow(clippy::expect_used)]
-                    let mut cookies = self.cookies.lock().expect("cookie poisoned");
-                    let cookie = match cookies.make_for_v4(Some(&self.arti), Some(isolation_key), name) {
+                    let mut cookies = cookies.lock().expect("cookie poisoned");
+                    let cookie = match cookies.make_for_v4(arti, Some(isolation_key), name) {
                         Some(cookie) => cookie,
                         // Return a `Refused` in case of an address exhaustion.
                         None => return Self::make_answer(query, RCode::Refused, vec![]),
@@ -670,8 +681,8 @@ where
                 }
                 &QType::AAAA => {
                     #[allow(clippy::expect_used)]
-                    let mut cookies = self.cookies.lock().expect("cookie poisoned");
-                    let cookie = match cookies.make_for_v6(Some(&self.arti), Some(isolation_key), name) {
+                    let mut cookies = cookies.lock().expect("cookie poisoned");
+                    let cookie = match cookies.make_for_v6(arti, Some(isolation_key), name) {
                         Some(cookie) => cookie,
                         // Return a `Refused` in case of an address exhaustion.
                         None => return Self::make_answer(query, RCode::Refused, vec![]),
@@ -1241,5 +1252,71 @@ mod test {
     async fn a_query_shorter_than_a_header_is_not_sent() {
         let up = upstream(|_| vec![vec![0, 0]]).await;
         assert_eq!(forward_udp(up, &[1], Duration::from_millis(200)).await.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    // FreeholdOS patch 0005: the DNS path reads bytes that an app controls; no input may make it panic. Inputs are random
+    // bytes, valid queries with a few bytes changed or cut, and queries built from random names and types. Whatever
+    // decodes goes through the routing and the answer builder, and every answer encodes.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+    }
+
+    #[test]
+    fn no_dns_message_makes_the_dns_path_panic() {
+        use crate::dns::{DnsManager, LockedDnsCookies};
+        use bytes::Bytes;
+        use std::sync::{Arc, Mutex};
+        let cookies: LockedDnsCookies = Arc::new(Mutex::new(DnsCookies::new()));
+        let types = [QType::A, QType::AAAA, QType::HTTPS, QType::SVCB, QType::PTR, QType::MX, QType::TXT, QType::NS];
+        let labels = ["a", "ads", "example", "x-y", "1", "xn--bcher-kva", "very-long-label-very-long-label-very-long-label-0123456789"];
+        for seed in [1u64, 2, 0x9e37_79b9_7f4a_7c15, 0xfeed_beef] {
+            let mut g = Rng(seed);
+            let mut decoded = 0;
+            for round in 0..20_000u32 {
+                let bytes: Vec<u8> = match g.below(3) {
+                    0 => (0..g.below(80)).map(|_| g.below(256) as u8).collect(),
+                    _ => {
+                        // A valid query from random labels and a random type, then up to three changed bytes or a cut.
+                        let n = 1 + g.below(4) as usize;
+                        let name: String = (0..n).map(|_| labels[g.below(labels.len() as u64) as usize]).collect::<Vec<_>>().join(".") + ".";
+                        let mut q = query_of(&[name.as_str()]);
+                        q.questions[0].q_type = types[g.below(types.len() as u64) as usize].clone();
+                        q.id = g.below(65536) as u16;
+                        let mut b = q.encode().map(|b| b.to_vec()).unwrap_or_default();
+                        if g.below(2) == 0 && !b.is_empty() {
+                            for _ in 0..1 + g.below(3) {
+                                let at = g.below(b.len() as u64) as usize;
+                                b[at] = g.below(256) as u8;
+                            }
+                        }
+                        if g.below(4) == 0 && !b.is_empty() {
+                            b.truncate(g.below(b.len() as u64) as usize);
+                        }
+                        b
+                    }
+                };
+                if let Ok(q) = Dns::decode(Bytes::from(bytes)) {
+                    decoded += 1;
+                    let route = route_query(&q, |name| if name.len() % 2 == 0 { DnsDecision::Tor } else { DnsDecision::Forward });
+                    let key = u64::from(round % 7);
+                    let answer = DnsManager::<()>::answer_names(&cookies, None, &q, key);
+                    let _ = answer.encode();
+                    let refusal = DnsManager::<()>::make_answer(&q, RCode::Refused, vec![]);
+                    let _ = refusal.encode();
+                    let _ = route;
+                }
+            }
+            assert!(decoded > 2_000, "seed {seed}: only {decoded} messages decoded; the test is too weak");
+        }
     }
 }
