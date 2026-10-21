@@ -228,6 +228,13 @@ mod tests {
             c.state_dir = Path::new(bad).to_path_buf();
             assert!(matches!(tunnel_config(&c, &root.join("arti.toml")), Err(ConfigError::Toml(_))), "{bad:?}");
         }
+        // The reason is the path check, not a later parse error of the file.
+        c.state_dir = Path::new("/x/line\nbreak").to_path_buf();
+        match tunnel_config(&c, &root.join("arti.toml")) {
+            Err(ConfigError::Toml(m)) => assert!(m.contains("control character"), "{m}"),
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(!root.join("arti.toml").exists(), "nothing is written for a refused path");
         std::fs::remove_dir_all(&root).unwrap();
     }
 
