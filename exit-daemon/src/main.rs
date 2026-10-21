@@ -15,7 +15,12 @@ use std::sync::{Arc, Mutex, PoisonError};
 use tokio::sync::Notify;
 
 fn main() -> ExitCode {
-    let argv: Vec<String> = std::env::args().skip(1).collect();
+    // args_os: `args()` panics on a byte sequence that is not UTF-8 and prints it.
+    let argv: Result<Vec<String>, _> = std::env::args_os().skip(1).map(|a| a.into_string()).collect();
+    let Ok(argv) = argv else {
+        eprintln!("exitd: argument is not UTF-8");
+        return ExitCode::from(2);
+    };
     let args = match parse_args(&argv) {
         Ok(a) => a,
         Err(e) => {
@@ -36,7 +41,11 @@ fn main() -> ExitCode {
 /// one is accepted. Returns after a peer asked for shutdown.
 fn control_loop(listener: UnixListener, peer_uid: u32, control: Arc<Mutex<Control>>, shutdown: Arc<Notify>) {
     for stream in listener.incoming() {
-        let Ok(stream) = stream else { continue };
+        let Ok(stream) = stream else {
+            // A persistent accept error (no descriptors left) must not become a busy loop.
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            continue;
+        };
         let handler = control.clone();
         let _ = serve(stream, peer_uid, |m| handler.lock().unwrap_or_else(PoisonError::into_inner).handle(m));
         if control.lock().unwrap_or_else(PoisonError::into_inner).shutdown_requested() {
@@ -56,6 +65,9 @@ fn run(a: Args) -> Result<(), &'static str> {
     // Arti's own files live in the state directory; the generated configuration sits beside them.
     let tunnel_cfg =
         tunnel_config(&cfg, &a.state_dir.join("exitd-arti.toml")).map_err(|_| "configuration could not be applied")?;
+
+    // The one kernel behaviour the daemon cannot work without, checked before anything is opened.
+    sockdiag::self_check().map_err(|_| "sock_diag self-check failed")?;
 
     // Upstream installs the same provider; an earlier installation is not an error.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();

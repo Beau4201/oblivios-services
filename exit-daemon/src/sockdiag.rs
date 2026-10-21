@@ -5,6 +5,7 @@
 
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::os::unix::fs::MetadataExt;
 
 #[allow(unsafe_code)]
 mod sys;
@@ -16,7 +17,12 @@ const NLM_F_REQUEST: u16 = 1;
 const REQUEST_BODY: usize = 56;
 const REPLY_BODY: usize = 72;
 const INET_DIAG_NOCOOKIE: u32 = 0xffff_ffff;
-const TCP_TIME_WAIT: u8 = 6;
+/// Socket states (`linux/tcp.h`) whose uid is the owner of a flow of this protocol. A lookup that finds no established
+/// socket falls back to the LISTEN socket on the same local port (state 10), and a TIME_WAIT socket (6) reports uid 0:
+/// neither is the app that opened the flow, and 3 and 12 are the half-open sockets of a server. Everything else is refused.
+const TCP_FLOW_STATES: [u8; 8] = [1, 2, 4, 5, 7, 8, 9, 11];
+/// A connected UDP socket is ESTABLISHED (1), an unconnected one is CLOSE (7).
+const UDP_FLOW_STATES: [u8; 2] = [1, 7];
 const ENOENT: i32 = 2;
 const IPPROTO_TCP: u8 = 6;
 const IPPROTO_UDP: u8 = 17;
@@ -35,7 +41,7 @@ pub enum Reply {
     Uid(u32),
     /// The kernel has no such socket (`ENOENT`).
     NoSuchSocket,
-    /// The socket exists but its uid is not an owner: a `TIME_WAIT` socket reports 0.
+    /// A socket answered, but not one that a flow of this protocol can come from (a listener, a `TIME_WAIT` socket).
     NoOwner,
     /// The kernel refused the request with this positive errno.
     Errno(i32),
@@ -103,8 +109,8 @@ fn ne_u32(b: &[u8], at: usize) -> Result<u32, ParseError> {
     Ok(u32::from_ne_bytes([s[0], s[1], s[2], s[3]]))
 }
 
-/// Reads the first netlink message of `buf`.
-pub fn parse_reply(buf: &[u8]) -> Result<Reply, ParseError> {
+/// Reads the first netlink message of `buf`, the reply to a lookup for a flow of `proto`.
+pub fn parse_reply(buf: &[u8], proto: Proto) -> Result<Reply, ParseError> {
     let len = ne_u32(buf, 0)? as usize;
     let ty = {
         let t = buf.get(4..6).ok_or(ParseError::Truncated)?;
@@ -129,13 +135,41 @@ pub fn parse_reply(buf: &[u8]) -> Result<Reply, ParseError> {
                 return Err(ParseError::Truncated);
             }
             let state = *body.get(1).ok_or(ParseError::Truncated)?;
-            if state == TCP_TIME_WAIT {
+            let states: &[u8] = match proto {
+                Proto::Tcp => &TCP_FLOW_STATES,
+                Proto::Udp => &UDP_FLOW_STATES,
+            };
+            if !states.contains(&state) {
                 return Ok(Reply::NoOwner);
             }
             Ok(Reply::Uid(ne_u32(body, 64)?))
         }
         other => Err(ParseError::Unexpected(other)),
     }
+}
+
+/// Startup check of the one kernel behaviour the daemon cannot work without: a loopback TCP pair and a connected UDP pair
+/// are found by `owner_uid` with the uid of this process. A kernel that answers differently would refuse every flow
+/// (the flows fail closed) with no hint why; the daemon stops with a fixed message instead.
+pub fn self_check() -> io::Result<()> {
+    use std::net::{TcpListener, TcpStream, UdpSocket};
+    let me = std::fs::metadata("/proc/self")?.uid();
+    let fail = |what: &'static str| io::Error::new(io::ErrorKind::Other, what);
+
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let client = TcpStream::connect(listener.local_addr()?)?;
+    let (_accepted, _) = listener.accept()?;
+    if owner_uid(Proto::Tcp, client.local_addr()?, client.peer_addr()?)? != Some(me) {
+        return Err(fail("sock_diag does not find a TCP socket"));
+    }
+
+    let a = UdpSocket::bind("127.0.0.1:0")?;
+    let b = UdpSocket::bind("127.0.0.1:0")?;
+    a.connect(b.local_addr()?)?;
+    if owner_uid(Proto::Udp, a.local_addr()?, a.peer_addr()?)? != Some(me) {
+        return Err(fail("sock_diag does not find a UDP socket"));
+    }
+    Ok(())
 }
 
 /// The uid of the process on the other end of a connected Unix socket (`SO_PEERCRED`). It lives in `sys` with the rest
@@ -148,7 +182,7 @@ pub fn peer_uid(fd: std::os::fd::BorrowedFd<'_>) -> io::Result<u32> {
 pub fn owner_uid(proto: Proto, local: SocketAddr, remote: SocketAddr) -> io::Result<Option<u32>> {
     let request = build_request(proto, local, remote)?;
     let reply = sys::query(&request)?;
-    match parse_reply(&reply) {
+    match parse_reply(&reply, proto) {
         Ok(Reply::Uid(uid)) => Ok(Some(uid)),
         Ok(Reply::NoSuchSocket | Reply::NoOwner) => Ok(None),
         Ok(Reply::Errno(e)) => Err(io::Error::from_raw_os_error(e)),
@@ -291,48 +325,83 @@ mod tests {
 
     #[test]
     fn a_reply_with_a_uid_is_read() {
-        assert_eq!(parse_reply(&reply(1, 10231)), Ok(Reply::Uid(10231)));
-        assert_eq!(parse_reply(&reply(1, 0)), Ok(Reply::Uid(0)));
-        assert_eq!(parse_reply(&reply(1, u32::MAX)), Ok(Reply::Uid(u32::MAX)));
+        assert_eq!(parse_reply(&reply(1, 10231), Proto::Tcp), Ok(Reply::Uid(10231)));
+        assert_eq!(parse_reply(&reply(1, 0), Proto::Tcp), Ok(Reply::Uid(0)));
+        assert_eq!(parse_reply(&reply(1, u32::MAX), Proto::Tcp), Ok(Reply::Uid(u32::MAX)));
+    }
+
+    #[test]
+    fn only_the_states_of_a_flow_have_an_owner() {
+        // The kernel answers a lookup that finds no established socket with the LISTEN socket on the same local port;
+        // its uid belongs to another app and must never become the isolation key of the flow.
+        for state in [1u8, 2, 4, 5, 7, 8, 9, 11] {
+            assert_eq!(parse_reply(&reply(state, 77), Proto::Tcp), Ok(Reply::Uid(77)), "tcp state {state}");
+        }
+        for state in [0u8, 3, 6, 10, 12, 13, 255] {
+            assert_eq!(parse_reply(&reply(state, 77), Proto::Tcp), Ok(Reply::NoOwner), "tcp state {state}");
+        }
+        for state in [1u8, 7] {
+            assert_eq!(parse_reply(&reply(state, 77), Proto::Udp), Ok(Reply::Uid(77)), "udp state {state}");
+        }
+        for state in [0u8, 2, 3, 6, 10, 12] {
+            assert_eq!(parse_reply(&reply(state, 77), Proto::Udp), Ok(Reply::NoOwner), "udp state {state}");
+        }
+    }
+
+    #[test]
+    fn a_listener_on_the_port_is_not_the_owner_of_a_foreign_tuple() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let local = listener.local_addr().unwrap();
+        let foreign: SocketAddr = "127.0.0.1:1".parse().unwrap();
+        assert_eq!(owner_uid(Proto::Tcp, local, foreign).unwrap(), None);
+        // A wildcard listener answers the same way.
+        let wild = TcpListener::bind("0.0.0.0:0").unwrap();
+        let wild_local = SocketAddr::from(([127, 0, 0, 1], wild.local_addr().unwrap().port()));
+        assert_eq!(owner_uid(Proto::Tcp, wild_local, foreign).unwrap(), None);
+    }
+
+    #[test]
+    fn the_self_check_passes_on_this_kernel() {
+        self_check().unwrap();
     }
 
     #[test]
     fn a_time_wait_socket_has_no_owner() {
         // The kernel reports uid 0 for a TIME_WAIT socket; that is not the uid of the app and must not be used.
-        assert_eq!(parse_reply(&reply(6, 0)), Ok(Reply::NoOwner));
+        assert_eq!(parse_reply(&reply(6, 0), Proto::Tcp), Ok(Reply::NoOwner));
     }
 
     #[test]
     fn enoent_means_no_such_socket_and_any_other_error_is_kept() {
-        assert_eq!(parse_reply(&error_reply(-2)), Ok(Reply::NoSuchSocket));
-        assert_eq!(parse_reply(&error_reply(-1)), Ok(Reply::Errno(1)));
-        assert_eq!(parse_reply(&error_reply(-13)), Ok(Reply::Errno(13)));
+        assert_eq!(parse_reply(&error_reply(-2), Proto::Tcp), Ok(Reply::NoSuchSocket));
+        assert_eq!(parse_reply(&error_reply(-1), Proto::Tcp), Ok(Reply::Errno(1)));
+        assert_eq!(parse_reply(&error_reply(-13), Proto::Tcp), Ok(Reply::Errno(13)));
         // An error of 0 is an acknowledgement, which a lookup never gets: it is not an answer.
-        assert_eq!(parse_reply(&error_reply(0)), Err(ParseError::Unexpected(2)));
+        assert_eq!(parse_reply(&error_reply(0), Proto::Tcp), Err(ParseError::Unexpected(2)));
     }
 
     #[test]
     fn a_reply_that_is_not_an_answer_is_refused() {
         let mut done = reply(1, 1);
         done[4..6].copy_from_slice(&3u16.to_ne_bytes()); // NLMSG_DONE
-        assert_eq!(parse_reply(&done), Err(ParseError::Unexpected(3)));
+        assert_eq!(parse_reply(&done, Proto::Tcp), Err(ParseError::Unexpected(3)));
         let mut length = reply(1, 1);
         length[..4].copy_from_slice(&8u32.to_ne_bytes()); // shorter than its own header
-        assert_eq!(parse_reply(&length), Err(ParseError::BadLength));
+        assert_eq!(parse_reply(&length, Proto::Tcp), Err(ParseError::BadLength));
         let mut longer = reply(1, 1);
         longer[..4].copy_from_slice(&1000u32.to_ne_bytes()); // longer than the buffer
-        assert_eq!(parse_reply(&longer), Err(ParseError::Truncated));
+        assert_eq!(parse_reply(&longer, Proto::Tcp), Err(ParseError::Truncated));
     }
 
     #[test]
     fn a_truncated_reply_is_an_error_at_every_length() {
         let full = reply(1, 10231);
         for n in 0..full.len() {
-            assert!(parse_reply(&full[..n]).is_err(), "{n} bytes parsed");
+            assert!(parse_reply(&full[..n], Proto::Tcp).is_err(), "{n} bytes parsed");
         }
         let full = error_reply(-2);
         for n in 0..full.len() {
-            assert!(parse_reply(&full[..n]).is_err(), "{n} bytes parsed");
+            assert!(parse_reply(&full[..n], Proto::Tcp).is_err(), "{n} bytes parsed");
         }
     }
 
@@ -344,9 +413,9 @@ mod tests {
         let request =
             build_request(Proto::Tcp, client.local_addr().unwrap(), client.peer_addr().unwrap()).unwrap();
         let full = sys::query(&request).unwrap();
-        assert_eq!(parse_reply(&full), Ok(Reply::Uid(my_uid())));
+        assert_eq!(parse_reply(&full, Proto::Tcp), Ok(Reply::Uid(my_uid())));
         for n in 0..full.len() {
-            assert!(parse_reply(&full[..n]).is_err(), "{n} of {} bytes parsed", full.len());
+            assert!(parse_reply(&full[..n], Proto::Tcp).is_err(), "{n} of {} bytes parsed", full.len());
         }
     }
 }

@@ -512,6 +512,14 @@ where
         }
     }
 
+    /// The isolation key of a query, or the SERVFAIL answer to give instead when the scaffolding could not attribute it.
+    fn attribute(
+        query: &dns_message_parser::Dns,
+        result: std::io::Result<u64>,
+    ) -> Result<u64, dns_message_parser::Dns> {
+        result.map_err(|_| Self::make_answer(query, RCode::ServFail, vec![]))
+    }
+
     fn build_answer(
         &self,
         query: &dns_message_parser::Dns,
@@ -526,14 +534,16 @@ where
         // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL. Upstream falls back to a
         // shared key here, which lets two apps share one DNS isolation (its own comment says so); the exit
         // daemon attributes every flow to a uid or refuses it (ADR-184, finding F03).
-        let isolation_key = query_isolation(self.scaffolding.isolate(from, dest, 17 /* UDP */));
-        if isolation_key.is_none() {
-            trace!(
-                "DNS query from {} refused: its owner could not be found",
-                sensitive(from)
-            );
-            return Some(Self::make_answer(query, RCode::ServFail, vec![]));
-        }
+        let isolation_key = match Self::attribute(query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {
+            Ok(key) => Some(key),
+            Err(refusal) => {
+                trace!(
+                    "DNS query from {} refused: its owner could not be found",
+                    sensitive(from)
+                );
+                return Some(refusal);
+            }
+        };
 
         // For UDP tunnel pre-building, look up what the associated country code would be
         #[cfg(feature = "experimental-udp-tunnel")]
@@ -700,11 +710,6 @@ where
     }
 }
 
-/// The isolation key of a DNS query, or `None` when the scaffolding could not attribute it (the query is refused).
-fn query_isolation(result: std::io::Result<u64>) -> Option<u64> {
-    result.ok()
-}
-
 #[cfg(test)]
 mod test {
     use crate::dns::DnsCookies;
@@ -846,12 +851,45 @@ mod test {
     // FreeholdOS: a query whose owner cannot be found is refused, not given a shared key (ADR-184, finding F03).
     #[test]
     fn isolation_failure_is_refused() {
-        use crate::dns::query_isolation;
-        assert_eq!(query_isolation(Ok(10231)), Some(10231));
-        assert_eq!(query_isolation(Ok(0)), Some(0));
-        assert_eq!(
-            query_isolation(Err(std::io::Error::from(std::io::ErrorKind::NotFound))),
-            None
-        );
+        use crate::dns::DnsManager;
+        use dns_message_parser::question::{QClass, QType, Question};
+        use dns_message_parser::{Dns, Flags, Opcode, RCode};
+        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
+        let query = Dns {
+            id: 0x4242,
+            flags: Flags {
+                qr: false,
+                opcode: Opcode::Query,
+                aa: false,
+                tc: false,
+                rd: true,
+                ra: false,
+                ad: false,
+                cd: false,
+                rcode: RCode::NoError,
+            },
+            questions: vec![Question {
+                domain_name: "example.org.".parse().unwrap(),
+                q_class: QClass::IN,
+                q_type: QType::A,
+            }],
+            answers: vec![],
+            authorities: vec![],
+            additionals: vec![],
+        };
+        assert_eq!(DnsManager::<()>::attribute(&query, Ok(10231)), Ok(10231));
+        assert_eq!(DnsManager::<()>::attribute(&query, Ok(0)), Ok(0));
+        for kind in [
+            std::io::ErrorKind::NotFound,
+            std::io::ErrorKind::InvalidInput,
+            std::io::ErrorKind::PermissionDenied,
+        ] {
+            let answer = DnsManager::<()>::attribute(&query, Err(std::io::Error::from(kind))).unwrap_err();
+            assert_eq!(answer.id, 0x4242);
+            assert!(answer.flags.qr);
+            assert_eq!(answer.flags.rcode, RCode::ServFail);
+            assert!(answer.answers.is_empty() && answer.authorities.is_empty() && answer.additionals.is_empty());
+            assert_eq!(answer.questions, query.questions);
+        }
     }
 }

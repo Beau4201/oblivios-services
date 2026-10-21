@@ -20,6 +20,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+D = "third_party/onionmasq/crates/onion-tunnel/src/dns.rs"
 C, S, V, G, A, F = (
     "src/control.rs",
     "src/sockdiag.rs",
@@ -58,7 +59,6 @@ MUTATIONS = [
     ("control: empty frame has a tag", C, "let (tag, payload) = body.split_first().ok_or(DecodeError::BadLength)?;", "let (tag, payload) = body.split_first().unwrap_or((&0x01, &[]));"),
     # sockdiag.rs
     ("sockdiag: udp ends not swapped", S, "Proto::Udp => (remote, local, IPPROTO_UDP),", "Proto::Udp => (local, remote, IPPROTO_UDP),"),
-    ("sockdiag: time wait read as an owner", S, "if state == TCP_TIME_WAIT {", "if state == 0 {"),
     ("sockdiag: enoent is an error", S, "if errno == ENOENT {", "if errno != ENOENT {"),
     ("sockdiag: ack accepted", S, "if e >= 0 {", "if e > 0 {"),
     ("sockdiag: short length accepted", S, "if len < NLMSG_HEADER {", "if len < NLMSG_HEADER - 8 {"),
@@ -89,8 +89,19 @@ MUTATIONS = [
     ("server: shutdown does not end serve", V, "let shutdown = matches!(msg, ToDaemon::Shutdown);", "let shutdown = false;"),
     ("server: end inside a frame is fine", V, "if buf.is_empty() { Ok(()) } else { Err(io::ErrorKind::UnexpectedEof.into()) }", "Ok(())"),
     ("server: refresh app refreshes all", V, "self.scaffolding.refresh_app(uid);", "self.scaffolding.refresh_all();"),
-    ("server: bind removes any file", V, "Ok(m) if m.file_type().is_socket() => std::fs::remove_file(path)?,", "Ok(_) => std::fs::remove_file(path)?,"),
+    ("server: bind removes any file", V, "Ok(m) if m.file_type().is_socket() => {", "Ok(_) => {"),
     ("server: bind keeps default mode", V, "from_mode(0o600)", "from_mode(0o666)"),
+    ("sockdiag: listener accepted as owner (tcp)", S, "const TCP_FLOW_STATES: [u8; 8] = [1, 2, 4, 5, 7, 8, 9, 11];", "const TCP_FLOW_STATES: [u8; 9] = [1, 2, 4, 5, 7, 8, 9, 10, 11];"),
+    ("sockdiag: time wait accepted as owner", S, "const TCP_FLOW_STATES: [u8; 8] = [1, 2, 4, 5, 7, 8, 9, 11];", "const TCP_FLOW_STATES: [u8; 9] = [1, 2, 4, 5, 6, 7, 8, 9, 11];"),
+    ("sockdiag: syn sent refused", S, "const TCP_FLOW_STATES: [u8; 8] = [1, 2, 4, 5, 7, 8, 9, 11];", "const TCP_FLOW_STATES: [u8; 7] = [1, 4, 5, 7, 8, 9, 11];"),
+    ("sockdiag: listener accepted as owner (udp)", S, "const UDP_FLOW_STATES: [u8; 2] = [1, 7];", "const UDP_FLOW_STATES: [u8; 3] = [1, 7, 10];"),
+    ("sockdiag: unconnected udp refused", S, "const UDP_FLOW_STATES: [u8; 2] = [1, 7];", "const UDP_FLOW_STATES: [u8; 1] = [1];"),
+    ("sockdiag: tcp ends swapped", S, "Proto::Tcp => (local, remote, IPPROTO_TCP),", "Proto::Tcp => (remote, local, IPPROTO_TCP),"),
+    ("sockdiag: self check inverted", S, "if owner_uid(Proto::Tcp, client.local_addr()?, client.peer_addr()?)? != Some(me) {", "if owner_uid(Proto::Tcp, client.local_addr()?, client.peer_addr()?)? == Some(me) {"),
+    ("server: live socket taken over", V, "if UnixStream::connect(path).is_ok() {", "if false {"),
+    ("config: control characters allowed", F, "if s.chars().any(|c| c.is_control()) {", "if false {"),
+    ("dns: refusal is not SERVFAIL", D, "result.map_err(|_| Self::make_answer(query, RCode::ServFail, vec![]))", "result.map_err(|_| Self::make_answer(query, RCode::NoError, vec![]))"),
+    ("dns: shared key instead of refusal", D, "result.map_err(|_| Self::make_answer(query, RCode::ServFail, vec![]))", "Ok(result.unwrap_or(0))"),
     # args.rs
     ("args: duplicate allowed", A, "if slot.is_some() {", "if false {"),
     ("args: uid cast instead of checked", A, "let uid = u32::try_from(digits(name, value)?).map_err(|_| ArgError::Value(name))?;", "let uid = digits(name, value)? as u32;"),
@@ -107,11 +118,14 @@ MUTATIONS = [
 
 
 def killed(output: str, rc: int) -> str:
+    """killed only when the tests ran and failed; anything else (ssh error, no tests, a build error) proves nothing."""
     if rc == 0:
         return "survived"
     if "could not compile" in output or "error[E" in output:
         return "does-not-compile"
-    return "killed"
+    if "test result: FAILED" in output or "panicked at" in output:
+        return "killed"
+    return "inconclusive"
 
 
 def main() -> int:
@@ -145,6 +159,8 @@ def main() -> int:
         try:
             r = subprocess.run(["bash", check], env=env, capture_output=True, text=True, timeout=1800)
             verdict = killed(r.stdout + r.stderr, r.returncode)
+        except subprocess.TimeoutExpired:
+            verdict = "timeout"
         finally:
             open(path, "w").write(orig)
         results.append((name, verdict))

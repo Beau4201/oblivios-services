@@ -35,4 +35,15 @@ fn an_unreadable_configuration_exits_with_status_1_not_with_defaults() {
     ]);
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
+    assert_eq!(String::from_utf8_lossy(&out.stderr), "exitd: configuration could not be applied\n");
+}
+
+#[test]
+fn an_argument_that_is_not_utf8_exits_with_status_2_and_is_not_echoed() {
+    use std::os::unix::ffi::OsStrExt;
+    let bad = std::ffi::OsStr::from_bytes(&[0xff, 0xfe]);
+    let out = Command::new(env!("CARGO_BIN_EXE_exitd")).arg("--state-dir").arg(bad).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    assert_eq!(String::from_utf8_lossy(&out.stderr), "exitd: argument is not UTF-8\n");
 }

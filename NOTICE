@@ -45,3 +45,16 @@ TRADEMARKS
 The name FreeholdOS and its logo are not licensed; section 6 of the Apache
 License grants no right to use them. This project is not affiliated with
 GrapheneOS, Google, or any other product that uses a similar name.
+
+THIRD-PARTY SOURCE IN THE REPOSITORY
+
+exit-daemon/third_party/onionmasq holds three crates of Onionmasq (Tor Project, commit
+849a8d14d165), licensed MIT OR Apache-2.0; their licence texts are copied unchanged
+(LICENSE-MIT, LICENSE-APACHE) and the changes are the patches in
+exit-daemon/third_party/patches (see exit-daemon/SOURCE.md).
+
+exit-daemon/Cargo.lock names 552 Rust packages that are fetched at build time and linked
+statically into the `exitd` binary (Arti, aws-lc and others, with a mix of MIT, Apache-2.0,
+ISC, OpenSSL-style, MPL-2.0 and similar licences). The aggregated attribution that a shipped
+binary needs (for example from `cargo about`) is not generated yet; it must exist, and
+`cargo audit` must have been run, before an image carries the daemon.

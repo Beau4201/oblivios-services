@@ -78,11 +78,17 @@ impl Control {
     }
 }
 
-/// Creates the control socket at `path` with mode 0600. A socket file left by an earlier run is replaced; anything else at
+/// Creates the control socket at `path` with mode 0600. A socket file left by an earlier run (nobody listens on it) is replaced; anything else at
 /// that path (a regular file, a directory, a symlink even to a socket) is an error and is never removed.
 pub fn bind_control(path: &Path) -> io::Result<UnixListener> {
     match std::fs::symlink_metadata(path) {
-        Ok(m) if m.file_type().is_socket() => std::fs::remove_file(path)?,
+        Ok(m) if m.file_type().is_socket() => {
+            // A daemon that still listens there is not ours to replace.
+            if UnixStream::connect(path).is_ok() {
+                return Err(io::Error::new(io::ErrorKind::AddrInUse, "another daemon listens on the control socket"));
+            }
+            std::fs::remove_file(path)?
+        }
         Ok(_) => return Err(io::Error::new(io::ErrorKind::AlreadyExists, "control path exists and is not a socket")),
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => return Err(e),
@@ -386,6 +392,18 @@ mod tests {
         let sub = d.join("sub");
         std::fs::create_dir(&sub).unwrap();
         assert_eq!(bind_control(&sub).unwrap_err().kind(), ErrorKind::AlreadyExists);
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_socket_with_a_live_daemon_behind_it_is_not_taken_over() {
+        let d = sockdir("live");
+        let path = d.join("ctl");
+        let first = bind_control(&path).unwrap();
+        assert_eq!(bind_control(&path).unwrap_err().kind(), ErrorKind::AddrInUse);
+        // The first daemon is untouched.
+        assert!(UnixStream::connect(&path).is_ok());
+        drop(first);
         std::fs::remove_dir_all(&d).unwrap();
     }
 

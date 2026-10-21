@@ -6,7 +6,8 @@
 #   EXIT_BUILD_SSH   user@host of the build server (kept out of the repository on purpose)
 #   EXIT_SRC         the source directory to test (default: the exit-daemon/ next to tools/); the mutation runner
 #                    points it at a mutated copy
-#   arguments        passed to `cargo test`, e.g. `-p onion-tunnel` or `control::`
+#   arguments        passed to `cargo test`, e.g. a test name filter such as `control::`
+# The whole workspace is tested: the vendored crates and their patches are part of what ships.
 # One run at a time (flock on the server).
 set -o errexit -o nounset -o pipefail
 WORK="${EXIT_WORK:-/srv/freeholdos/exit-daemon-work}"
@@ -36,7 +37,7 @@ if [[ ! -d "$CARGO_HOME/registry" ]]; then
   cargo fetch --locked
 fi
 set +o errexit
-cargo test --locked --offline --target-dir "$WORK/target-test" "$@" 2>&1 | tee "$LOG"
+cargo test --locked --offline --workspace --target-dir "$WORK/target-test" "$@" 2>&1 | tee "$LOG"
 rc=${PIPESTATUS[0]}
 set -o errexit
 if [[ $rc -ne 0 ]]; then
