@@ -175,3 +175,40 @@ fn two_generated_passwords_differ() {
     let mut rng = StdRng::seed_from_u64(99);
     assert_ne!(generate(&mut rng, &opts).unwrap(), generate(&mut rng, &opts).unwrap());
 }
+
+#[test]
+fn seven_characters_are_too_short_and_eight_are_not() {
+    let v = vault_of(&["Xk3mQ9v", "Xk3mQ9vT"]);
+    let weak = checkup(&v).weak;
+    assert_eq!(weak, vec![([1; 16], WeakReason::TooShort)]);
+}
+
+#[test]
+fn the_strength_steps_sit_where_the_estimate_puts_them() {
+    // All letters distinct and lower case: bits = n * log2(26) = n * 4.70.
+    assert_eq!(strength("xkqzvjwf"), Strength::Weak); // 8 -> 37.6
+    assert_eq!(strength("xkqzvjwfm"), Strength::Fair); // 9 -> 42.3
+    assert_eq!(strength("xkqzvjwfmhtp"), Strength::Fair); // 12 -> 56.4
+    assert_eq!(strength("xkqzvjwfmhtpl"), Strength::Good); // 13 -> 61.1
+    assert_eq!(strength("xkqzvjwfmhtplcdbg"), Strength::Good); // 17 -> 79.9
+    assert_eq!(strength("xkqzvjwfmhtplcdbgn"), Strength::Strong); // 18 -> 84.6
+    // Repeated characters count for half: 9 distinct + 9 repeats = 13.5 characters.
+    assert_eq!(strength("xkqzvjwfmxkqzvjwfk"), Strength::Good);
+}
+
+#[test]
+fn every_character_class_widens_the_pool() {
+    // Nine distinct characters: 26 -> 42.3 (Fair), 26+26+10+33 = 95 -> 59.1 (Fair), 4 classes of 9 > 40 in all cases;
+    // eight distinct characters: lower only 37.6 (Weak) but all four classes 52.6 (Fair).
+    assert_eq!(strength("xkqzvjwf"), Strength::Weak);
+    assert_eq!(strength("xKq3vj!f"), Strength::Fair);
+    // Non-ASCII adds its own pool of 100: eight distinct characters with one of them is 8 * log2(126) = 55.8.
+    assert_eq!(strength("xkqzvj\u{e9}f"), Strength::Fair);
+}
+
+#[test]
+fn a_password_of_exactly_1024_characters_can_be_generated() {
+    let mut rng = StdRng::seed_from_u64(5);
+    let opts = GenOpts { length: 1_024, lower: true, upper: true, digits: true, symbols: true };
+    assert_eq!(generate(&mut rng, &opts).unwrap().len(), 1_024);
+}

@@ -33,6 +33,10 @@ jni = { version = "0.21", default-features = false }
 
 [workspace]
 
+[profile.dev.package."*"]
+# Host tests run the crypto crates: optimised dependencies keep a 64 MiB vault test to seconds instead of minutes.
+opt-level = 3
+
 [profile.release]
 # The Android standard library of the AOSP tree has no unwind strategy: every panic ends the process.
 panic = "abort"

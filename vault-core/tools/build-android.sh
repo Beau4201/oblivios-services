@@ -59,8 +59,12 @@ for lib in $needed; do
   case "$lib" in libc.so|libdl.so|libm.so|liblog.so) ;; *) bad "NEEDED holds $lib" ;; esac
 done
 check "NEEDED $needed"
-"$READELF" --dyn-syms "$BIN" | grep -q ' freeholdos_vault_selftest$' || bad "freeholdos_vault_selftest is not exported"
-check "freeholdos_vault_selftest exported"
+# The exports are exactly the JNI surface of org.freeholdos.passwords.core.VaultCore: nothing missing, nothing extra.
+EXPECTED="selfTest create unlockWithPassphrase unlockWithVaultKey lock list search get addOrEdit delete markFilled checkup export importEntries indexBuild indexContains generate strength writeFileAtomic readFileBounded"
+want="$(for n in $EXPECTED; do echo "Java_org_freeholdos_passwords_core_VaultCore_$n"; done | sort)"
+have="$("$READELF" --dyn-syms "$BIN" | awk '$7 != "UND" && $5 == "GLOBAL" {print $NF}' | sed 's/@.*//' | sort)"
+[[ "$have" == "$want" ]] || bad "exports differ from the JNI surface: $(diff <(echo "$want") <(echo "$have") | tr '\n' ' ')"
+check "exports: the $(wc -w <<<"$EXPECTED") JNI functions and nothing else"
 # llvm-readelf prints imports as `name@LIBC`: strip the version, or an anchored pattern matches nothing.
 imports() { "$READELF" --dyn-syms "$BIN" | awk '/ UND /{print $NF}' | sed 's/@.*//'; }
 if imports | grep -E -q '^(socket|connect|bind|listen|accept|accept4|getaddrinfo|android_getaddrinfofornet|gethostbyname|sendto|recvfrom|sendmsg|recvmsg)$'; then

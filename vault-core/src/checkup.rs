@@ -68,7 +68,7 @@ fn is_patterned(password: &str) -> bool {
         return true;
     }
     // One block repeated: abab, xyzxyzxyz.
-    (1..=chars.len() / 2).any(|unit| chars.len() % unit == 0 && chars.chunks(unit).all(|c| c == &chars[..unit]))
+    (1..=chars.len() / 2).any(|unit| chars.len().is_multiple_of(unit) && chars.chunks(unit).all(|c| c == &chars[..unit]))
 }
 
 pub fn checkup(vault: &Vault) -> Checkup {
@@ -116,7 +116,7 @@ pub fn strength(password: &str) -> Strength {
     if password.chars().any(|c| c.is_ascii() && !c.is_ascii_alphanumeric()) {
         pool += 33;
     }
-    if password.chars().any(|c| !c.is_ascii()) {
+    if !password.is_ascii() {
         pool += 100;
     }
     let unique = password.chars().collect::<HashSet<_>>().len();

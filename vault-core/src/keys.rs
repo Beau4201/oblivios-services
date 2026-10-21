@@ -91,9 +91,21 @@ mod tests {
     use super::*;
 
     const P: KdfParams = KdfParams { m_kib: 64, t: 1, p: 1 };
+    const GOLDEN_KEK: [u8; 32] = [
+        158, 96, 81, 54, 125, 75, 28, 189, 14, 201, 29, 255, 182, 46, 202, 197, 211, 166, 78, 10, 44, 133, 147, 149, 111, 185, 77, 141, 151, 239, 180, 158,
+    ];
 
     fn kek(pass: &[u8], hw: u8, salt: u8, params: &KdfParams) -> [u8; 32] {
         *derive_kek(pass, &[hw; 32], params, &[salt; 16]).unwrap()
+    }
+
+    /// Pins Argon2id (version 0x13) + HKDF-SHA256 with this info string: the RFC 9106 and RFC 5869 vectors prove the
+    /// primitives, this proves how the core combines them. Changing the algorithm, the version, the cost handling or the
+    /// info string changes the value, and every vault ever written stops opening.
+    #[test]
+    fn the_kek_for_fixed_inputs_never_changes() {
+        let want: [u8; 32] = GOLDEN_KEK;
+        assert_eq!(kek(b"pw", 1, 2, &P), want);
     }
 
     #[test]

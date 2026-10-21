@@ -22,8 +22,9 @@ pub const MAX_ENTRIES: usize = 100_000;
 /// Domains or linked packages per entry.
 pub const MAX_LIST: usize = 256;
 pub const MAX_HISTORY: usize = 10;
-/// The plaintext may not outgrow what one sealed blob can carry.
-pub const MAX_PLAIN: usize = 64 * 1024 * 1024;
+/// The plaintext may not outgrow what one sealed blob can carry (64 MiB), less 1 MiB of room: `mark_filled` adds eight
+/// bytes to an entry without asking the limit, and 100 000 entries need at most 800 000 of them.
+pub const MAX_PLAIN: usize = 64 * 1024 * 1024 - 1024 * 1024;
 /// id 16, six length or count words of 4, two times 8, the flag and the history count.
 const MIN_ENTRY: usize = 16 + 6 * 4 + 2 * 8 + 1 + 1;
 const HEADER: usize = 1 + 4;
@@ -138,6 +139,22 @@ fn decode(r: &mut Reader) -> Result<Entry, VaultError> {
     Ok(Entry { id, title, domains, packages, username, password, notes, created_ms, edited_ms, last_filled_ms, history })
 }
 
+/// One entry in the wire form of the vault plaintext, for the JNI boundary.
+pub fn encode_entry(e: &Entry) -> zeroize::Zeroizing<Vec<u8>> {
+    let mut w = Writer::default();
+    encode(e, &mut w);
+    zeroize::Zeroizing::new(w.0)
+}
+
+/// Reads one entry and nothing else; every limit of [`validate`] applies.
+pub fn decode_entry(bytes: &[u8]) -> Result<Entry, VaultError> {
+    let mut r = Reader::new(bytes);
+    let e = decode(&mut r)?;
+    r.finish()?;
+    validate(&e)?;
+    Ok(e)
+}
+
 #[derive(Debug, Clone)]
 pub struct Vault {
     entries: Vec<Entry>,
@@ -162,6 +179,11 @@ impl Vault {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// Size of the plaintext the vault would seal, at most [`MAX_PLAIN`].
+    pub fn plain_size(&self) -> usize {
+        self.size
     }
 
     pub fn entries(&self) -> &[Entry] {

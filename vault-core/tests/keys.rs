@@ -110,3 +110,16 @@ fn a_truncated_wrapped_key_is_refused() {
         assert!(unwrap_with_passphrase(&wrapped[..len], b"right", &HW, &FAST, &SALT).is_err());
     }
 }
+
+#[test]
+fn the_limits_are_inclusive_and_the_minimum_lane_memory_is_eight_kib() {
+    for ok in [
+        KdfParams { m_kib: 262_144, t: 10, p: 4 },
+        KdfParams { m_kib: 16, t: 1, p: 2 },
+        KdfParams { m_kib: 8, t: 1, p: 1 },
+    ] {
+        assert_eq!(ok.validated(), Ok(ok), "{ok:?}");
+    }
+    assert_eq!(KdfParams { m_kib: 7, t: 1, p: 1 }.validated().err(), Some(VaultError::Corrupt));
+    assert_eq!(KdfParams { m_kib: 15, t: 1, p: 2 }.validated().err(), Some(VaultError::Corrupt));
+}

@@ -195,3 +195,29 @@ fn merging_never_overwrites_an_existing_entry() {
     assert_eq!(v.get(&[1; 16]).unwrap().title, "Site 1 \u{645}\u{631}\u{62d}\u{628}\u{627}", "the existing entry is untouched");
     assert_eq!(v.search("Other site").len(), 1);
 }
+
+#[test]
+fn exactly_ten_history_items_are_accepted() {
+    let hist = vec![r#"{"password":"x","replaced_ms":1}"#; 10].join(",");
+    let e = good_entry_json().replace(r#""history":[]"#, &format!(r#""history":[{hist}]"#));
+    let got = import(&sealed(&payload(&format!("[{e}]"))), PASS).unwrap();
+    assert_eq!(got[0].history.len(), 10);
+}
+
+#[test]
+fn exactly_the_entry_limit_is_accepted() {
+    let e = good_entry_json();
+    let all = format!("[{}]", vec![e.as_str(); 100_000].join(","));
+    let got = import(&sealed(&payload(&all)), PASS).unwrap();
+    assert_eq!(got.len(), 100_000);
+}
+
+#[test]
+fn a_list_of_257_strings_is_refused() {
+    let many = vec![r#""d.example""#; 257].join(",");
+    let e = good_entry_json().replace(r#""domains":[]"#, &format!(r#""domains":[{many}]"#));
+    assert_eq!(import(&sealed(&payload(&format!("[{e}]"))), PASS).err(), Some(VaultError::TooLarge));
+    let ok = vec![r#""d.example""#; 256].join(",");
+    let e = good_entry_json().replace(r#""domains":[]"#, &format!(r#""domains":[{ok}]"#));
+    assert!(import(&sealed(&payload(&format!("[{e}]"))), PASS).is_ok());
+}

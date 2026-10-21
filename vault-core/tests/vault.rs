@@ -258,3 +258,86 @@ fn a_field_length_beyond_the_limit_is_refused() {
         Some(VaultError::TooLarge) | Some(VaultError::Corrupt)
     ));
 }
+
+// --- limits that the mutation run found untested ---
+
+fn maximal(n: u32, notes_len: usize) -> Entry {
+    let big = "x".repeat(MAX_FIELD);
+    let mut e = entry(n, &big, &big, &big);
+    e.notes = "x".repeat(notes_len);
+    e.domains.clear();
+    e
+}
+
+#[test]
+fn a_vault_filled_to_the_exact_limit_still_opens_and_can_be_marked_filled() {
+    let vk = VaultKey::generate();
+    let mut v = Vault::new();
+    let mut n = 0u32;
+    while v.add(maximal(n, MAX_FIELD)).is_ok() {
+        n += 1;
+    }
+    assert!(n > 200, "only {n} maximal entries fit");
+    // Squeeze one more entry in, with notes as long as the room allows: the vault is then full to the byte.
+    let mut probe = Vault::new();
+    probe.add(maximal(0, 0)).unwrap();
+    let room = vault_core::vault::MAX_PLAIN - v.plain_size();
+    let fixed = probe.plain_size() - 5; // the entry without notes
+    v.add(maximal(n, room - fixed)).unwrap();
+    assert_eq!(v.plain_size(), vault_core::vault::MAX_PLAIN, "the vault must be full to the byte");
+    assert!(v.add(maximal(n + 1, 1)).is_err(), "the vault is not full yet");
+    // A fill adds eight bytes per entry: the file must still be readable after every one of them.
+    for i in 0..=n {
+        v.mark_filled(&id(i), 1);
+    }
+    let blob = v.to_sealed(&vk);
+    let back = Vault::from_sealed(&blob, &vk).expect("a full vault must reopen");
+    assert_eq!(back.len(), n as usize + 1);
+    // Room comes back when an entry goes.
+    assert!(v.delete(&id(0)));
+    v.add(maximal(1_000_000, 100)).unwrap();
+}
+
+#[test]
+fn lists_are_limited_to_256() {
+    let mut v = Vault::new();
+    let mut e = entry(1, "A", "a", "a");
+    e.domains = (0..256).map(|i| format!("d{i}.example")).collect();
+    e.packages = (0..256).map(|i| format!("p.{i}")).collect();
+    v.add(e.clone()).unwrap();
+    let vk = VaultKey::generate();
+    assert_eq!(Vault::from_sealed(&v.to_sealed(&vk), &vk).unwrap().get(&id(1)).unwrap().domains.len(), 256);
+    let mut too_many = e.clone();
+    too_many.domains.push("one.more".into());
+    assert_eq!(v.add(too_many).err(), Some(VaultError::TooLarge));
+    let mut too_many = e;
+    too_many.packages.push("one.more".into());
+    assert_eq!(v.add(too_many).err(), Some(VaultError::TooLarge));
+}
+
+#[test]
+fn an_entry_of_nothing_roundtrips() {
+    let vk = VaultKey::generate();
+    let mut v = Vault::new();
+    let mut e = entry(1, "", "", "");
+    e.domains.clear();
+    v.add(e.clone()).unwrap();
+    let back = Vault::from_sealed(&v.to_sealed(&vk), &vk).unwrap();
+    assert_eq!(back.get(&id(1)).unwrap(), &e);
+}
+
+#[test]
+fn debug_output_never_shows_a_password() {
+    let mut e = entry(1, "Mail", "me", "hunter2-very-secret");
+    e.history = vec![(SecretString::new("older-secret"), 1)];
+    let shown = format!("{e:?} {:?}", e.password);
+    assert!(!shown.contains("hunter2") && !shown.contains("older-secret"), "{shown}");
+}
+
+#[test]
+fn a_secret_compares_by_value() {
+    assert_eq!(SecretString::new("abc"), SecretString::new("abc"));
+    assert_ne!(SecretString::new("abc"), SecretString::new("abd"));
+    assert_ne!(SecretString::new("abc"), SecretString::new("abcd"));
+    assert_ne!(SecretString::new(""), SecretString::new("a"));
+}

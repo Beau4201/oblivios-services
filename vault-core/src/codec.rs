@@ -99,6 +99,11 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Everything not read yet.
+    pub(crate) fn rest(self) -> &'a [u8] {
+        &self.buf[self.pos..]
+    }
+
     /// The whole buffer must have been consumed.
     pub(crate) fn finish(self) -> Result<(), VaultError> {
         if self.remaining() == 0 {

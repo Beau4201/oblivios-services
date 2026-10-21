@@ -218,3 +218,36 @@ fn private_suffixes_keep_tenants_apart() {
     let idx = index_for(vec![entry(1, &["alice.github.io"], &[])]);
     assert!(!idx.contains(&KEY, "bob.github.io", Kind::Domain));
 }
+
+#[test]
+fn ports_up_to_65535_are_accepted() {
+    assert_eq!(registrable_domain("github.com:65535"), Some("github.com".into()));
+    assert_eq!(registrable_domain("github.com:0"), Some("github.com".into()));
+    assert_eq!(registrable_domain("github.com:65536"), None);
+    assert_eq!(registrable_domain("github.com:123456"), None);
+    assert_eq!(registrable_domain("github.com:12a"), None);
+}
+
+#[test]
+fn a_host_may_be_253_bytes_but_not_254() {
+    // 3 labels of 63 + the registrable "ab.com" tail: 63 + 1 + 63 + 1 + 63 + 1 + 61 = 253
+    let l63 = "a".repeat(63);
+    let ok = format!("{l63}.{l63}.{l63}.{}.com", "b".repeat(57));
+    assert_eq!(ok.len(), 253);
+    assert!(registrable_domain(&ok).is_some());
+    let too_long = format!("{l63}.{l63}.{l63}.{}.com", "b".repeat(58));
+    assert_eq!(too_long.len(), 254);
+    assert_eq!(registrable_domain(&too_long), None);
+}
+
+#[test]
+fn duplicate_tags_and_unknown_versions_are_refused() {
+    let two = index_for(vec![entry(1, &["github.com", "example.org"], &[])]).to_bytes();
+    let mut dup = two.clone();
+    let first = two[9..25].to_vec();
+    dup[25..41].copy_from_slice(&first);
+    assert_eq!(DomainIndex::from_bytes(&dup).err(), Some(VaultError::Corrupt));
+    let mut v2 = two.clone();
+    v2[4] = 2;
+    assert_eq!(DomainIndex::from_bytes(&v2).err(), Some(VaultError::UnsupportedVersion(2)));
+}

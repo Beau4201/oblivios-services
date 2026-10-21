@@ -85,3 +85,8 @@ fn nonces_are_unique() {
         assert!(seen.insert(seal(&KEY, AAD, b"same plaintext")), "two seals gave the same blob");
     }
 }
+
+#[test]
+fn a_blob_of_exactly_the_limit_is_structure_checked_not_too_large() {
+    assert_eq!(open(&KEY, AAD, &vec![0u8; MAX_BLOB]), Err(VaultError::Corrupt));
+}

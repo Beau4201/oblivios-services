@@ -132,3 +132,12 @@ fn read_bounded_reports_a_missing_file_as_io() {
     let d = Dir::new("missing");
     assert_eq!(read_bounded(&d.0.join("none")).err(), Some(VaultError::Io));
 }
+
+#[test]
+fn a_file_of_exactly_the_limit_is_read() {
+    let d = Dir::new("exact");
+    let path = d.0.join("v");
+    let f = fs::File::create(&path).unwrap();
+    f.set_len(MAX_BLOB as u64).unwrap();
+    assert_eq!(read_bounded(&path).unwrap().len(), MAX_BLOB);
+}
