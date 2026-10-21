@@ -2,6 +2,8 @@
 //! Core of the FreeholdOS Passwords app (ADR-185).
 #![deny(unsafe_code)]
 
+pub mod envelope;
+pub mod error;
 mod ffi;
 mod selftest;
 
