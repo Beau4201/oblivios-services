@@ -165,6 +165,19 @@ pub enum UdpTunnelChoice {
     Turn(Arc<TurnConfig>),
 }
 
+/// What to do with the DNS question of an app.
+///
+/// FreeholdOS patch 0004: upstream answers every question itself with a fake address that it carries through Tor.
+/// The exit daemon masks only some names (ADR-181, ADR-186): the others are passed on, unchanged, to the resolver
+/// that the app asked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DnsDecision {
+    /// Resolve through Tor: answer with a fake address and carry the later connection through Tor by name.
+    Tor,
+    /// Pass the query on to the resolver the app asked, and give the app its answer unchanged.
+    Forward,
+}
+
 /// Support functions used to integrate an [`crate::OnionTunnel`] into its environment.
 ///
 /// An `OnionTunnel` can be parameterized on a type implementing this trait in
@@ -219,6 +232,16 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
         let _ = dst;
         let _ = ip_proto;
         Ok(0)
+    }
+
+    /// Decide what to do with one DNS question of the app with this isolation key (FreeholdOS patch 0004).
+    ///
+    /// `name` is the queried name as written in the question (with its trailing dot). The default keeps the upstream
+    /// behaviour: every name is resolved through Tor.
+    fn dns_decision(&self, isolation_key: u64, name: &str) -> DnsDecision {
+        let _ = isolation_key;
+        let _ = name;
+        DnsDecision::Tor
     }
 
     /// Return a country code to be used for a connection, in order to make it appear to the

@@ -45,6 +45,9 @@ if [[ ! -d "$CARGO_HOME/registry" ]]; then
 fi
 set +o errexit
 if [[ "${EXIT_ONLY_DAEMON:-0}" == 1 ]]; then scope=(-p exit-daemon); else scope=(--workspace); fi
+# No debug information in the test builds: it only makes the two big test binaries slower to link (panic locations do not
+# need it).
+export CARGO_PROFILE_DEV_DEBUG=0
 cargo test --locked --offline "${scope[@]}" --target-dir "${EXIT_TARGET:-$WORK/target-test}" "$@" 2>&1 | tee "$LOG"
 rc=${PIPESTATUS[0]}
 set -o errexit

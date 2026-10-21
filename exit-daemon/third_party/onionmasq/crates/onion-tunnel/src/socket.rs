@@ -8,7 +8,7 @@ use crate::{OnionTunnel, TunnelScaffolding};
 use bytes::Bytes;
 use futures::Stream;
 use smoltcp::iface::SocketSet;
-use smoltcp::socket::udp::{BindError, SendError};
+use smoltcp::socket::udp::{BindError, SendError, UdpMetadata};
 use smoltcp::socket::{tcp, udp};
 use smoltcp::{iface::SocketHandle, wire::IpEndpoint};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -58,8 +58,15 @@ impl UdpSocket {
         self.with(|s| s.bind((addr, port)))
     }
 
-    pub fn send(&mut self, payload: &[u8], endpoint: IpEndpoint) -> Result<(), SendError> {
-        let ret = self.with(|s| s.send_slice(payload, endpoint));
+    /// FreeholdOS patch 0004: accept datagrams for this port whatever the destination address is.
+    pub fn bind_any(&mut self, port: u16) -> Result<(), BindError> {
+        self.with(|s| s.bind(port))
+    }
+
+    /// Send a datagram. With `local_address` set in the metadata the datagram leaves from that address, which is how an
+    /// answer carries the address the query was sent to.
+    pub fn send(&mut self, payload: &[u8], meta: impl Into<UdpMetadata>) -> Result<(), SendError> {
+        let ret = self.with(|s| s.send_slice(payload, meta));
         self.notify.notify_one();
         ret
     }
@@ -73,15 +80,13 @@ impl Drop for UdpSocket {
 }
 
 impl Stream for UdpSocket {
-    type Item = (Bytes, IpEndpoint);
+    type Item = (Bytes, UdpMetadata);
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.with(|s| match s.can_recv() {
             true => match s.recv() {
                 Err(_) => Poll::Ready(None),
-                Ok((payload, udp_meta)) => {
-                    Poll::Ready(Some((Bytes::copy_from_slice(payload), udp_meta.endpoint)))
-                }
+                Ok((payload, udp_meta)) => Poll::Ready(Some((Bytes::copy_from_slice(payload), udp_meta))),
             },
             false => {
                 s.register_recv_waker(cx.waker());

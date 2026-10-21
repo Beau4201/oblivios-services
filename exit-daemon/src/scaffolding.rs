@@ -4,10 +4,12 @@
 //! socket: its own uid stays outside every network preference, so its connections to the Tor network leave on the normal
 //! default network by the normal routing.
 
-use crate::control::DaemonState;
+use crate::control::{DaemonState, Kind};
+use crate::masklist::MaskList;
+use crate::policy::{Policy, SharedPolicy};
 use crate::sockdiag::Proto;
 use futures::Stream;
-use onion_tunnel::scaffolding::{FailedConnectionDetails, TunnelCommand};
+use onion_tunnel::scaffolding::{DnsDecision, FailedConnectionDetails, TunnelCommand};
 use onion_tunnel::{CountryCode, TunnelScaffolding};
 use smoltcp::wire::{IpAddress, IpEndpoint};
 use std::collections::HashMap;
@@ -16,7 +18,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::os::fd::RawFd;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::task::{Context, Poll};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -35,6 +37,9 @@ pub struct ExitScaffolding {
 
 struct Inner {
     lookup: Box<Lookup>,
+    /// What the exit app told the daemon about the apps, and the names that are masked for the apps of class `Masked`.
+    policy: SharedPolicy,
+    list: Arc<MaskList>,
     /// Failed Tor connections per uid: counts only, never a destination or a name.
     failures: Mutex<HashMap<u32, u32>>,
     commands: UnboundedSender<TunnelCommand>,
@@ -54,11 +59,19 @@ impl Stream for Commands {
 }
 
 impl ExitScaffolding {
+    /// A scaffolding with no policy and an empty list: no app is Tor and no name is masked, so every DNS query is passed on.
     pub fn new(lookup: Box<Lookup>) -> Self {
+        Self::with_policy(lookup, Arc::new(RwLock::new(Policy::default())), Arc::new(MaskList::default()))
+    }
+
+    /// A scaffolding that decides by `policy` (which the control server writes) and `list`.
+    pub fn with_policy(lookup: Box<Lookup>, policy: SharedPolicy, list: Arc<MaskList>) -> Self {
         let (commands, rx) = unbounded_channel();
         Self {
             inner: Arc::new(Inner {
                 lookup,
+                policy,
+                list,
                 failures: Mutex::new(HashMap::new()),
                 commands,
                 command_rx: Mutex::new(Some(rx)),
@@ -160,6 +173,22 @@ impl TunnelScaffolding for ExitScaffolding {
     fn on_arti_failure(&self, details: FailedConnectionDetails) {
         self.record_failure(details.isolation_key);
     }
+
+    /// An app of class Tor reaches everything through Tor. An app of class Masked reaches the names on the list through
+    /// Tor, unless the user chose to show the real address of that company to that app. Every other app, and every
+    /// key that is not a uid, has its queries passed on to its resolver.
+    fn dns_decision(&self, isolation_key: u64, name: &str) -> DnsDecision {
+        let Ok(uid) = u32::try_from(isolation_key) else { return DnsDecision::Forward };
+        let policy = self.inner.policy.read().unwrap_or_else(PoisonError::into_inner);
+        match policy.kind_of(uid) {
+            Some(Kind::Tor) => DnsDecision::Tor,
+            Some(Kind::Masked) => match self.inner.list.classify(name) {
+                Some(company) if !policy.overridden(uid, company) => DnsDecision::Tor,
+                _ => DnsDecision::Forward,
+            },
+            Some(Kind::Exempt) | None => DnsDecision::Forward,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -177,6 +206,68 @@ mod tests {
 
     fn fixed(answer: Option<u32>) -> ExitScaffolding {
         ExitScaffolding::new(Box::new(move |_, _, _| Ok(answer)))
+    }
+
+    fn dns_scaffolding(classes: Vec<crate::control::UidClass>) -> (ExitScaffolding, SharedPolicy) {
+        let policy: SharedPolicy = Arc::new(RwLock::new(Policy::default()));
+        policy.write().unwrap().set_classes(classes).unwrap();
+        let list = MaskList::parse(
+            "exit-mask-list\t1\nads.example.com\t7\tExample Ads\nexample.net\t8\tExample Net\ncdn.example.net\t0\tprotected\n",
+        )
+        .unwrap();
+        (ExitScaffolding::with_policy(Box::new(|_, _, _| Ok(Some(1))), policy.clone(), Arc::new(list)), policy)
+    }
+
+    fn class(start: u32, end: u32, kind: Kind) -> crate::control::UidClass {
+        crate::control::UidClass { start, end, kind }
+    }
+
+    #[test]
+    fn an_app_of_class_tor_resolves_every_name_through_tor() {
+        let (s, _) = dns_scaffolding(vec![class(10231, 10231, Kind::Tor)]);
+        for name in ["www.example.org.", "ads.example.com.", "cdn.example.net.", "x."] {
+            assert_eq!(s.dns_decision(10231, name), DnsDecision::Tor, "{name}");
+        }
+    }
+
+    #[test]
+    fn an_app_of_class_masked_resolves_only_listed_names_through_tor() {
+        let (s, _) = dns_scaffolding(vec![class(10000, 19999, Kind::Masked)]);
+        assert_eq!(s.dns_decision(10100, "ads.example.com."), DnsDecision::Tor);
+        assert_eq!(s.dns_decision(10100, "Sub.Example.NET."), DnsDecision::Tor);
+        assert_eq!(s.dns_decision(10100, "www.example.org."), DnsDecision::Forward);
+        assert_eq!(s.dns_decision(10100, "cdn.example.net."), DnsDecision::Forward, "a protected row shields");
+        assert_eq!(s.dns_decision(10100, "example.com."), DnsDecision::Forward, "the parent of a listed domain");
+        assert_eq!(s.dns_decision(10100, "not a name"), DnsDecision::Forward);
+    }
+
+    #[test]
+    fn a_company_the_user_chose_to_show_the_address_to_is_passed_on_for_that_app_only() {
+        let (s, policy) = dns_scaffolding(vec![class(10000, 19999, Kind::Masked)]);
+        policy.write().unwrap().set_overrides(10100, vec![7]).unwrap();
+        assert_eq!(s.dns_decision(10100, "ads.example.com."), DnsDecision::Forward, "company 7 for app 10100");
+        assert_eq!(s.dns_decision(10100, "www.example.net."), DnsDecision::Tor, "another company of the same app");
+        assert_eq!(s.dns_decision(10101, "ads.example.com."), DnsDecision::Tor, "the same company for another app");
+    }
+
+    #[test]
+    fn exempt_unclassified_and_foreign_keys_are_passed_on() {
+        let (s, _) = dns_scaffolding(vec![class(10000, 10099, Kind::Exempt), class(10200, 10299, Kind::Masked)]);
+        assert_eq!(s.dns_decision(10050, "ads.example.com."), DnsDecision::Forward, "exempt");
+        assert_eq!(s.dns_decision(10150, "ads.example.com."), DnsDecision::Forward, "no class");
+        assert_eq!(s.dns_decision(1000, "ads.example.com."), DnsDecision::Forward, "a system uid");
+        assert_eq!(s.dns_decision(u64::from(u32::MAX) + 1, "ads.example.com."), DnsDecision::Forward, "a key that is no uid");
+        assert_eq!(ExitScaffolding::new(Box::new(|_, _, _| Ok(None))).dns_decision(10231, "ads.example.com."), DnsDecision::Forward);
+    }
+
+    #[test]
+    fn a_new_policy_changes_the_next_decision() {
+        let (s, policy) = dns_scaffolding(vec![]);
+        assert_eq!(s.dns_decision(10231, "www.example.org."), DnsDecision::Forward);
+        policy.write().unwrap().set_classes(vec![class(10231, 10231, Kind::Tor)]).unwrap();
+        assert_eq!(s.dns_decision(10231, "www.example.org."), DnsDecision::Tor);
+        policy.write().unwrap().set_classes(vec![]).unwrap();
+        assert_eq!(s.dns_decision(10231, "www.example.org."), DnsDecision::Forward);
     }
 
     #[test]

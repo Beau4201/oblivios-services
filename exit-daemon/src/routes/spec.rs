@@ -260,6 +260,27 @@ mod tests {
     }
 
     #[test]
+    fn the_fake_ranges_of_the_rules_are_the_ranges_the_dns_manager_hands_out() {
+        use onion_tunnel::{is_fake_address, FAKE_V4_PREFIX, FAKE_V6_PREFIX};
+        use smoltcp::wire::{IpAddress, Ipv4Address, Ipv6Address};
+        // The rule covers 198.18.0.0/15: the prefix and the length agree with the manager.
+        assert_eq!(FAKE_V4.0.octets()[..2], FAKE_V4_PREFIX);
+        assert_eq!(FAKE_V4.1, 15);
+        assert_eq!(FAKE_V6.0.octets()[..6], FAKE_V6_PREFIX);
+        assert_eq!(FAKE_V6.1, 49);
+        // First and last address of each range are fake, the neighbours are not.
+        let v4 = |a: [u8; 4]| is_fake_address(&IpAddress::Ipv4(Ipv4Address::from(a)));
+        assert!(v4([198, 18, 0, 0]) && v4([198, 19, 255, 255]) && !v4([198, 17, 255, 255]) && !v4([198, 20, 0, 0]));
+        let v6 = |x: u128| is_fake_address(&IpAddress::Ipv6(Ipv6Address::from(x)));
+        let base = u128::from(FAKE_V6.0);
+        let size = 1u128 << (128 - u32::from(FAKE_V6.1));
+        assert!(v6(base) && v6(base + size - 1) && !v6(base - 1) && !v6(base + size));
+        // The tun's own addresses are not in the fake ranges, or a connection to the tun would be taken for one to a name.
+        assert!(!v4(TUN_V4.0.octets()));
+        assert!(!v6(u128::from(TUN_V6.0)));
+    }
+
+    #[test]
     fn a_steer_range_gives_the_dns_and_fake_rules_for_both_families_and_nothing_else() {
         let ops = plan(&spec(vec![r(10000, 10230)], vec![], None)).unwrap();
         assert_eq!(

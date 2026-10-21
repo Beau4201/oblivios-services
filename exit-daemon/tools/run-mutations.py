@@ -7,12 +7,13 @@ and runs tools/check-on-server.sh on the copy. A mutation is killed when the tes
 compile is NOT counted as killed: it proves nothing about the tests. A mutation whose text is not found exactly once in
 its file is an error of this list, not a surviving mutant.
 
-    EXIT_BUILD_SSH=user@host tools/run-mutations.py [--check-applies] [NAME_FILTER ...]
+    EXIT_BUILD_SSH=user@host tools/run-mutations.py [--check-applies] [--shard=I/N] [NAME_FILTER ...]
 
 --check-applies only checks that every mutation applies to the current sources. The result line is
 "N of N mutations killed"; the exit status is 0 only when all were killed.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,7 +22,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 D = "third_party/onionmasq/crates/onion-tunnel/src/dns.rs"
-C, S, V, G, A, F, P, Y, R = (
+C, S, V, G, A, F, P, Y, R, N, K, O, H, W = (
     "src/control.rs",
     "src/sockdiag.rs",
     "src/server.rs",
@@ -31,6 +32,11 @@ C, S, V, G, A, F, P, Y, R = (
     "src/policy.rs",
     "src/sockdiag/sys.rs",
     "src/routes/spec.rs",
+    "src/routes/netlink.rs",
+    "src/routes/reconcile.rs",
+    "src/routes/proto.rs",
+    "src/routes/helper.rs",
+    "src/routes/sys.rs",
 )
 
 # (name, file, old, new)
@@ -167,6 +173,76 @@ MUTATIONS = [
     ("spec: guard deny does not prohibit", R, "action: Action::Prohibit, ..rule(PRIO_GUARD_DENY, f)", "action: Action::Nop, ..rule(PRIO_GUARD_DENY, f)"),
     ("spec: guard oem rule always added", R, "            if let Some(id) = spec.oem_netid {\n                rules.push(Rule {", "            if let Some(id) = Some(spec.oem_netid.unwrap_or(1)) {\n                rules.push(Rule {"),
     ("spec: order by family first", R, "(r.priority, r.uids.map(|u| u.start), r.family == Family::V6)", "(r.family == Family::V6, r.priority, r.uids.map(|u| u.start))"),
+    # Task 6: netlink encoding, the stand-in and the real kernel, reconcile, the helper protocol and the helper
+    ("netlink: a message shorter than its header", N, "if len < NLMSG_HDR {", "if len < NLMSG_HDR - 1 {"),
+    ("netlink: a length of exactly the header is refused", N, "if len < NLMSG_HDR {", "if len <= NLMSG_HDR {"),
+    ("netlink: padding not counted", N, "at = at.checked_add(align4(len)).ok_or(NlError::BadLength)?;", "at = at.checked_add(len).ok_or(NlError::BadLength)?;"),
+    ("netlink: attribute padding not added", N, "self.buf.resize(align4(self.buf.len()), 0);", "// no padding"),
+    ("netlink: align rounds down", N, "(n + 3) & !3", "n & !3"),
+    ("netlink: length of the message not filled in", N, "self.buf[..4].copy_from_slice(&len.to_ne_bytes());", "let _ = len;"),
+    ("netlink: error code not negated", N, "Ok(e.checked_neg().unwrap_or(i32::MAX))", "Ok(e)"),
+    ("netlink: attribute shorter than its header", N, "        if len < 4 {\n            return Err(NlError::BadLength);\n        }\n        // The nested", "        if len < 3 {\n            return Err(NlError::BadLength);\n        }\n        // The nested"),
+    ("netlink: attribute flags kept in the type", N, "ne_u16(&head[2..4])? & 0x3fff", "ne_u16(&head[2..4])?"),
+    ("netlink: source prefix ignored", N, "if hdr[2] != 0 || hdr[3] != 0 || flags != 0 {", "if hdr[3] != 0 || flags != 0 {"),
+    ("netlink: tos ignored", N, "if hdr[2] != 0 || hdr[3] != 0 || flags != 0 {", "if hdr[2] != 0 || flags != 0 {"),
+    ("netlink: header flags ignored", N, "if hdr[2] != 0 || hdr[3] != 0 || flags != 0 {", "if hdr[2] != 0 || hdr[3] != 0 {"),
+    ("netlink: unknown attribute ignored", N, "            _ => return Ok(None),\n        }\n    }\n    let Some(priority)", "            _ => {}\n        }\n    }\n    let Some(priority)"),
+    ("netlink: nonzero protocol attribute ignored", N, "FRA_PROTOCOL if p == [0] => {}", "FRA_PROTOCOL => {}"),
+    ("netlink: suppression ignored", N, "FRA_SUPPRESS_PREFIXLEN | FRA_SUPPRESS_IFGROUP if p == u32::MAX.to_ne_bytes() => {}", "FRA_SUPPRESS_PREFIXLEN | FRA_SUPPRESS_IFGROUP => {}"),
+    ("netlink: a port range is any range", N, "                if lo != hi {\n                    return Ok(None);\n                }", "                let _ = hi;"),
+    ("netlink: a goto without a target is described", N, "            Some(p) => Action::Goto(p),\n            None => return Ok(None),", "            Some(p) => Action::Goto(p),\n            None => Action::Goto(0),"),
+    ("netlink: table taken from the header only", N, "FRA_TABLE => table = u32::from_ne_bytes(fixed::<4>(p)?),", "FRA_TABLE => {}"),
+    ("netlink: mark mask dropped", N, "(v, m) => Some((v.unwrap_or(0), m.unwrap_or(0))),", "(v, _) => Some((v.unwrap_or(0), 0)),"),
+    ("netlink: mark value dropped", N, "(v, m) => Some((v.unwrap_or(0), m.unwrap_or(0))),", "(_, m) => Some((0, m.unwrap_or(0))),"),
+    ("netlink: destination length lost", N, "(Family::V4, Some(b)) => Some(Dst::V4(Ipv4Addr::from(fixed::<4>(b)?), dst_len)),", "(Family::V4, Some(b)) => Some(Dst::V4(Ipv4Addr::from(fixed::<4>(b)?), 32)),"),
+    ("netlink: families confused", N, "AF_INET => Family::V4,\n        AF_INET6 => Family::V6,\n        _ => return Ok(None),\n    };\n    let (dst_len", "AF_INET => Family::V6,\n        AF_INET6 => Family::V4,\n        _ => return Ok(None),\n    };\n    let (dst_len"),
+    ("netlink: delete uses the add flags", N, "Verb::Del => (RTM_DELRULE, NLM_F_REQUEST | NLM_F_ACK),", "Verb::Del => (RTM_DELRULE, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE),"),
+    ("netlink: the port is written once", N, "b[2..].copy_from_slice(&port.to_ne_bytes());", "b[2..].copy_from_slice(&0u16.to_ne_bytes());"),
+    ("netlink: the uid range end is the start", N, "b[4..].copy_from_slice(&u.end.to_ne_bytes());", "b[4..].copy_from_slice(&u.start.to_ne_bytes());"),
+    ("netlink: v4 route has universe scope", N, "        Family::V4 => RT_SCOPE_LINK,\n        Family::V6 => RT_SCOPE_UNIVERSE,\n    };\n    // struct rtmsg: family, dst_len, src_len, tos, table, protocol, scope, type, flags\n    m.raw(&[family_byte(family), 0, 0, 0, 0, RTPROT_STATIC, scope, RTN_UNICAST]);\n    m.raw(&0u32.to_ne_bytes());\n    m.attr_u32(RTA_TABLE, table);\n    m.attr_u32(RTA_OIF, ifindex);", "        Family::V4 => RT_SCOPE_UNIVERSE,\n        Family::V6 => RT_SCOPE_UNIVERSE,\n    };\n    // struct rtmsg: family, dst_len, src_len, tos, table, protocol, scope, type, flags\n    m.raw(&[family_byte(family), 0, 0, 0, 0, RTPROT_STATIC, scope, RTN_UNICAST]);\n    m.raw(&0u32.to_ne_bytes());\n    m.attr_u32(RTA_TABLE, table);\n    m.attr_u32(RTA_OIF, ifindex);"),
+    ("netlink: the address is written once", N, "    m.attr(IFA_LOCAL, octets);\n    m.attr(IFA_ADDRESS, octets);", "    m.attr(IFA_LOCAL, octets);"),
+    ("netlink: the link name has no terminator", N, "    n.push(0);\n    m.attr(IFLA_IFNAME, &n);", "    m.attr(IFLA_IFNAME, &n);"),
+    ("netlink: link up without the change mask", N, "    m.raw(&IFF_UP.to_ne_bytes());\n    m.raw(&IFF_UP.to_ne_bytes());\n    let mut n", "    m.raw(&IFF_UP.to_ne_bytes());\n    m.raw(&0u32.to_ne_bytes());\n    let mut n"),
+    ("reconcile: removal before addition", K, "    for r in &missing {\n        ack(k, &nl::rule_msg(Verb::Add, r, seq.next()), &[EEXIST])?;\n        out.added += 1;\n    }\n    for r in &stale {\n        ack(k, &nl::rule_msg(Verb::Del, r, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }", "    for r in &stale {\n        ack(k, &nl::rule_msg(Verb::Del, r, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    for r in &missing {\n        ack(k, &nl::rule_msg(Verb::Add, r, seq.next()), &[EEXIST])?;\n        out.added += 1;\n    }"),
+    ("reconcile: everything is rewritten", K, "            Some(i) => {\n                unmatched.swap_remove(i);\n            }\n            None => missing.push(*d),", "            Some(i) => {\n                unmatched.swap_remove(i);\n                missing.push(*d);\n            }\n            None => missing.push(*d),"),
+    ("reconcile: stale rules are kept", K, "    let stale = unmatched;", "    let stale: Vec<Rule> = Vec::new();"),
+    ("reconcile: unreadable rules are kept", K, "    for (family, prio) in &band.foreign {\n        ack(k, &nl::rule_del_priority_msg(*family, *prio, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    Ok(out)\n}\n\n/// Removes every rule in the band and", "    Ok(out)\n}\n\n/// Removes every rule in the band and"),
+    ("reconcile: the band starts one early", K, "(BAND_FIRST..=BAND_LAST).contains(&priority)", "(BAND_FIRST - 1..=BAND_LAST).contains(&priority)"),
+    ("reconcile: the band ends one late", K, "(BAND_FIRST..=BAND_LAST).contains(&priority)", "(BAND_FIRST..=BAND_LAST + 1).contains(&priority)"),
+    ("reconcile: the band is open at the end", K, "(BAND_FIRST..=BAND_LAST).contains(&priority)", "(BAND_FIRST..BAND_LAST).contains(&priority)"),
+    ("reconcile: a rule outside the band in a plan is written", K, "    if desired.iter().any(|r| !in_band(r.priority)) {", "    if false {"),
+    ("reconcile: existing rule is an error", K, "ack(k, &nl::rule_msg(Verb::Add, r, seq.next()), &[EEXIST])?;", "ack(k, &nl::rule_msg(Verb::Add, r, seq.next()), &[])?;"),
+    ("reconcile: a missing rule is an error", K, "ack(k, &nl::rule_msg(Verb::Del, r, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    for (family, prio) in &band.foreign {\n        ack(k, &nl::rule_del_priority_msg(*family, *prio, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    for family in", "ack(k, &nl::rule_msg(Verb::Del, r, seq.next()), &[])?;\n        out.removed += 1;\n    }\n    for (family, prio) in &band.foreign {\n        ack(k, &nl::rule_del_priority_msg(*family, *prio, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    for family in"),
+    ("reconcile: an existing address is an error", K, "ack(k, &msg, &[EEXIST])?;", "ack(k, &msg, &[])?;"),
+    ("reconcile: any errno is fine", K, "    if code == 0 || tolerated.contains(&code) {", "    if true {"),
+    ("reconcile: the acknowledgement is not required", K, "        .ok_or_else(|| bad_reply(\"no acknowledgement in the netlink reply\"))?", "        .unwrap_or(Ok(0))?"),
+    ("reconcile: a dump without an end is accepted", K, "        if !done {\n            return Err(bad_reply(\"the rule dump did not end\"));\n        }", "        let _ = done;"),
+    ("reconcile: only the first family is read", K, "    for family in [Family::V4, Family::V6] {\n        let reply = k.request(&nl::dump_rules_msg", "    for family in [Family::V4] {\n        let reply = k.request(&nl::dump_rules_msg"),
+    ("reconcile: clear leaves the routes", K, "    for family in [Family::V4, Family::V6] {\n        ack(k, &nl::route_default_del_msg(family, TABLE, seq.next()), &[ESRCH, ENOENT])?;\n    }", ""),
+    ("reconcile: clear fails when there is no route", K, "&[ESRCH, ENOENT])?;", "&[])?;"),
+    ("reconcile: the rule count is the added ones", K, "let mut out = Applied { rules: desired.len(), ..Applied::default() };", "let mut out = Applied { rules: 0, ..Applied::default() };"),
+    ("proto: the network id is not sent", O, "p.extend_from_slice(&spec.oem_netid.unwrap_or(0).to_be_bytes());", "p.extend_from_slice(&0u32.to_be_bytes());"),
+    ("proto: zero is a network id", O, "oem_netid: (id != 0).then_some(id)", "oem_netid: Some(id)"),
+    ("proto: trailing bytes after an apply", O, "            if !rest.is_empty() {\n                return Err(DecodeError::Trailing);\n            }", "            let _ = rest;"),
+    ("proto: the name length is not checked", O, "let name = rest.get(..usize::from(*name_len)).ok_or(DecodeError::BadLength)?;", "let name = rest.get(..usize::from(*name_len).min(rest.len())).ok_or(DecodeError::BadLength)?;"),
+    ("proto: a range count that is too large is read", O, "let body = rest.get(..want).ok_or(DecodeError::BadLength)?;", "let body = rest.get(..want.min(rest.len())).ok_or(DecodeError::BadLength)?;"),
+    ("proto: the encoder is unbounded", O, "let list = &list[..list.len().min(MAX_RANGES)];", "let list = &list[..list.len().min(MAX_RANGES + 1000)];"),
+    ("proto: an error code of 5 is refused", O, "                5 => ErrorCode::Failed,\n", ""),
+    ("proto: applied count is the low byte", O, "RouteReply::Applied { seq: p[0], rules: u16::from_be_bytes([p[1], p[2]]) }", "RouteReply::Applied { seq: p[0], rules: u16::from(p[2]) }"),
+    ("helper: wrong version accepted", H, "RouteMsg::Hello { version } if version == ROUTE_PROTOCOL_VERSION => {", "RouteMsg::Hello { version } if version != ROUTE_PROTOCOL_VERSION => {"),
+    ("helper: a wrong version keeps the connection", H, "RouteMsg::Hello { .. } => {\n                HelperReply { msgs: vec![RouteReply::Error { seq: 0, code: ErrorCode::Unsupported }], close: true }", "RouteMsg::Hello { .. } => {\n                HelperReply { msgs: vec![RouteReply::Error { seq: 0, code: ErrorCode::Unsupported }], close: false }"),
+    ("helper: a refused specification is applied anyway", H, "Err(e) => return HelperReply::one(RouteReply::Error { seq, code: spec_error(e) }),", "Err(_) => Vec::new(),"),
+    ("helper: too many ranges is a bad value", H, "SpecError::TooManyRanges => ErrorCode::TooMany,", "SpecError::TooManyRanges => ErrorCode::BadValue,"),
+    ("helper: a kernel refusal is acknowledged", H, "Err(_) => HelperReply::one(RouteReply::Error { seq, code: ErrorCode::Failed }),\n                }\n            }\n            RouteMsg::Clear", "Err(_) => HelperReply::one(RouteReply::Ack { seq }),\n                }\n            }\n            RouteMsg::Clear"),
+    ("helper: the specification is remembered before it is applied", H, "                    Ok(_) => {\n                        self.last = Some(spec);\n                        HelperReply::one(RouteReply::Ack { seq })\n                    }", "                    Ok(_) => HelperReply::one(RouteReply::Ack { seq }),"),
+    ("helper: clear keeps the specification", H, "                Ok(_) => {\n                    self.last = None;", "                Ok(_) => {"),
+    ("helper: the applied count is the known rules only", H, "let n = band.known.len() + band.foreign.len();", "let n = band.known.len();"),
+    ("helper: the applied count wraps", H, "u16::try_from(n).unwrap_or(u16::MAX)", "n as u16"),
+    ("helper: the peer is not checked", H, "serve_framed(stream, |s| check_peer(s, auth), decode_msg, encode_reply, |m| {", "serve_framed(stream, |_| Ok(()), decode_msg, encode_reply, |m| {"),
+    ("sys: the dump end is not looked for", W, "(dump && m.kind == NLMSG_DONE)", "false"),
+    ("sys: replies of other requests are kept", W, "let ours: Vec<_> = msgs.iter().filter(|m| m.seq == seq).collect();", "let ours: Vec<_> = msgs.iter().collect();"),
+    ("sys: the reply size is not bounded", W, "if all.len() > REPLY_MAX {", "if false {"),
+    ("sys: the ack is not looked for", W, "m.kind == NLMSG_ERROR || (dump", "m.kind == NLMSG_DONE || (dump"),
     # sockdiag.rs
     ("sockdiag: udp ends not swapped", S, "Proto::Udp => (remote, local, IPPROTO_UDP),", "Proto::Udp => (local, remote, IPPROTO_UDP),"),
     ("sockdiag: enoent is an error", S, "if errno == ENOENT {", "if errno != ENOENT {"),
@@ -198,7 +274,7 @@ MUTATIONS = [
     ("server: shutdown does not end serve", V, "Reply::closing(FromDaemon::Ack { seq })", "Reply::one(FromDaemon::Ack { seq })"),
     ("server: shutdown acknowledged with another sequence number", V, "Reply::closing(FromDaemon::Ack { seq })", "Reply::closing(FromDaemon::Ack { seq: 0 })"),
     ("server: version mismatch keeps the connection", V, "Reply::closing(FromDaemon::Error { seq: 0, code: ErrorCode::Unsupported })", "Reply::one(FromDaemon::Error { seq: 0, code: ErrorCode::Unsupported })"),
-    ("server: serve ignores the close flag", V, "if reply.close {", "if false {"),
+    ("server: serve ignores the close flag", V, "                    if close {\n                        return Ok(());", "                    if false {\n                        return Ok(());"),
     ("server: a refused request is acknowledged", V, "Err(code) => Self::error(seq, code),", "Err(_) => Self::ack(seq),"),
     ("server: a refused quota is acknowledged", V, "Err(_) => Reply::error(seq, ErrorCode::BadValue),", "Err(_) => Reply::ack(seq),"),
     ("server: overrides are not stored", V, "Reply::result(seq, p.set_overrides(uid, companies))", "Reply::ack(seq)"),
@@ -233,6 +309,27 @@ MUTATIONS = [
 ]
 
 
+_CONST = re.compile(r"^(?P<head>(?:pub(?:\([a-z]+\))? )?const (?P<name>[A-Z0-9_]+): (?P<ty>u8|u16|u32|u64|i32|usize) = )(?P<val>0x[0-9a-fA-F]+|[0-9]+)(?P<tail>;.*)$", re.M)
+
+
+def constant_mutations(files, label):
+    """One mutation per plain numeric constant: its value plus one. A constant that no test pins survives."""
+    out = []
+    for f in files:
+        text = open(os.path.join(ROOT, f)).read()
+        for m in _CONST.finditer(text):
+            old = m.group(0)
+            if text.count(old) != 1:
+                continue
+            val = int(m.group("val"), 0)
+            new = m.group("head") + str(val + 1) + m.group("tail")
+            out.append((f"{label}: {f.split('/')[-1]} {m.group('name')} + 1", f, old, new))
+    return out
+
+
+MUTATIONS += constant_mutations(["src/routes/netlink.rs", "src/routes/proto.rs", "src/routes/reconcile.rs"], "const")
+
+
 def killed(output: str, rc: int) -> str:
     """killed only when the tests ran and failed; anything else (ssh error, no tests, a build error) proves nothing."""
     if rc == 0:
@@ -246,9 +343,15 @@ def killed(output: str, rc: int) -> str:
 
 def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    # --shard=I/N runs every Nth mutation starting at I, so that several runs (each in its own work directory on the
+    # server) share a long list. The shards together run every mutation exactly once.
+    shard = next((a for a in sys.argv[1:] if a.startswith("--shard=")), None)
     only_check = "--check-applies" in sys.argv
     # Any number of name filters; a mutation runs when its name contains one of them (all of them with no filter).
     muts = [m for m in MUTATIONS if not args or any(f in m[0] for f in args)]
+    if shard:
+        i, n = (int(x) for x in shard.split("=", 1)[1].split("/"))
+        muts = [m for k, m in enumerate(muts) if k % n == i]
     work = tempfile.mkdtemp(prefix="exit-mutations-")
     copy = os.path.join(work, "exit-daemon")
     shutil.copytree(ROOT, copy, ignore=shutil.ignore_patterns("target", ".git", "__pycache__"))
@@ -275,7 +378,9 @@ def main() -> int:
         try:
             # A mutation of the daemon's own sources cannot change a vendored test: only the daemon's crate is tested.
             menv = dict(env, EXIT_ONLY_DAEMON="0" if f == D else "1")
-            r = subprocess.run(["bash", check], env=menv, capture_output=True, text=True, timeout=1800)
+            # Only the library's tests link the daemon's modules; the binary's own tests matter for main.rs only.
+            targs = ["--lib"] if f.startswith("src/") and f != "src/main.rs" else []
+            r = subprocess.run(["bash", check, *targs], env=menv, capture_output=True, text=True, timeout=1800)
             verdict = killed(r.stdout + r.stderr, r.returncode)
         except subprocess.TimeoutExpired:
             verdict = "timeout"

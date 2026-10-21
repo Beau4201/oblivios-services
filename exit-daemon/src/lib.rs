@@ -5,6 +5,7 @@
 #![deny(unsafe_code)]
 
 pub mod control;
+pub mod masklist;
 pub mod policy;
 pub mod routes;
 pub mod sockdiag;
