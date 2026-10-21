@@ -23,7 +23,8 @@ pub const MAX_ENTRIES: usize = 100_000;
 pub const MAX_LIST: usize = 256;
 pub const MAX_HISTORY: usize = 10;
 /// The plaintext may not outgrow what one sealed blob can carry (64 MiB), less 1 MiB of room: `mark_filled` adds eight
-/// bytes to an entry without asking the limit, and 100 000 entries need at most 800 000 of them.
+/// bytes to an entry without asking the limit, and 100 000 entries need at most 800 000 of them. A full vault can
+/// therefore stand a few bytes above this value; `add` and `edit` then refuse only what makes it bigger still.
 pub const MAX_PLAIN: usize = 64 * 1024 * 1024 - 1024 * 1024;
 /// id 16, six length or count words of 4, two times 8, the flag and the history count.
 const MIN_ENTRY: usize = 16 + 6 * 4 + 2 * 8 + 1 + 1;
@@ -204,7 +205,7 @@ impl Vault {
             return Err(VaultError::TooLarge);
         }
         let new_size = self.size - old_len + encoded_len(&entry);
-        if new_size > MAX_PLAIN {
+        if new_size > MAX_PLAIN && new_size > self.size {
             return Err(VaultError::TooLarge);
         }
         self.size = new_size;
@@ -232,7 +233,7 @@ impl Vault {
         }
         validate(&e)?;
         let new_size = self.size - encoded_len(&self.entries[i]) + encoded_len(&e);
-        if new_size > MAX_PLAIN {
+        if new_size > MAX_PLAIN && new_size > self.size {
             return Err(VaultError::TooLarge);
         }
         self.size = new_size;

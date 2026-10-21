@@ -293,6 +293,16 @@ fn a_vault_filled_to_the_exact_limit_still_opens_and_can_be_marked_filled() {
     let blob = v.to_sealed(&vk);
     let back = Vault::from_sealed(&blob, &vk).expect("a full vault must reopen");
     assert_eq!(back.len(), n as usize + 1);
+    // The vault is full: an edit may not make it bigger, but one that keeps or shrinks it must still work.
+    let last = id(n);
+    assert_eq!(v.edit(&last, |e| e.notes.push('x')), Err(VaultError::TooLarge), "a growing edit of a full vault");
+    assert_eq!(v.edit(&last, |e| e.title = "y".repeat(MAX_FIELD)), Ok(true), "an edit of the same size");
+    assert_eq!(v.edit(&last, |e| e.notes.pop().map(|_| ()).unwrap_or(())), Ok(true), "a shrinking edit");
+    let same = maximal(n, v.get(&last).unwrap().notes.len());
+    assert_eq!(v.add(same), Ok(()), "replacing an entry by one of the same size");
+    let mut bigger = maximal(n, v.get(&last).unwrap().notes.len() + 1);
+    bigger.id = last;
+    assert_eq!(v.add(bigger).err(), Some(VaultError::TooLarge), "replacing an entry by a bigger one");
     // Room comes back when an entry goes.
     assert!(v.delete(&id(0)));
     v.add(maximal(1_000_000, 100)).unwrap();
