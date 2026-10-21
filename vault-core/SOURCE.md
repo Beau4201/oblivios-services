@@ -48,3 +48,12 @@ A standalone cargo build cannot reach that copy either, so every crate comes fro
 
 The size and hash are snapshots of the Task 1 build (a known-answer self-check of each crate, no vault code yet); they
 change with the first real module and are re-recorded by Task 9.
+
+## Common-password list (`data/common-passwords.txt`)
+
+159 widely known frequent passwords, written by hand for Task 6: no file was downloaded, so there is no upstream, no
+commit and no licence to record. This is a placeholder for the pinned list the plan calls for (a public list such as
+the SecLists 10k most common passwords, MIT). Replacing it needs the owner's yes for the download; the file is read
+with `include_str!`, one lower-case word per line, so the swap changes no code. Until then the checkup flags only
+these words (also with digits and symbols appended); a password that is common but not on the list counts as strong
+if its length and character mix are.
