@@ -178,5 +178,15 @@ mod tests {
         b.in_second = u32::MAX;
         b.in_minute = u32::MAX;
         assert!(!r.allow(1, t));
+        // Each counter saturates on its own: a full second counter is refused although the minute counter is low, and the
+        // other way round (a wrapped counter would start from zero and let the question through).
+        let mut r = RateLimiter::default();
+        assert!(r.allow(2, t));
+        r.buckets.get_mut(&2).unwrap().in_second = u32::MAX;
+        assert!(!r.allow(2, t));
+        let mut r = RateLimiter::default();
+        assert!(r.allow(3, t));
+        r.buckets.get_mut(&3).unwrap().in_minute = u32::MAX;
+        assert!(!r.allow(3, t));
     }
 }

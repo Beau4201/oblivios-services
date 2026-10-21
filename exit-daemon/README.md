@@ -18,7 +18,7 @@ steer packets into the tun and nothing else. The design is
 | `src/sockdiag.rs`, `src/sockdiag/sys.rs` | owner uid of a flow through `sock_diag` (only an established-flow state counts), `SO_PEERCRED`, `SO_PEERSEC`, the socket handed down by `init`; `sys.rs` holds the only `unsafe` of the daemon |
 | `src/server.rs` | the control server: peer check by SELinux type or uid before the first byte, a new connection of the peer replaces the old one, a frame must be complete within ten seconds |
 | `src/routes/` | the route helper: `spec` (the closed rule language), `netlink` (messages and the parser of the kernel's rule dump), `reconcile` (adds before it removes, sends nothing when the plan is in place), `proto` and `helper` (its control protocol), `sys` (the only `unsafe` of the helper) |
-| `src/config.rs`, `src/args.rs`, `src/main.rs` | the Arti configuration with an explicit memory quota, the command line, the entry point (the entry point does not yet start the helper mode, load the mask list or share the policy with the control server: Task 14 of the plan) |
+| `src/config.rs`, `src/args.rs`, `src/main.rs` | the Arti configuration with an explicit memory quota, the command line (`exitd` is the daemon and `exitd --routes` the route helper; the mask list is required and a daemon whose list does not load exits with status 2), the entry point (one policy table shared by the control server and the packet path; the Tor client is created at start and bootstrapped only when the table first holds a Tor or masked class) |
 | `third_party/onionmasq/` | the vendored library, see `SOURCE.md` (four patches; the fourth splits DNS by policy) |
 
 ## Build and test
@@ -33,7 +33,8 @@ script takes a lock on the workstation before it copies (a second run would othe
 `CAP_NET_ADMIN`; they start themselves again under `unshare --user --map-root-user --net` and fail when that is not possible.
 `tools/build-android.sh` builds `exitd` for `aarch64-linux-android` and checks the binary itself, not the exit code.
 `tools/run-mutations.py` applies single-line mutations and counts one as killed only when the tests ran and failed (`--shard=I/N`
-splits the list over several work directories). `tools/audit-panics.py` compares the places where a panic can start with
+splits the list over several work directories; a test that hangs because of its mutation is killed on the server, which counts as failed).
+`tests/vectors.txt` holds golden frames of both control protocols; the Java codec of the exit app checks the same file. `tools/audit-panics.py` compares the places where a panic can start with
 `PANIC-SITES.tsv`; `tools/check-licences.sh` checks the licence of every package of `Cargo.lock` and keeps `NOTICE` current.
 
 `Cargo.lock` is committed and every build uses `--locked`. The release profile sets `panic = "abort"`: the Android standard
@@ -61,9 +62,9 @@ read-back matches the `Debug` text `max: ByteQty(<bytes>)`; a changed text fails
 
 ## Known gaps before an image carries the daemon
 
-- `main.rs` is not finished: it must read `--mask-list`, share the policy between `Control` and the scaffolding, start
-  `--routes` as its own mode, create the tun and report `Ready`, and the Android build must be repeated and read (Task 14).
-- The mutation list (404 mutations) has not been run on the final code; the last complete run was on an earlier state.
+- The entry point itself (the tun creation, the wait for the first Tor class, the signal handling) is run only on a phone:
+  the host tests reach the argument handling, the list loading and the helper mode through the binary (`tests/cli.rs`), and
+  the sharing of the policy through `server::wired`. `NET-009` is the device row.
 - TCP DNS (a truncated UDP answer retried over TCP) is refused for a masked app, because only UDP DNS is passed on.
 - Where the resolver uses DNS-over-TLS (Private DNS that works on the network) the daemon never sees the queries; the exit
   app reports the tier as limited there (`MSK-008`).

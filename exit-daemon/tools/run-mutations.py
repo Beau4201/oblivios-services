@@ -9,7 +9,10 @@ its file is an error of this list, not a surviving mutant.
 
     EXIT_BUILD_SSH=user@host tools/run-mutations.py [--check-applies] [--shard=I/N] [NAME_FILTER ...]
 
---check-applies only checks that every mutation applies to the current sources. The result line is
+--check-applies only checks that every mutation applies to the current sources. Left out on purpose: `dns: no questions are routed` (dropping `|| query.questions.is_empty()` from `route_query`): a query
+without questions leaves both flags false, and the `(false, false)` arm refuses it too, so the clause is redundant.
+
+The result line is
 "N of N mutations killed"; the exit status is 0 only when all were killed.
 """
 import os
@@ -305,13 +308,12 @@ MUTATIONS = [
     ("server: a rest of a buffer starts no deadline", V, "frame_began = if buf.is_empty() { None } else { Some(Instant::now()) };", "frame_began = None;"),
     ("server: a first byte starts no deadline", V, "        if buf.is_empty() {\n            frame_began = Some(Instant::now());\n        }", "        if false {\n            frame_began = Some(Instant::now());\n        }"),
     ("server: the read time-out is a would-block", V, "return Err(io::Error::new(io::ErrorKind::TimedOut, \"no control frame arrived in time\"));", "return Err(io::Error::from(io::ErrorKind::WouldBlock));"),
-    ("server: a stranger may replace the peer", V, "        if check_peer(&stream, &auth).is_err() {\n            continue; // dropped: closed without a byte read\n        }\n", ""),
+    ("server: a stranger may replace the peer", V, "        if check_peer(&stream, auth).is_err() {\n            continue; // dropped: closed without a byte read\n        }\n", ""),
     ("server: the old connection is kept", V, "                let _ = old.shutdown(Shutdown::Both);", "                let _ = old;"),
-    ("server: the shutdown hook is not called", V, "                on_shutdown();", "                let _ = &on_shutdown;"),
+    ("server: the shutdown hook is not called", V, "            on_shutdown();", "            let _ = &on_shutdown;"),
     ("sys: the context lookup timeout is long", Y, "const TIMEOUT_USEC: libc::suseconds_t = 250_000;", "const TIMEOUT_USEC: libc::suseconds_t = 2_500_000;"),
     ("dns: the response bit is ignored", D, "    if query.flags.qr {\n        return Route::Ignore;\n    }", "    if false {\n        return Route::Ignore;\n    }"),
     ("dns: another opcode is routed", D, "if query.flags.opcode != dns_message_parser::Opcode::Query || query.questions.is_empty() {", "if query.questions.is_empty() {"),
-    ("dns: no questions are routed", D, "if query.flags.opcode != dns_message_parser::Opcode::Query || query.questions.is_empty() {", "if query.flags.opcode != dns_message_parser::Opcode::Query {"),
     ("dns: tor and forward are swapped", D, "        (true, false) => Route::Tor,\n        (false, true) => Route::Forward,", "        (true, false) => Route::Forward,\n        (false, true) => Route::Tor,"),
     ("dns: a mixed query is sent to tor", D, "        (false, true) => Route::Forward,\n        _ => Route::Refuse,", "        (false, true) => Route::Forward,\n        _ => Route::Tor,"),
     ("dns: loopback is a resolver", D, "!(a.is_loopback() || a.is_unspecified() || a.is_multicast() || a.is_broadcast() ||", "!(a.is_unspecified() || a.is_multicast() || a.is_broadcast() ||"),
@@ -326,8 +328,8 @@ MUTATIONS = [
     ("dns: the v6 fake range has no top bit", D, "            octets[6] |= 0x80;\n", ""),
     ("dns: the v4 fake range is a /16", D, "FAKE_V4_PREFIX[1] | (r[0] & 1)", "FAKE_V4_PREFIX[1]"),
     ("dns: a full range is not refused", D, "if self.map_v4.cache_size() >= self.max_v4 {\n            return None;\n        }", ""),
-    ("dns: an app over its limit is answered", D, "        if !self.scaffolding.dns_allow(key) {", "        if false {"),
-    ("dns: an app with no owner is answered", D, "        let key = match Self::attribute(&query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {\n            Ok(key) => key,", "        let key = match Self::attribute(&query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {\n            Ok(key) => key,"),
+    ("dns: an app over its limit is admitted", D, "        if allow(key) {", "        if true {"),
+    ("dns: an app with no owner is admitted", D, "        result.map_err(|_| Self::make_answer(query, RCode::ServFail, vec![]))", "        Ok(result.unwrap_or(0))"),
     # sockdiag.rs
     ("sockdiag: udp ends not swapped", S, "Proto::Udp => (remote, local, IPPROTO_UDP),", "Proto::Udp => (local, remote, IPPROTO_UDP),"),
     ("sockdiag: enoent is an error", S, "if errno == ENOENT {", "if errno != ENOENT {"),
@@ -391,6 +393,33 @@ MUTATIONS = [
     ("config: file mode", F, ".mode(0o600)", ".mode(0o644)"),
     ("config: quota not validated", F, "validate_memory_max(c.memory_max).map_err(|_| ConfigError::MemoryMax)?;", "();"),
     ("config: loaded quota not read back", F, "if text.contains(&format!(\"max: ByteQty({bytes})\")) {", "if true {"),
+    # Task 14: the entry point. The mask list is required, the route helper has none of the daemon's options, the mode is the
+    # first argument; main.rs is judged by the process tests of tests/cli.rs.
+    ("args: mask list not required", A, "let mask_list = s.mask_list.take().ok_or(ArgError::Missing(MASK_LIST))?;", "let mask_list = s.mask_list.take().unwrap_or_default();"),
+    ("args: the route helper takes the daemon's options", A, "if !daemon && DAEMON_ONLY.contains(&args[i].as_str()) {", "if false {"),
+    ("args: route mode allows --state-dir", A, "const DAEMON_ONLY: [&str; 6] = [STATE_DIR, CACHE_DIR,", "const DAEMON_ONLY: [&str; 6] = [CACHE_DIR, CACHE_DIR,"),
+    ("args: route mode allows --cache-dir", A, "const DAEMON_ONLY: [&str; 6] = [STATE_DIR, CACHE_DIR,", "const DAEMON_ONLY: [&str; 6] = [STATE_DIR, STATE_DIR,"),
+    ("args: route mode allows --memory-max", A, "MEMORY_MAX, DEVICE, MASK_LIST, NO_FS_CHECKS];", "STATE_DIR, DEVICE, MASK_LIST, NO_FS_CHECKS];"),
+    ("args: route mode allows --device", A, "MEMORY_MAX, DEVICE, MASK_LIST, NO_FS_CHECKS];", "MEMORY_MAX, STATE_DIR, MASK_LIST, NO_FS_CHECKS];"),
+    ("args: route mode allows --mask-list", A, "MEMORY_MAX, DEVICE, MASK_LIST, NO_FS_CHECKS];", "MEMORY_MAX, DEVICE, STATE_DIR, NO_FS_CHECKS];"),
+    ("args: route mode allows the permission-check switch", A, "MEMORY_MAX, DEVICE, MASK_LIST, NO_FS_CHECKS];", "MEMORY_MAX, DEVICE, MASK_LIST, STATE_DIR];"),
+    ("args: the daemon is the route mode by default", A, "_ => parse_args(args).map(Command::Daemon),", "_ => parse_route_args(args).map(Command::Routes),"),
+    ("args: --routes starts the daemon", A, "if first == ROUTES => parse_route_args(rest).map(Command::Routes),", "if first == ROUTES => parse_args(rest).map(Command::Daemon),"),
+    ("masklist: a file one byte over the limit is read as a list", L, "file.take(MAX_FILE + 1)", "file.take(MAX_FILE)"),
+    ("masklist: the size check is gone", L, "if text.len() as u64 > MAX_FILE {", "if false {"),
+    ("masklist: the size limit is exclusive", L, "if text.len() as u64 > MAX_FILE {", "if text.len() as u64 >= MAX_FILE {"),
+    ("masklist: a missing file is an empty list", L, "let file = std::fs::File::open(path).map_err(|_| ListError::Unreadable)?;", "let Ok(file) = std::fs::File::open(path) else { return Ok(MaskList::default()) };"),
+    ("masklist: a file that is not UTF-8 is read lossily", L, "        file.take(MAX_FILE + 1).read_to_string(&mut text).map_err(|_| ListError::Unreadable)?;", "        { let mut raw = Vec::new(); let _ = file.take(MAX_FILE + 1).read_to_end(&mut raw); text = String::from_utf8_lossy(&raw).into_owned(); }"),
+    ("server: the control server writes another policy table than the packet path reads", V, "let control = Control::with_policy(scaffolding.clone(), iface, memory_max, policy);", "let control = Control::new(scaffolding.clone(), iface, memory_max);"),
+    ("policy: the exempt apps need Tor", P, "self.classes.iter().any(|c| c.kind != Kind::Exempt)", "!self.classes.is_empty()"),
+    ("policy: only an app on Tor needs Tor", P, "c.kind != Kind::Exempt", "c.kind == Kind::Tor"),
+    ("policy: the daemon does not wait for the first class", P, "while !policy.read().unwrap_or_else(std::sync::PoisonError::into_inner).needs_tor() {", "while false {"),
+    ("policy: the wait looks late", P, "Duration::from_millis(250)", "Duration::from_millis(2500)"),
+    ("main: a list that does not load exits with status 1", "src/main.rs", "eprintln!(\"exitd: mask list could not be loaded\");\n                return ExitCode::from(2);", "eprintln!(\"exitd: mask list could not be loaded\");\n                return ExitCode::from(1);"),
+    ("main: a list that does not load is ignored", "src/main.rs", "let Ok(list) = MaskList::load(&a.mask_list) else {", "let list = MaskList::load(&a.mask_list).unwrap_or_default(); let Ok(list) = Ok::<_, ()>(list) else {"),
+    ("main: the route helper is not started", "src/main.rs", "Command::Routes(a) => run_routes(a),", "Command::Routes(_) => Ok(()),"),
+    ("main: the route helper lets any uid in", "src/main.rs", "Peer::Uid(uid) => Auth::Uid(*uid),", "Peer::Uid(_) => Auth::Uid(0),"),
+    ("main: the route helper serves nobody", "src/main.rs", "let _ = serve_route(stream, &who, &mut helper.lock().unwrap_or_else(PoisonError::into_inner));", "let _ = (stream, &who, &helper);"),
 ]
 
 

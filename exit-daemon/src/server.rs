@@ -7,8 +7,9 @@ use crate::control::{
     decode_to_daemon, encode_from_daemon, validate_memory_max, DecodeError, ErrorCode, FromDaemon, ToDaemon, MAX_FRAME,
     PROTOCOL_VERSION,
 };
+use crate::masklist::MaskList;
 use crate::policy::{Policy, SharedPolicy};
-use crate::scaffolding::ExitScaffolding;
+use crate::scaffolding::{ExitScaffolding, Lookup};
 use crate::sockdiag::{
     listener_from_fd, peer_context as socket_peer_context, peer_uid as socket_peer_uid,
 };
@@ -59,6 +60,16 @@ impl Reply {
             Err(code) => Self::error(seq, code),
         }
     }
+}
+
+/// The scaffolding and the control server of one daemon, built around ONE policy table: what the exit app writes through
+/// the control socket is what the packet path reads. A pair built from two tables would start, answer every message and
+/// carry nothing.
+pub fn wired(lookup: Box<Lookup>, list: MaskList, iface: String, memory_max: u64) -> (ExitScaffolding, Control) {
+    let policy: SharedPolicy = Arc::new(RwLock::new(Policy::default()));
+    let scaffolding = ExitScaffolding::with_policy(lookup, policy.clone(), Arc::new(list));
+    let control = Control::with_policy(scaffolding.clone(), iface, memory_max, policy);
+    (scaffolding, control)
 }
 
 /// What the daemon does with each message of the peer.
@@ -237,16 +248,29 @@ pub fn serve_connections(
     control: Arc<std::sync::Mutex<Control>>,
     on_shutdown: impl Fn() + Send + Sync + 'static,
 ) {
+    let who = auth.clone();
+    accept_replacing(listener, &auth, move |stream| {
+        let _ = serve(stream, &who, |m| control.lock().unwrap_or_else(PoisonError::into_inner).handle(m));
+        if control.lock().unwrap_or_else(PoisonError::into_inner).shutdown_requested() {
+            on_shutdown();
+        }
+    });
+}
+
+/// The accept loop of both control sockets (the daemon's and the route helper's): the peer is checked before anything is
+/// read, a connection of the right peer replaces the one before it (which is shut down) and `handler` serves it on its own
+/// thread. Returns when the listener fails.
+pub fn accept_replacing(listener: UnixListener, auth: &Auth, handler: impl Fn(UnixStream) + Send + Sync + 'static) {
     use std::net::Shutdown;
     let current: Arc<std::sync::Mutex<Option<UnixStream>>> = Arc::new(std::sync::Mutex::new(None));
-    let on_shutdown = Arc::new(on_shutdown);
+    let handler = Arc::new(handler);
     for stream in listener.incoming() {
         let Ok(stream) = stream else {
             // A persistent accept error (no descriptors left) must not become a busy loop.
             std::thread::sleep(Duration::from_millis(100));
             continue;
         };
-        if check_peer(&stream, &auth).is_err() {
+        if check_peer(&stream, auth).is_err() {
             continue; // dropped: closed without a byte read
         }
         if let Ok(handle) = stream.try_clone() {
@@ -255,13 +279,8 @@ pub fn serve_connections(
                 let _ = old.shutdown(Shutdown::Both);
             }
         }
-        let (control, auth, on_shutdown) = (control.clone(), auth.clone(), on_shutdown.clone());
-        std::thread::spawn(move || {
-            let _ = serve(stream, &auth, |m| control.lock().unwrap_or_else(PoisonError::into_inner).handle(m));
-            if control.lock().unwrap_or_else(PoisonError::into_inner).shutdown_requested() {
-                on_shutdown();
-            }
-        });
+        let handler = handler.clone();
+        std::thread::spawn(move || handler(stream));
     }
 }
 
@@ -549,7 +568,9 @@ mod tests {
     #[test]
     fn the_control_socket_variable_must_be_a_plain_number() {
         assert_eq!(inherited_control("EXITD_TEST_FD_UNSET").unwrap_err().kind(), ErrorKind::NotFound);
-        for (i, bad) in ["", "abc", "-4", "+4", " 4", "4 ", "0x4", "4.0", "99999999999999999999"].iter().enumerate() {
+        // "+999999" parses as a number and names no open descriptor: it must be refused for its form (InvalidInput), not for
+        // the descriptor (a different error).
+        for (i, bad) in ["", "abc", "-4", "+4", "+999999", " 4", "4 ", "0x4", "4.0", "99999999999999999999"].iter().enumerate() {
             let var = format!("EXITD_TEST_FD_BAD{i}");
             std::env::set_var(&var, bad);
             assert_eq!(inherited_control(&var).unwrap_err().kind(), ErrorKind::InvalidInput, "{bad:?}");
@@ -846,6 +867,22 @@ mod tests {
     }
 
     #[test]
+    fn the_start_of_a_frame_that_follows_a_complete_one_in_the_same_read_has_its_deadline_too() {
+        let (server, mut client) = UnixStream::pair().unwrap();
+        let started = Instant::now();
+        let h = thread::spawn(move || {
+            serve_framed_with(server, |_| Ok(()), dummy_decode, dummy_encode, |_| (vec![], false), Duration::from_secs(30), Duration::from_millis(300))
+        });
+        // A whole Hello and the first two bytes of the next frame in one write, then nothing.
+        let mut bytes = encode_to_daemon(&ToDaemon::Hello { version: 2 });
+        bytes.extend_from_slice(&[0, 0]);
+        client.write_all(&bytes).unwrap();
+        let e = h.join().unwrap().unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(5), "dropped at the frame deadline and not at the idle limit: {:?}", started.elapsed());
+    }
+
+    #[test]
     fn a_peer_that_says_nothing_is_dropped_at_the_idle_limit() {
         let (server, _client) = UnixStream::pair().unwrap();
         let started = Instant::now();
@@ -925,6 +962,18 @@ mod tests {
         assert_eq!(read_reply(&mut c), FromDaemon::Ack { seq: 1 });
         assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
         std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_control_server_and_the_packet_path_share_one_policy_table() {
+        use smoltcp::wire::{IpAddress, IpEndpoint};
+        let (scaffolding, mut ctl) = wired(Box::new(|_, _, _| Ok(Some(1))), MaskList::default(), "exit0".into(), 64 * MIB);
+        let dst = IpEndpoint::new(IpAddress::v4(93, 184, 216, 34), 443);
+        assert!(scaffolding.admit_tcp(10100, &dst).is_err(), "nobody is Tor before the exit app says so");
+        let classes = vec![UidClass { start: 10100, end: 10100, kind: Kind::Tor }];
+        assert_eq!(ctl.handle(ToDaemon::SetPolicy { seq: 1, classes }).msgs, vec![FromDaemon::Ack { seq: 1 }]);
+        assert!(scaffolding.admit_tcp(10100, &dst).is_ok(), "what the control server wrote is what the packet path reads");
+        assert!(scaffolding.admit_tcp(10101, &dst).is_err());
     }
 
     #[test]

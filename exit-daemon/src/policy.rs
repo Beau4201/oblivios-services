@@ -81,6 +81,12 @@ impl Policy {
         self.overrides.get(&uid).is_some_and(|v| v.contains(&company))
     }
 
+    /// True when some app is Tor or Masked: only then the Tor client is started. The daemon runs from boot with an
+    /// unbootstrapped client that has contacted nobody; the first table with a class other than Exempt starts it.
+    pub fn needs_tor(&self) -> bool {
+        self.classes.iter().any(|c| c.kind != Kind::Exempt)
+    }
+
     pub fn class_count(&self) -> usize {
         self.classes.len()
     }
@@ -93,12 +99,59 @@ impl Policy {
 /// The policy as the control server writes it and the packet path reads it.
 pub type SharedPolicy = Arc<RwLock<Policy>>;
 
+/// Returns when the table first has a class that needs the Tor client (checked every 250 ms). The daemon waits here before
+/// it bootstraps: until the user has asked for something, the Tor client exists but has contacted nobody.
+pub async fn wait_until_needed(policy: SharedPolicy) {
+    while !policy.read().unwrap_or_else(std::sync::PoisonError::into_inner).needs_tor() {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn c(start: u32, end: u32, kind: Kind) -> UidClass {
         UidClass { start, end, kind }
+    }
+
+    #[test]
+    fn the_tor_client_is_needed_only_for_a_tor_or_masked_class() {
+        let mut p = Policy::default();
+        assert!(!p.needs_tor(), "an empty policy");
+        p.set_classes(vec![c(10050, 10050, Kind::Exempt)]).unwrap();
+        assert!(!p.needs_tor(), "only the exempt apps");
+        p.set_classes(vec![c(10050, 10050, Kind::Exempt), c(10100, 10100, Kind::Tor)]).unwrap();
+        assert!(p.needs_tor(), "an app on Tor");
+        p.set_classes(vec![c(10000, 10049, Kind::Masked), c(10050, 10050, Kind::Exempt)]).unwrap();
+        assert!(p.needs_tor(), "masked destinations");
+        p.set_classes(vec![]).unwrap();
+        assert!(!p.needs_tor(), "an emptied table");
+    }
+
+    #[test]
+    fn the_daemon_waits_for_the_first_class_that_needs_tor() {
+        use std::time::{Duration, Instant};
+        let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+        let policy: SharedPolicy = Arc::new(RwLock::new(Policy::default()));
+        let p2 = policy.clone();
+        let start = Instant::now();
+        let setter = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(400));
+            // The exempt apps alone do not end the wait; the Tor app does.
+            p2.write().unwrap().set_classes(vec![c(10050, 10050, Kind::Exempt)]).unwrap();
+            std::thread::sleep(Duration::from_millis(400));
+            p2.write().unwrap().set_classes(vec![c(10050, 10050, Kind::Exempt), c(10100, 10100, Kind::Tor)]).unwrap();
+        });
+        rt.block_on(wait_until_needed(policy.clone()));
+        let waited = start.elapsed();
+        setter.join().unwrap();
+        assert!(waited >= Duration::from_millis(800), "it waited for the Tor class, not the exempt one: {waited:?}");
+        assert!(waited < Duration::from_secs(2), "and ended soon after it: {waited:?}");
+        // Already needed: it returns at once.
+        let t = Instant::now();
+        rt.block_on(wait_until_needed(policy));
+        assert!(t.elapsed() < Duration::from_millis(100));
     }
 
     #[test]

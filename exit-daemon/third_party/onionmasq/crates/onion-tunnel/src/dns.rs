@@ -629,6 +629,21 @@ where
         result.map_err(|_| Self::make_answer(query, RCode::ServFail, vec![]))
     }
 
+    /// [`Self::attribute`], then the per-app limit: the SERVFAIL answer too when the app asks faster than `allow` lets it.
+    /// `allow` is asked once, with the key, and not at all for a query whose owner could not be found.
+    fn admit(
+        query: &dns_message_parser::Dns,
+        owner: std::io::Result<u64>,
+        allow: impl FnOnce(u64) -> bool,
+    ) -> Result<u64, dns_message_parser::Dns> {
+        let key = Self::attribute(query, owner)?;
+        if allow(key) {
+            Ok(key)
+        } else {
+            Err(Self::make_answer(query, RCode::ServFail, vec![]))
+        }
+    }
+
     /// The answer to a query whose names all go through Tor: a fake address for each name, remembered for this app, and
     /// the connection to it is carried through Tor by name.
     fn answer_tor(
@@ -750,20 +765,15 @@ where
         trace!("DNS question from {}: {}", sensitive(from), sensitive(&query));
         let dest = Self::dest_of(&meta, &from);
         // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
-        let key = match Self::attribute(&query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {
+        let scaffolding = self.scaffolding.clone();
+        let key = match Self::admit(&query, scaffolding.isolate(from, dest, 17 /* UDP */), |key| scaffolding.dns_allow(key)) {
             Ok(key) => key,
             Err(refusal) => {
-                trace!("DNS query from {} refused: its owner could not be found", sensitive(from));
+                trace!("DNS query from {} refused: its owner is unknown or it asks too fast", sensitive(from));
                 self.reply(&refusal, from, meta.local_address);
                 return;
             }
         };
-        if !self.scaffolding.dns_allow(key) {
-            trace!("DNS query from {} refused: the app asks too fast", sensitive(from));
-            self.reply(&Self::make_answer(&query, RCode::ServFail, vec![]), from, meta.local_address);
-            return;
-        }
-        let scaffolding = self.scaffolding.clone();
         match route_query(&query, |name| scaffolding.dns_decision(key, name)) {
             Route::Ignore => trace!("no DNS answer for {}", sensitive(from)),
             Route::Refuse => self.reply(&Self::make_answer(&query, RCode::Refused, vec![]), from, meta.local_address),
@@ -1020,6 +1030,37 @@ mod test {
             assert!(answer.answers.is_empty() && answer.authorities.is_empty() && answer.additionals.is_empty());
             assert_eq!(answer.questions, query.questions);
         }
+    }
+
+    // FreeholdOS patch 0005: the per-app limit comes after the owner is known, and a refused query is a SERVFAIL ---------
+    #[test]
+    fn a_query_is_admitted_only_with_a_known_owner_that_is_not_over_its_limit() {
+        use crate::dns::DnsManager;
+        use dns_message_parser::question::{QClass, QType, Question};
+        use dns_message_parser::{Dns, Flags, Opcode, RCode};
+        use std::cell::RefCell;
+        let query = Dns {
+            id: 0x1234,
+            flags: Flags { qr: false, opcode: Opcode::Query, aa: false, tc: false, rd: true, ra: false, ad: false, cd: false, rcode: RCode::NoError },
+            questions: vec![Question { domain_name: "example.org.".parse().unwrap(), q_class: QClass::IN, q_type: QType::A }],
+            answers: vec![],
+            authorities: vec![],
+            additionals: vec![],
+        };
+        // An owner under its limit: the key, and the limit was asked about that key.
+        let asked = RefCell::new(vec![]);
+        assert_eq!(DnsManager::<()>::admit(&query, Ok(10231), |k| { asked.borrow_mut().push(k); true }), Ok(10231));
+        assert_eq!(*asked.borrow(), vec![10231]);
+        // An owner over its limit: SERVFAIL, not the key and not an answer.
+        let over = DnsManager::<()>::admit(&query, Ok(10231), |_| false).unwrap_err();
+        assert_eq!((over.id, over.flags.qr, over.flags.rcode), (0x1234, true, RCode::ServFail));
+        assert!(over.answers.is_empty());
+        // No owner: SERVFAIL, and the limit is not asked about nobody.
+        let asked = RefCell::new(0);
+        let none = DnsManager::<()>::admit(&query, Err(std::io::Error::from(std::io::ErrorKind::NotFound)), |_| { *asked.borrow_mut() += 1; true })
+            .unwrap_err();
+        assert_eq!(none.flags.rcode, RCode::ServFail);
+        assert_eq!(*asked.borrow(), 0);
     }
 
     // FreeholdOS patch 0004 -------------------------------------------------------------------------------------------

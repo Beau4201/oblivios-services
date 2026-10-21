@@ -231,6 +231,13 @@ mod tests {
         l.record_failure(10001, 0, t + secs(62));
         assert_eq!(l.due(t + secs(63), usize::MAX), vec![Due { uid: 10001, company: 0, count: 3 }]);
         assert_eq!(l.len(), MAX_KEYS);
+        // The oldest key starts afresh (two failures are not enough), the newest kept its one (two more are three).
+        let newest = 10000 + MAX_KEYS as u32 - 1;
+        for _ in 0..2 {
+            l.record_failure(10000, 0, t + secs(64));
+            l.record_failure(newest, 0, t + secs(64));
+        }
+        assert_eq!(l.due(t + secs(65), usize::MAX), vec![Due { uid: newest, company: 0, count: 3 }]);
     }
 
     #[test]

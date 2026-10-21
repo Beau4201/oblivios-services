@@ -424,6 +424,28 @@ mod tests {
     use super::*;
     use crate::routes::spec::{plan, RouteSpec, RuleOp, TABLE};
 
+    /// The numbers the kernel knows, from its headers: linux/netlink.h, linux/rtnetlink.h, linux/fib_rules.h, linux/if_addr.h,
+    /// linux/if.h and asm-generic/errno-base.h. A wrong value would be accepted by the stand-in kernel of the other tests, which
+    /// speaks whatever this module speaks, and refused or misread by the real one.
+    #[test]
+    fn the_constants_are_the_numbers_of_the_kernel_headers() {
+        assert_eq!((NLMSG_HDR, NLM_F_REQUEST, NLM_F_ACK, NLM_F_REPLACE, NLM_F_EXCL, NLM_F_CREATE), (16, 1, 4, 0x100, 0x200, 0x400));
+        assert_eq!(NLM_F_DUMP, 0x100 | 0x200, "NLM_F_ROOT | NLM_F_MATCH");
+        assert_eq!((NLMSG_ERROR, NLMSG_DONE), (2, 3));
+        assert_eq!((RTM_NEWLINK, RTM_SETLINK, RTM_NEWADDR, RTM_NEWROUTE, RTM_DELROUTE), (16, 19, 20, 24, 25));
+        assert_eq!((RTM_NEWRULE, RTM_DELRULE, RTM_GETRULE), (32, 33, 34));
+        assert_eq!((AF_INET, AF_INET6), (2, 10));
+        assert_eq!(
+            (FRA_DST, FRA_GOTO, FRA_PRIORITY, FRA_FWMARK, FRA_SUPPRESS_IFGROUP, FRA_SUPPRESS_PREFIXLEN, FRA_TABLE, FRA_FWMASK),
+            (1, 4, 6, 10, 13, 14, 15, 16)
+        );
+        assert_eq!((FRA_PAD, FRA_UID_RANGE, FRA_PROTOCOL, FRA_IP_PROTO, FRA_DPORT_RANGE), (18, 20, 21, 22, 24));
+        assert_eq!((FR_ACT_TO_TBL, FR_ACT_GOTO, FR_ACT_NOP, FR_ACT_PROHIBIT), (1, 2, 3, 8));
+        assert_eq!((FIB_RULE_HDR, RTMSG_HDR), (12, 12));
+        assert_eq!((RTA_OIF, RTA_TABLE, RTN_UNICAST, RTPROT_STATIC, RT_SCOPE_UNIVERSE, RT_SCOPE_LINK), (4, 15, 1, 4, 0, 253));
+        assert_eq!((IFA_ADDRESS, IFA_LOCAL, IFLA_IFNAME, IFF_UP), (1, 2, 3, 1));
+    }
+
     fn r(start: u32, end: u32) -> UidRange {
         UidRange { start, end }
     }

@@ -8,9 +8,13 @@
 //! specific row would mask it (the most specific row decides, as `Classifier.lookup` of the Data Map does).
 
 use std::collections::HashMap;
+use std::io::Read;
+use std::path::Path;
 
 /// Most rows a list may have, longest domain and name.
 pub const MAX_ENTRIES: usize = 8192;
+/// The largest list file: every row at its longest (253 + 5 + 64 bytes and separators) with room to spare.
+pub const MAX_FILE: u64 = 4 * 1024 * 1024;
 pub const MAX_DOMAIN: usize = 253;
 pub const MAX_NAME: usize = 64;
 pub const HEADER: &str = "exit-mask-list\t1";
@@ -27,6 +31,8 @@ pub enum ListError {
     Name(usize),
     Duplicate(usize),
     TooMany,
+    /// The file could not be opened or read whole, is not UTF-8 or is longer than [`MAX_FILE`].
+    Unreadable,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -91,6 +97,18 @@ impl MaskList {
             }
         }
         Ok(MaskList { rows })
+    }
+
+    /// Reads and parses the list file. A file that cannot be read, is not UTF-8 or is longer than [`MAX_FILE`] is
+    /// `Unreadable`: the daemon takes no list from a file it cannot read whole, and never a partial one.
+    pub fn load(path: &Path) -> Result<MaskList, ListError> {
+        let mut text = String::new();
+        let file = std::fs::File::open(path).map_err(|_| ListError::Unreadable)?;
+        file.take(MAX_FILE + 1).read_to_string(&mut text).map_err(|_| ListError::Unreadable)?;
+        if text.len() as u64 > MAX_FILE {
+            return Err(ListError::Unreadable);
+        }
+        MaskList::parse(&text)
     }
 
     pub fn len(&self) -> usize {
@@ -215,6 +233,57 @@ mod tests {
         let e = MaskList::parse(&format!("{HEADER}\n")).unwrap();
         assert!(e.is_empty());
         assert_eq!(e.classify("anything.example"), None);
+    }
+
+    #[test]
+    fn the_limits_of_a_row_and_of_the_list_are_exact() {
+        let a = |n: usize| "a".repeat(n);
+        let d253 = format!("{}.{}.{}.{}", a(63), a(63), a(63), a(61));
+        let d254 = format!("{}.{}.{}.{}", a(63), a(63), a(63), a(62));
+        assert_eq!((d253.len(), d254.len()), (253, 254));
+        assert!(MaskList::parse(&format!("{HEADER}\n{d253}\t1\tN\n")).is_ok(), "253 bytes");
+        assert_eq!(MaskList::parse(&format!("{HEADER}\n{d254}\t1\tN\n")).unwrap_err(), ListError::Domain(2), "254 bytes");
+        let rows = |n: usize| (0..n).map(|i| format!("d{i}.example\t{}\tN\n", 1 + i % 60000)).collect::<String>();
+        assert_eq!(MaskList::parse(&format!("{HEADER}\n{}", rows(MAX_ENTRIES))).unwrap().len(), MAX_ENTRIES);
+        assert_eq!(MaskList::parse(&format!("{HEADER}\n{}", rows(MAX_ENTRIES + 1))).unwrap_err(), ListError::TooMany);
+        assert_eq!((MAX_ENTRIES, MAX_DOMAIN, MAX_NAME), (8192, 253, 64));
+    }
+
+    #[test]
+    fn a_company_id_is_plain_digits() {
+        for id in ["+5", "-5", " 5", "5 ", "0x5", "65536", "", "5.0"] {
+            assert!(MaskList::parse(&format!("{HEADER}\nx.example\t{id}\tN\n")).is_err(), "{id:?}");
+        }
+        assert!(MaskList::parse(&format!("{HEADER}\nx.example\t65535\tN\n")).is_ok());
+    }
+
+    fn temp_list(tag: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!("exitd-masklist-{}-{tag}", std::process::id()));
+        std::fs::write(&p, bytes).unwrap();
+        p
+    }
+
+    #[test]
+    fn a_list_file_is_read_whole_or_not_at_all() {
+        let ok = temp_list("ok", format!("{HEADER}\n{SAMPLE}").as_bytes());
+        let l = MaskList::load(&ok).unwrap();
+        assert_eq!((l.len(), l.classify("x.ads.example.com")), (5, Some(7)));
+        // Missing file, not UTF-8, a bad header and a file one byte over the limit are each refused.
+        assert_eq!(MaskList::load(&std::env::temp_dir().join("exitd-masklist-does-not-exist")).unwrap_err(), ListError::Unreadable);
+        let bin = temp_list("bin", &[0xff, 0xfe, b'\n']);
+        assert_eq!(MaskList::load(&bin).unwrap_err(), ListError::Unreadable);
+        let bad = temp_list("bad", b"not-a-list\n");
+        assert_eq!(MaskList::load(&bad).unwrap_err(), ListError::Header);
+        let mut big = format!("{HEADER}\n").into_bytes();
+        big.resize(MAX_FILE as usize + 1, b'\n');
+        let over = temp_list("over", &big);
+        assert_eq!(MaskList::load(&over).unwrap_err(), ListError::Unreadable);
+        big.pop();
+        let at_limit = temp_list("limit", &big);
+        assert!(MaskList::load(&at_limit).unwrap().is_empty(), "exactly the limit is accepted");
+        for p in [ok, bin, bad, over, at_limit] {
+            std::fs::remove_file(p).unwrap();
+        }
     }
 
     #[test]

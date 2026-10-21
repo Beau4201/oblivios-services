@@ -130,7 +130,7 @@ impl ExitScaffolding {
     /// class Masked may reach only the fake addresses that the daemon handed out for its listed names (the steering rules
     /// send nothing else of it into the tunnel, so anything else is a stray flow). An app of class Exempt, an app that has
     /// no class and a uid the policy has never heard of may reach nothing: they would otherwise be relayed by accident.
-    fn admit_tcp(&self, uid: u32, dst: &IpEndpoint) -> io::Result<()> {
+    pub(crate) fn admit_tcp(&self, uid: u32, dst: &IpEndpoint) -> io::Result<()> {
         let policy = self.inner.policy.read().unwrap_or_else(PoisonError::into_inner);
         match policy.kind_of(uid) {
             Some(Kind::Tor) => Ok(()),

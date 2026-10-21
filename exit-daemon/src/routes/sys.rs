@@ -89,6 +89,22 @@ impl KernelNetlink {
     }
 }
 
+/// Adds one datagram to the reply being collected and says whether the reply is complete. A datagram without a message of
+/// this request (a late reply to an earlier one that timed out) adds nothing; an error message ends the reply, and so does
+/// the end of a dump; a reply past [`REPLY_MAX`] is refused.
+fn take_part(all: &mut Vec<u8>, part: &[u8], seq: u32, dump: bool) -> io::Result<bool> {
+    let msgs = netlink::messages(part).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "malformed netlink reply"))?;
+    let ours: Vec<_> = msgs.iter().filter(|m| m.seq == seq).collect();
+    let finished = ours.iter().any(|m| m.kind == NLMSG_ERROR || (dump && m.kind == NLMSG_DONE));
+    if !ours.is_empty() {
+        all.extend_from_slice(part);
+    }
+    if all.len() > REPLY_MAX {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "netlink reply too large"));
+    }
+    Ok(finished)
+}
+
 impl Netlink for KernelNetlink {
     fn request(&mut self, msg: &[u8]) -> io::Result<Vec<u8>> {
         let head = netlink::messages(msg).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "malformed request"))?;
@@ -99,17 +115,7 @@ impl Netlink for KernelNetlink {
         let mut all: Vec<u8> = Vec::new();
         loop {
             let part = self.recv()?;
-            let msgs = netlink::messages(&part).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "malformed netlink reply"))?;
-            // A reply to another request (a late one from an earlier time-out) is not ours.
-            let ours: Vec<_> = msgs.iter().filter(|m| m.seq == seq).collect();
-            let finished = ours.iter().any(|m| m.kind == NLMSG_ERROR || (dump && m.kind == NLMSG_DONE));
-            if !ours.is_empty() {
-                all.extend_from_slice(&part);
-            }
-            if all.len() > REPLY_MAX {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "netlink reply too large"));
-            }
-            if finished {
+            if take_part(&mut all, &part, seq, dump)? {
                 return Ok(all);
             }
         }
@@ -300,5 +306,52 @@ mod tests {
         let mut k = KernelNetlink::open().unwrap();
         assert_eq!(k.request(&[1, 2, 3]).unwrap_err().kind(), io::ErrorKind::InvalidInput);
         assert_eq!(k.ifindex("a\0b").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+    }
+}
+
+#[cfg(test)]
+mod collect_tests {
+    use super::*;
+
+    fn msg(kind: u16, seq: u32, payload_len: usize) -> Vec<u8> {
+        let mut m = Vec::new();
+        m.extend_from_slice(&((16 + payload_len) as u32).to_ne_bytes());
+        m.extend_from_slice(&kind.to_ne_bytes());
+        m.extend_from_slice(&0u16.to_ne_bytes());
+        m.extend_from_slice(&seq.to_ne_bytes());
+        m.extend_from_slice(&0u32.to_ne_bytes());
+        m.resize(16 + payload_len, 0);
+        m
+    }
+
+    #[test]
+    fn a_datagram_of_another_request_adds_nothing_and_ends_nothing() {
+        let mut all = Vec::new();
+        // A late acknowledgement of request 6 while request 7 is waiting.
+        assert_eq!(take_part(&mut all, &msg(NLMSG_ERROR, 6, 4), 7, false).unwrap(), false);
+        assert!(all.is_empty(), "not ours, not kept");
+        assert_eq!(take_part(&mut all, &msg(NLMSG_DONE, 6, 4), 7, true).unwrap(), false);
+        assert!(all.is_empty());
+        // Ours is kept and, as an error message, ends the reply.
+        assert_eq!(take_part(&mut all, &msg(NLMSG_ERROR, 7, 4), 7, false).unwrap(), true);
+        assert_eq!(all.len(), 20);
+    }
+
+    #[test]
+    fn the_end_of_a_dump_ends_a_dump_and_only_a_dump() {
+        let mut all = Vec::new();
+        assert_eq!(take_part(&mut all, &msg(0x1c, 7, 8), 7, true).unwrap(), false, "a dump entry");
+        assert_eq!(take_part(&mut all, &msg(NLMSG_DONE, 7, 4), 7, false).unwrap(), false, "DONE ends nothing but a dump");
+        assert_eq!(take_part(&mut all, &msg(NLMSG_DONE, 7, 4), 7, true).unwrap(), true);
+    }
+
+    #[test]
+    fn a_reply_past_the_limit_is_refused() {
+        let mut all = vec![0u8; REPLY_MAX - 20];
+        assert!(take_part(&mut all, &msg(0x1c, 7, 4), 7, true).is_ok(), "exactly at the limit: {}", all.len());
+        assert_eq!(all.len(), REPLY_MAX);
+        let mut all = vec![0u8; REPLY_MAX - 20];
+        assert_eq!(take_part(&mut all, &msg(0x1c, 7, 8), 7, true).unwrap_err().kind(), io::ErrorKind::InvalidData);
+        assert_eq!(take_part(&mut Vec::new(), &[1, 2, 3], 7, true).unwrap_err().kind(), io::ErrorKind::InvalidData, "not netlink");
     }
 }

@@ -208,6 +208,8 @@ pub(crate) mod tests {
         pub sent: Vec<u16>,
         pub fail_with: Option<(u16, i32)>,
         pub garbage: bool,
+        /// Answers every request with nothing at all: no acknowledgement and no error.
+        pub silent: bool,
     }
 
     fn error_msg(seq: u32, errno: i32) -> Vec<u8> {
@@ -237,6 +239,9 @@ pub(crate) mod tests {
             self.sent.push(head.kind);
             if self.garbage {
                 return Ok(vec![1, 2, 3]);
+            }
+            if self.silent {
+                return Ok(vec![]);
             }
             if let Some((kind, errno)) = self.fail_with {
                 if kind == head.kind {
@@ -480,6 +485,34 @@ pub(crate) mod tests {
         let e = apply(&mut k, &plan_of(vec![r(10000, 10230)], vec![], None)).unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::InvalidData);
         assert_eq!(clear(&mut k).unwrap_err().kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn the_errno_values_are_those_of_the_kernel() {
+        assert_eq!((EEXIST, ENOENT, ESRCH), (17, 2, 3));
+    }
+
+    #[test]
+    fn a_write_that_is_not_acknowledged_is_an_error_and_never_a_success() {
+        let rule = Rule {
+            priority: 13_500,
+            family: Family::V4,
+            uids: Some(UidRange { start: 10_000, end: 10_000 }),
+            proto: None,
+            dport: None,
+            dst: None,
+            fwmark: None,
+            action: crate::routes::spec::Action::Lookup(4747),
+        };
+        let msg = nl::rule_msg(Verb::Add, &rule, 1);
+        let mut silent = FakeKernel { silent: true, ..FakeKernel::default() };
+        let err = ack(&mut silent, &msg, &[]).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData, "a reply without an acknowledgement");
+        // The same message, acknowledged, is a success; a tolerated errno is one too, any other is that errno.
+        let mut kernel = FakeKernel::default();
+        assert!(ack(&mut kernel, &msg, &[]).is_ok());
+        assert_eq!(ack(&mut kernel, &msg, &[]).unwrap_err().raw_os_error(), Some(EEXIST));
+        assert!(ack(&mut kernel, &msg, &[EEXIST]).is_ok());
     }
 
     #[test]
