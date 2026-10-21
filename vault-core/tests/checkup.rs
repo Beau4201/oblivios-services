@@ -212,3 +212,30 @@ fn a_password_of_exactly_1024_characters_can_be_generated() {
     let opts = GenOpts { length: 1_024, lower: true, upper: true, digits: true, symbols: true };
     assert_eq!(generate(&mut rng, &opts).unwrap().len(), 1_024);
 }
+
+#[test]
+fn keyboard_rows_are_patterns_either_way_round() {
+    let v = vault_of(&["wertyuiop", "sdfghjkl", "poiuytrewq", "zxcvb7nm.q"]);
+    let weak = checkup(&v).weak;
+    assert_eq!(weak[..3], [([1; 16], WeakReason::Pattern), ([2; 16], WeakReason::Pattern), ([3; 16], WeakReason::Pattern)]);
+    assert!(!weak.iter().any(|(id, _)| *id == [4; 16]), "a row with other characters mixed in is not a stretch of a row");
+}
+
+#[test]
+fn groups_and_ids_come_back_sorted() {
+    let mut v = Vault::new();
+    for (n, p) in [(5u8, "shared-One-pass-77!"), (4, "shared-Two-pass-88!"), (3, "shared-One-pass-77!"), (2, "shared-Two-pass-88!")] {
+        v.add(entry(n, p)).unwrap();
+    }
+    assert_eq!(checkup(&v).reused, vec![vec![[2; 16], [4; 16]], vec![[3; 16], [5; 16]]]);
+}
+
+#[test]
+fn every_character_class_is_counted() {
+    // Twelve distinct characters each: 12 * log2(pool) must land on the same side of the steps as the pool says.
+    assert_eq!(strength("xkqzvjwfmhtp"), Strength::Fair); // lower only: 26 -> 56.4
+    assert_eq!(strength("xKqzVjwFmhTp"), Strength::Good); // + upper: 52 -> 68.4
+    assert_eq!(strength("xkqzvjwfm3h7"), Strength::Good); // + digits: 36 -> 62.0
+    assert_eq!(strength("xkqzvjwfm!h#"), Strength::Good); // + symbols: 59 -> 70.6
+    assert_eq!(strength("xkqzvjwfmht\u{e9}"), Strength::Strong); // + non-ASCII: 126 -> 83.7
+}

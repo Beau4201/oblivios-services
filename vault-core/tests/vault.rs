@@ -341,3 +341,62 @@ fn a_secret_compares_by_value() {
     assert_ne!(SecretString::new("abc"), SecretString::new("abcd"));
     assert_ne!(SecretString::new(""), SecretString::new("a"));
 }
+
+#[test]
+fn the_size_bookkeeping_matches_the_real_plaintext() {
+    let vk = VaultKey::generate();
+    let mut v = Vault::new();
+    let real = |v: &Vault| plaintext_of(v, &vk).len();
+    assert_eq!(v.plain_size(), real(&v));
+    v.add(entry(1, "A", "a", "one")).unwrap();
+    v.add(entry(2, "BB", "bb", "two")).unwrap();
+    assert_eq!(v.plain_size(), real(&v), "after add");
+    v.add(entry(2, "A much longer title for the same id", "bb", "two")).unwrap();
+    assert_eq!(v.plain_size(), real(&v), "after a replace");
+    v.edit(&id(1), |e| {
+        e.password = SecretString::new("a different and longer password");
+        e.notes = "notes".into();
+    })
+    .unwrap();
+    assert_eq!(v.plain_size(), real(&v), "after an edit that grows the history");
+    v.mark_filled(&id(1), 5);
+    v.mark_filled(&id(1), 6);
+    v.mark_filled(&id(2), 7);
+    assert_eq!(v.plain_size(), real(&v), "after fills (eight bytes once per entry)");
+    assert!(v.delete(&id(2)));
+    assert_eq!(v.plain_size(), real(&v), "after a delete");
+}
+
+#[test]
+fn replacing_an_entry_over_and_over_does_not_use_up_the_room() {
+    let mut v = Vault::new();
+    let big = "x".repeat(MAX_FIELD);
+    for _ in 0..300 {
+        let mut e = entry(1, &big, &big, &big);
+        e.notes = big.clone();
+        v.add(e).expect("a replace must release the room of the entry it replaces");
+    }
+    assert_eq!(v.len(), 1);
+}
+
+#[test]
+fn an_edit_cannot_change_the_id() {
+    let mut v = Vault::new();
+    v.add(entry(1, "A", "a", "a")).unwrap();
+    v.edit(&id(1), |e| e.id = id(9)).unwrap();
+    assert!(v.get(&id(1)).is_some());
+    assert!(v.get(&id(9)).is_none());
+}
+
+#[test]
+fn two_entries_with_one_id_in_a_file_are_corrupt() {
+    let vk = VaultKey::generate();
+    let mut v = Vault::new();
+    v.add(entry(1, "A", "a", "a")).unwrap();
+    v.add(entry(2, "B", "b", "b")).unwrap();
+    let mut plain = plaintext_of(&v, &vk);
+    let two = id(2);
+    let at = plain.windows(16).position(|w| w == two).unwrap();
+    plain[at..at + 16].copy_from_slice(&id(1));
+    assert_eq!(Vault::from_sealed(&reseal(&vk, &plain), &vk).err(), Some(VaultError::Corrupt));
+}

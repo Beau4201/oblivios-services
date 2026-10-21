@@ -261,16 +261,22 @@ fn checkup_reports_reuse_and_weakness() {
     api::add_or_edit(h, &wire(&entry(1, "A", "same-strong-Passw0rd-xyz!"))).unwrap();
     api::add_or_edit(h, &wire(&entry(2, "B", "same-strong-Passw0rd-xyz!"))).unwrap();
     api::add_or_edit(h, &wire(&entry(3, "C", "abc"))).unwrap();
+    api::add_or_edit(h, &wire(&entry(4, "D", "password123"))).unwrap();
+    api::add_or_edit(h, &wire(&entry(5, "E", "zzzzzzzzzzzz"))).unwrap();
     let r = api::checkup(h).unwrap();
     // u32 groups | (u32 n | ids)... | u32 weak | (id | reason)...
     assert_eq!(&r[..4], &1u32.to_le_bytes());
     assert_eq!(&r[4..8], &2u32.to_le_bytes());
     assert_eq!(&r[8..24], &[1u8; 16]);
     assert_eq!(&r[24..40], &[2u8; 16]);
-    assert_eq!(&r[40..44], &1u32.to_le_bytes());
+    assert_eq!(&r[40..44], &3u32.to_le_bytes());
     assert_eq!(&r[44..60], &[3u8; 16]);
     assert_eq!(r[60], 0, "TooShort");
-    assert_eq!(r.len(), 61);
+    assert_eq!(&r[61..77], &[4u8; 16]);
+    assert_eq!(r[77], 1, "Common");
+    assert_eq!(&r[78..94], &[5u8; 16]);
+    assert_eq!(r[94], 2, "Pattern");
+    assert_eq!(r.len(), 95);
 }
 
 #[test]

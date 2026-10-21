@@ -221,3 +221,10 @@ fn a_list_of_257_strings_is_refused() {
     let e = good_entry_json().replace(r#""domains":[]"#, &format!(r#""domains":[{ok}]"#));
     assert!(import(&sealed(&payload(&format!("[{e}]"))), PASS).is_ok());
 }
+
+#[test]
+fn a_wrong_magic_is_corrupt_and_a_short_file_too() {
+    let mut blob = export(&vault_of(1), PASS, &FAST).unwrap();
+    blob[0] ^= 1;
+    assert_eq!(import(&blob, PASS).err(), Some(VaultError::Corrupt));
+}
