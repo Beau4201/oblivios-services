@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -270,6 +271,30 @@ MUTATIONS = [
 ]
 
 
+def wait_until_idle() -> None:
+    """The build server is shared: a mutation run (a compile and a test run per mutant) starts only while the one-minute
+    load is below 8 and 12 GiB of memory are available, and waits otherwise (for a running AOSP build, for instance)."""
+    host = os.environ["VAULT_BUILD_SSH"]
+    waited = False
+    while True:
+        r = subprocess.run(
+            ["ssh", "-o", "BatchMode=yes", host, "cut -d' ' -f1 /proc/loadavg; awk '/MemAvailable/ {print $2}' /proc/meminfo"],
+            capture_output=True, text=True,
+        )
+        try:
+            load, avail_kib = r.stdout.split()
+            if float(load) < 8 and int(avail_kib) > 12 * 1024 * 1024:
+                if waited:
+                    print("server idle again; continuing", flush=True)
+                return
+        except ValueError:
+            pass  # ssh failed or answered something else: wait and try again
+        if not waited:
+            print("server busy (load or memory); waiting", flush=True)
+            waited = True
+        time.sleep(120)
+
+
 def killed(output: str, rc: int) -> str:
     """killed only when the tests ran and failed; anything else (ssh error, no tests, a build error) proves nothing."""
     if rc == 0:
@@ -300,6 +325,7 @@ def main() -> int:
         return 0
     env = dict(os.environ, VAULT_SRC=copy)
     check = os.path.join(ROOT, "tools", "check-on-server.sh")
+    wait_until_idle()
     base = subprocess.run(["bash", check], env=env, capture_output=True, text=True)
     if base.returncode != 0:
         print("the unmutated tests do not pass; nothing to measure")
@@ -307,6 +333,7 @@ def main() -> int:
         return 4
     results = []
     for name, f, old, new in muts:
+        wait_until_idle()
         path = os.path.join(copy, f)
         orig = open(path).read()
         open(path, "w").write(orig.replace(old, new))

@@ -51,9 +51,13 @@ change with the first real module and are re-recorded by Task 9.
 
 ## Common-password list (`data/common-passwords.txt`)
 
-159 widely known frequent passwords, written by hand for Task 6: no file was downloaded, so there is no upstream, no
-commit and no licence to record. This is a placeholder for the pinned list the plan calls for (a public list such as
-the SecLists 10k most common passwords, MIT). Replacing it needs the owner's yes for the download; the file is read
-with `include_str!`, one lower-case word per line, so the swap changes no code. Until then the checkup flags only
-these words (also with digits and symbols appended); a password that is common but not on the list counts as strong
-if its length and character mix are.
+| Item | Value |
+| --- | --- |
+| Upstream | SecLists, `Passwords/Common-Credentials/10k-most-common.txt` (github.com/danielmiessler/SecLists) |
+| Commit | `913b327317496d062bcc7cace524aaad8a693be2` (2026-09-08) |
+| Downloaded | 2026-10-21 with the owner's yes: 73 026 bytes, 10 001 lines of ASCII, SHA-256 `68782d6a4a19a4768d5f15dd66bd534e7a33055cc755411e33f16d18c50fdcce` |
+| Licence | MIT, Copyright (c) 2018 Daniel Miessler; the repository's `LICENSE` at that commit has SHA-256 `3dbdc93d5f8829de0941744841730a09c106d0732e5ae0e98ca1d77be7ded66c` |
+| Processing | lower-cased and de-duplicated, order kept: 10 001 unique entries, 73 026 bytes; no other change |
+
+The list is read with `include_str!`, one lower-case word per line. The checkup flags a password that is on it, also with
+digits and symbols appended. The licence notice of SecLists has to ship with the app (Task 17 adds it to the notices).
