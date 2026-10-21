@@ -28,3 +28,10 @@ impl core::fmt::Display for VaultError {
         }
     }
 }
+
+/// The system random source failing, or the cipher refusing a plaintext below the size limit, cannot be carried on: a
+/// blob sealed with a predictable nonce or a key that is not random would break the cipher. The process ends (the
+/// release profile aborts on panic anyway).
+pub(crate) fn fatal() -> ! {
+    std::process::abort()
+}

@@ -5,6 +5,8 @@
 pub mod envelope;
 pub mod error;
 mod ffi;
+pub mod kdf;
+pub mod keys;
 mod selftest;
 
 /// Version of the core, from `Cargo.toml`.

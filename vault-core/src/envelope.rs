@@ -9,7 +9,7 @@ use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-use crate::error::VaultError;
+use crate::error::{fatal, VaultError};
 
 const MAGIC: &[u8; 4] = b"FHPV";
 const VERSION: u16 = 1;
@@ -18,12 +18,6 @@ const NONCE: usize = 24;
 const TAG: usize = 16;
 /// The largest plaintext a blob carries (64 MiB: a vault of 100 000 entries is far below it), plus the overhead.
 pub const MAX_BLOB: usize = 64 * 1024 * 1024 + HEADER + NONCE + TAG;
-
-/// The system random source failing, or the cipher refusing a plaintext below `MAX_BLOB`, cannot be carried on: a
-/// blob sealed with a predictable nonce would break the cipher. The process ends (the profile aborts on panic anyway).
-fn fatal() -> ! {
-    std::process::abort()
-}
 
 fn bound_aad(header: &[u8], aad: &[u8]) -> Vec<u8> {
     let mut v = Vec::with_capacity(header.len() + aad.len());
