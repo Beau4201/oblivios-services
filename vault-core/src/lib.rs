@@ -5,9 +5,11 @@
 mod codec;
 pub mod envelope;
 pub mod error;
+pub mod index;
 mod ffi;
 pub mod kdf;
 pub mod keys;
+mod punycode;
 pub mod secret;
 mod selftest;
 pub mod store;
