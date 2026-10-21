@@ -6,6 +6,7 @@ pub mod checkup;
 mod codec;
 pub mod envelope;
 pub mod error;
+pub mod exchange;
 pub mod generator;
 pub mod index;
 mod ffi;

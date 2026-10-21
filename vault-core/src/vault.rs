@@ -62,7 +62,7 @@ fn encoded_len(e: &Entry) -> usize {
         + e.history.iter().map(|(p, _)| 4 + p.expose().len() + 8).sum::<usize>()
 }
 
-fn validate(e: &Entry) -> Result<(), VaultError> {
+pub(crate) fn validate(e: &Entry) -> Result<(), VaultError> {
     let field_ok = |s: &str| s.len() <= MAX_FIELD;
     let ok = field_ok(&e.title)
         && field_ok(&e.username)
@@ -138,7 +138,7 @@ fn decode(r: &mut Reader) -> Result<Entry, VaultError> {
     Ok(Entry { id, title, domains, packages, username, password, notes, created_ms, edited_ms, last_filled_ms, history })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Vault {
     entries: Vec<Entry>,
     /// Encoded size of the plaintext, kept up to date so the 64 MiB bound is checked in O(1).
