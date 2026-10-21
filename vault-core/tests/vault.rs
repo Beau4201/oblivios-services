@@ -410,3 +410,38 @@ fn two_entries_with_one_id_in_a_file_are_corrupt() {
     plain[at..at + 16].copy_from_slice(&id(1));
     assert_eq!(Vault::from_sealed(&reseal(&vk, &plain), &vk).err(), Some(VaultError::Corrupt));
 }
+
+// --- a hostile file with exactly too long a field or list (the length words are honest and the bytes are there) ---
+
+fn crafted(title_len: usize, domains: usize, packages: usize) -> Vec<u8> {
+    let le32 = |n: usize| (n as u32).to_le_bytes().to_vec();
+    let mut p = vec![1u8]; // schema
+    p.extend(le32(1)); // one entry
+    p.extend([7u8; 16]); // id
+    p.extend(le32(title_len));
+    p.extend(vec![b'a'; title_len]);
+    p.extend(le32(domains));
+    (0..domains).for_each(|_| p.extend(le32(0)));
+    p.extend(le32(packages));
+    (0..packages).for_each(|_| p.extend(le32(0)));
+    p.extend(le32(0)); // username
+    p.extend(le32(0)); // password
+    p.extend(le32(0)); // notes
+    p.extend(0i64.to_le_bytes());
+    p.extend(0i64.to_le_bytes());
+    p.push(0); // no last fill
+    p.push(0); // no history
+    p
+}
+
+#[test]
+fn a_crafted_entry_is_accepted_and_one_byte_or_item_over_the_limit_is_not() {
+    let vk = VaultKey::generate();
+    let open = |plain: Vec<u8>| Vault::from_sealed(&reseal(&vk, &plain), &vk);
+    assert!(open(crafted(0, 0, 0)).is_ok(), "the crafted form itself is well formed");
+    assert!(open(crafted(MAX_FIELD, 0, 0)).is_ok(), "a title of exactly the limit");
+    assert_eq!(open(crafted(MAX_FIELD + 1, 0, 0)).err(), Some(VaultError::TooLarge), "a title one byte over");
+    assert!(open(crafted(0, 256, 256)).is_ok(), "256 domains and 256 packages");
+    assert_eq!(open(crafted(0, 257, 0)).err(), Some(VaultError::TooLarge), "257 domains");
+    assert_eq!(open(crafted(0, 0, 257)).err(), Some(VaultError::TooLarge), "257 packages");
+}

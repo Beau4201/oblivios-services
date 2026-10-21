@@ -418,3 +418,38 @@ fn the_wire_format_is_pinned() {
     assert_eq!(hex(&api::list(h).unwrap()), GOLDEN_LIST, "list");
     assert_eq!(hex(&api::checkup(h).unwrap()), GOLDEN_CHECKUP, "checkup");
 }
+
+#[test]
+fn matches_returns_the_accounts_of_a_site_or_an_app() {
+    let (file, _) = new_vault();
+    let h = open_file(&file);
+    let mut a = entry(1, "GitHub", "p1");
+    a.domains = vec!["github.com".into()];
+    let mut b = entry(2, "GitHub work", "p2");
+    b.domains = vec!["login.GitHub.com".into(), "example.org".into()];
+    let mut c = entry(3, "Mail app", "p3");
+    c.domains = vec![];
+    c.packages = vec!["org.example.mail".into()];
+    let mut d = entry(4, "Other", "p4");
+    d.domains = vec!["githubb.com".into()];
+    let mut blank = entry(5, "Blank package", "p5");
+    blank.domains = vec![];
+    blank.packages = vec![String::new()];
+    for e in [&a, &b, &c, &d, &blank] {
+        api::add_or_edit(h, &wire(e)).unwrap();
+    }
+    let mut hit = titles(&api::matches(h, "gist.github.com", 0).unwrap());
+    hit.sort();
+    assert_eq!(hit, ["GitHub", "GitHub work"], "any subdomain of a registrable domain, either way round");
+    assert_eq!(titles(&api::matches(h, "example.org:8443", 0).unwrap()), ["GitHub work"]);
+    assert_eq!(titles(&api::matches(h, "github.com.evil.example", 0).unwrap()), Vec::<String>::new(), "a look-alike");
+    assert_eq!(titles(&api::matches(h, "192.0.2.1", 0).unwrap()), Vec::<String>::new());
+    assert_eq!(titles(&api::matches(h, "org.example.mail", 1).unwrap()), ["Mail app"]);
+    assert_eq!(titles(&api::matches(h, "org.example.mail", 0).unwrap()), Vec::<String>::new(), "a package is not a domain");
+    assert_eq!(titles(&api::matches(h, "github.com", 1).unwrap()), Vec::<String>::new(), "a domain is not a package");
+    assert_eq!(titles(&api::matches(h, "org.example.Mail", 1).unwrap()), Vec::<String>::new(), "packages are exact");
+    assert_eq!(titles(&api::matches(h, "org.example", 1).unwrap()), Vec::<String>::new(), "not by prefix");
+    assert_eq!(titles(&api::matches(h, "", 1).unwrap()), Vec::<String>::new(), "an empty package matches nothing");
+    assert_eq!(api::matches(h, "github.com", 9).err(), Some(Code::BadArgument));
+    assert_eq!(api::matches(0, "github.com", 0).err(), Some(Code::DeadHandle));
+}

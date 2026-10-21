@@ -20,7 +20,7 @@ use crate::container::{build_file, parse_file, FileHeader};
 use crate::error::{fatal, VaultError};
 use crate::exchange;
 use crate::generator::{generate as run_generate, GenOpts};
-use crate::index::{DomainIndex, Kind};
+use crate::index::{entry_matches, DomainIndex, Kind};
 use crate::kdf::KdfParams;
 use crate::keys::{unwrap_with_passphrase, wrap_with_passphrase, VaultKey};
 pub use crate::vault::{decode_entry, encode_entry};
@@ -300,6 +300,17 @@ pub fn import_entries(handle: u64, blob: &[u8], passphrase: &[u8]) -> Result<Vec
 pub fn index_build(handle: u64, key: &[u8]) -> Result<Vec<u8>, Code> {
     let key = key32(key)?;
     with_session(handle, |s| Ok(DomainIndex::build(&key, &s.vault).to_bytes()))
+}
+
+/// The accounts of a site (`kind` 0, a host as the browser reports it) or an app (`kind` 1, a package name): the
+/// summaries of the entries that [`entry_matches`] accepts. Only for an open session, so the vault key has been used.
+pub fn matches(handle: u64, subject: &str, kind: i32) -> Result<Vec<u8>, Code> {
+    let kind = match kind {
+        0 => Kind::Domain,
+        1 => Kind::Package,
+        _ => return Err(Code::BadArgument),
+    };
+    with_session(handle, |s| Ok(summaries(s.vault.entries().iter().filter(|e| entry_matches(e, subject, kind)))))
 }
 
 /// `kind` 0 is a domain, 1 a package name; anything else, a bad key or a bad index answers `false`.

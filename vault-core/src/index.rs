@@ -10,7 +10,7 @@ use sha2::Sha256;
 
 use crate::error::{fatal, VaultError};
 use crate::punycode;
-use crate::vault::Vault;
+use crate::vault::{Entry, Vault};
 
 const MAGIC: &[u8; 4] = b"FHIX";
 const VERSION: u8 = 1;
@@ -68,6 +68,18 @@ pub fn registrable_domain(host: &str) -> Option<String> {
         return None;
     }
     psl::domain_str(&joined).map(str::to_owned)
+}
+
+/// True when the entry belongs to `subject`: for a domain, when one of its domains has the same registrable domain as the
+/// host; for a package, when the package name is linked to it, exactly. Same rule as the index, without the key.
+pub fn entry_matches(entry: &Entry, subject: &str, kind: Kind) -> bool {
+    match kind {
+        Kind::Domain => match registrable_domain(subject) {
+            Some(target) => entry.domains.iter().any(|d| registrable_domain(d).as_deref() == Some(target.as_str())),
+            None => false,
+        },
+        Kind::Package => !subject.is_empty() && entry.packages.iter().any(|p| p == subject),
+    }
 }
 
 fn tag(key: &[u8; 32], kind: Kind, subject: &[u8]) -> [u8; TAG] {

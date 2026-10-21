@@ -60,7 +60,7 @@ for lib in $needed; do
 done
 check "NEEDED $needed"
 # The exports are exactly the JNI surface of org.freeholdos.passwords.core.VaultCore: nothing missing, nothing extra.
-EXPECTED="selfTest create unlockWithPassphrase unlockWithVaultKey lock vaultKey list search get addOrEdit delete markFilled checkup export importEntries indexBuild indexContains generate strength writeFileAtomic readFileBounded"
+EXPECTED="selfTest create unlockWithPassphrase unlockWithVaultKey lock vaultKey list search matches get addOrEdit delete markFilled checkup export importEntries indexBuild indexContains generate strength writeFileAtomic readFileBounded"
 want="$(for n in $EXPECTED; do echo "Java_org_freeholdos_passwords_core_VaultCore_$n"; done | sort)"
 have="$("$READELF" --dyn-syms "$BIN" | awk '$7 != "UND" && $5 == "GLOBAL" {print $NF}' | sed 's/@.*//' | sort)"
 [[ "$have" == "$want" ]] || bad "exports differ from the JNI surface: $(diff <(echo "$want") <(echo "$have") | tr '\n' ' ')"

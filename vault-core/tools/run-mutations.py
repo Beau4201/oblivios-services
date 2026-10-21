@@ -21,6 +21,9 @@ Left out on purpose, and why:
   * removing fsync calls (store.rs): not observable on a running host;
   * the 100 000-entry limit of Vault::add (vault.rs): filling it takes minutes in a test; the same constant is covered at
     its edge by the import tests;
+  * the size check before reading in store.rs read_bounded (the check after reading gives the same answer; the first one
+    only keeps a hostile file from being read and from being allocated up front, which a test cannot show without
+    allocating tens of gigabytes);
   * equivalent mutants: the header bound into the envelope's authenticated data (magic and version are checked first),
     the second validation of the Argon2 parameters in unwrap_with_passphrase, and the bracket check of
     registrable_domain (bare and bracketed IPv6 both end as None).
@@ -146,7 +149,6 @@ MUTATIONS = [
     ("store: stale temp file kept", S, "    match fs::remove_file(&tmp) {\n        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),\n        _ => {}\n    }\n", ""),
     ("store: wrong step reported", S, "hook(WriteStep::TempSynced)?;", "hook(WriteStep::TempCreated)?;"),
     ("store: read limit (>=)", S, "if len > MAX_BLOB as u64 {", "if len >= MAX_BLOB as u64 {"),
-    ("store: read limit removed", S, "if len > MAX_BLOB as u64 {", "if false {"),
     # index.rs
     ("index: domain and package tags equal", I, "Kind::Package => 2,", "Kind::Package => 1,"),
     ("index: tags not sorted", I, "tags.sort_unstable();", "();"),
@@ -172,6 +174,14 @@ MUTATIONS = [
     ("index: label characters unrestricted", I, "label.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')", "true"),
     ("index: unicode labels not converted", I, "let label = if label.is_ascii() { label.to_owned() } else { punycode::to_ascii_label(label)? };", "let label = label.to_owned();"),
     ("index: host not lower-cased", I, "for label in host.to_lowercase().split('.') {", "for label in host.split('.') {"),
+    ("index: an entry matches by the written host", I, "entry.domains.iter().any(|d| registrable_domain(d).as_deref() == Some(target.as_str()))", "entry.domains.iter().any(|d| d == subject)"),
+    ("index: an entry matches any domain", I, "entry.domains.iter().any(|d| registrable_domain(d).as_deref() == Some(target.as_str()))", "!entry.domains.is_empty()"),
+    ("index: a package matches by prefix", I, "entry.packages.iter().any(|p| p == subject)", "entry.packages.iter().any(|p| p.starts_with(subject))"),
+    ("index: an empty package matches", I, "Kind::Package => !subject.is_empty() && entry.packages", "Kind::Package => entry.packages"),
+    ("index: a domain subject without a registrable form matches", I, "            None => false,\n        },\n        Kind::Package", "            None => true,\n        },\n        Kind::Package"),
+    ("api: matches returns every entry", A, "s.vault.entries().iter().filter(|e| entry_matches(e, subject, kind))", "s.vault.entries().iter().filter(|_| true)"),
+    ("api: matches swaps the kinds", A, "        0 => Kind::Domain,\n        1 => Kind::Package,\n        _ => return Err(Code::BadArgument),", "        0 => Kind::Package,\n        1 => Kind::Domain,\n        _ => return Err(Code::BadArgument),"),
+    ("api: matches accepts any kind", A, "        _ => return Err(Code::BadArgument),\n    };\n    with_session(handle, |s| Ok(summaries(s.vault.entries().iter().filter", "        _ => Kind::Domain,\n    };\n    with_session(handle, |s| Ok(summaries(s.vault.entries().iter().filter"),
     # punycode.rs
     ("punycode: initial bias", P, "const INITIAL_BIAS: u32 = 72;", "const INITIAL_BIAS: u32 = 71;"),
     ("punycode: damp", P, "const DAMP: u32 = 700;", "const DAMP: u32 = 701;"),

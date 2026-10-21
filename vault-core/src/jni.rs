@@ -155,6 +155,19 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_search<'l>(
     reply(&env, api::search(handle as u64, &query))
 }
 
+/// The accounts of a site (kind 0) or an app (kind 1), as list summaries.
+#[no_mangle]
+pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_matches<'l>(
+    mut env: JNIEnv<'l>,
+    _this: JObject<'l>,
+    handle: jlong,
+    subject: JString<'l>,
+    kind: jint,
+) -> jbyteArray {
+    let subject = string!(env, subject);
+    reply(&env, api::matches(handle as u64, &subject, kind))
+}
+
 #[no_mangle]
 pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_get<'l>(
     env: JNIEnv<'l>,
