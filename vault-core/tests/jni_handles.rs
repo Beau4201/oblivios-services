@@ -82,6 +82,7 @@ fn a_locked_handle_is_dead() {
     let id = [1u8; 16];
     let e = wire(&entry(1, "t", "p"));
     assert_eq!(api::list(h).err(), Some(Code::DeadHandle));
+    assert_eq!(api::vault_key(h).err(), Some(Code::DeadHandle));
     assert_eq!(api::search(h, "x").err(), Some(Code::DeadHandle));
     assert_eq!(api::get(h, &id).err(), Some(Code::DeadHandle));
     assert_eq!(api::add_or_edit(h, &e).err(), Some(Code::DeadHandle));
@@ -355,4 +356,65 @@ fn many_threads_share_the_table_without_trouble() {
     for t in threads {
         t.join().unwrap();
     }
+}
+
+#[test]
+fn the_vault_key_of_an_open_session_is_the_one_made_at_creation() {
+    let (file, vk) = new_vault();
+    let h = open_file(&file);
+    assert_eq!(*api::vault_key(h).unwrap(), vk.to_vec(), "after a passphrase unlock");
+    let h2 = api::unlock_with_vault_key(&file, &vk).unwrap();
+    assert_eq!(*api::vault_key(h2).unwrap(), vk.to_vec(), "after a vault-key unlock");
+    assert_eq!(api::lock(h), Code::Ok);
+    assert_eq!(api::vault_key(h).err(), Some(Code::DeadHandle), "a locked handle has no key to give");
+    assert_eq!(api::vault_key(0).err(), Some(Code::DeadHandle));
+}
+
+// --- the wire format, pinned: the Kotlin side (passwords/app/tests/host/WireTest.kt) holds the same hex strings ---
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+fn golden_entry() -> Entry {
+    Entry {
+        id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        title: "Hetzner".into(),
+        domains: vec!["hetzner.com".into()],
+        packages: vec!["de.hetzner.app".into()],
+        username: "anna".into(),
+        password: SecretString::new("pw-\u{fc}"),
+        notes: "n\n".into(),
+        created_ms: 1,
+        edited_ms: 2,
+        last_filled_ms: Some(3),
+        history: vec![(SecretString::new("old"), 4)],
+    }
+}
+
+const GOLDEN_ENTRY: &str = "0102030405060708090a0b0c0d0e0f10070000004865747a6e6572010000000b0000006865747a6e65722e636f6d010000000e00000064652e6865747a6e65722e61707004000000616e6e610500000070772dc3bc020000006e0a0100000000000000020000000000000001030000000000000001030000006f6c640400000000000000";
+const GOLDEN_LIST: &str = "020000000102030405060708090a0b0c0d0e0f10070000004865747a6e657204000000616e6e61010000000b0000006865747a6e65722e636f6d010000000e00000064652e6865747a6e65722e617070020000000000000001030000000000000009090909090909090909090909090909040000005765616b04000000616e6e610000000000000000020000000000000000";
+const GOLDEN_CHECKUP: &str = "00000000020000000102030405060708090a0b0c0d0e0f10000909090909090909090909090909090900";
+
+#[test]
+fn the_wire_format_is_pinned() {
+    let e = golden_entry();
+    let actual = hex(&api::encode_entry(&e));
+    assert_eq!(actual, GOLDEN_ENTRY, "entry");
+    assert_eq!(api::decode_entry(&api::encode_entry(&e)).unwrap(), e);
+
+    let (file, _) = new_vault();
+    let h = open_file(&file);
+    api::add_or_edit(h, &api::encode_entry(&e)).unwrap();
+    let mut weak = golden_entry();
+    weak.id = [9; 16];
+    weak.title = "Weak".into();
+    weak.password = SecretString::new("abc");
+    weak.last_filled_ms = None;
+    weak.history = vec![];
+    weak.domains = vec![];
+    weak.packages = vec![];
+    api::add_or_edit(h, &api::encode_entry(&weak)).unwrap();
+    assert_eq!(hex(&api::list(h).unwrap()), GOLDEN_LIST, "list");
+    assert_eq!(hex(&api::checkup(h).unwrap()), GOLDEN_CHECKUP, "checkup");
 }

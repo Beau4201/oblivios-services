@@ -133,6 +133,12 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_lock<'l>(_en
     jint::from(api::lock(handle as u64).code())
 }
 
+/// Reply payload: the 32 bytes of the vault key.
+#[no_mangle]
+pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_vaultKey<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
+    reply(&env, api::vault_key(handle as u64).map(|k| k.to_vec()))
+}
+
 #[no_mangle]
 pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_list<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
     reply(&env, api::list(handle as u64))

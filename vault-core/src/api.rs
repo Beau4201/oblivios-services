@@ -191,6 +191,12 @@ fn summaries<'a>(entries: impl Iterator<Item = &'a Entry>) -> Vec<u8> {
     w.0
 }
 
+/// The vault key of an open session, for the app to wrap with its biometric Keystore key. It passes through the JVM for
+/// an instant (a residual of the design, recorded in the threat model); the app overwrites it at once.
+pub fn vault_key(handle: u64) -> Result<Zeroizing<Vec<u8>>, Code> {
+    with_session(handle, |s| Ok(Zeroizing::new(s.vk.as_bytes().to_vec())))
+}
+
 pub fn list(handle: u64) -> Result<Vec<u8>, Code> {
     with_session(handle, |s| Ok(summaries(s.vault.entries().iter())))
 }
