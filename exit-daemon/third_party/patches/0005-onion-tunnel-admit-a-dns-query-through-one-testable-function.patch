@@ -3,7 +3,8 @@ Subject: onion-tunnel: ask the per-app DNS limit only for an attributed query, t
 The check of the owner (patch 0002) and the check of the per-app limit (patch 0004) were two blocks inside the packet
 handler, which no test reaches without a whole tunnel. `admit` is the two together as a function of the owner lookup and
 the limit: SERVFAIL when the owner is unknown (the limit is not asked), SERVFAIL when the app is over its limit, the
-key otherwise. Behaviour is unchanged.
+key otherwise. Behaviour is unchanged. A test pins the address of the DNS listener that the exit app registers as the
+DNS server of the Tor network.
 
 --- a/crates/onion-tunnel/src/dns.rs
 +++ b/crates/onion-tunnel/src/dns.rs
@@ -53,10 +54,18 @@ key otherwise. Behaviour is unchanged.
          match route_query(&query, |name| scaffolding.dns_decision(key, name)) {
              Route::Ignore => trace!("no DNS answer for {}", sensitive(from)),
              Route::Refuse => self.reply(&Self::make_answer(&query, RCode::Refused, vec![]), from, meta.local_address),
-@@ -1022,6 +1032,37 @@
+@@ -1022,6 +1032,45 @@
          }
      }
  
++    // The address of the daemon's DNS listener is also the DNS server of the Tor network that the exit app registers
++    // (AndroidPlatform.java in freeholdos-platform, checked against tests/vectors.txt of the daemon).
++    #[test]
++    fn the_dns_listener_is_at_the_address_the_exit_app_registers() {
++        use crate::dns::DnsManager;
++        assert_eq!(DnsManager::<()>::V4_ADDRESS, std::net::Ipv4Addr::new(169, 254, 42, 53));
++    }
++
 +    // FreeholdOS patch 0005: the per-app limit comes after the owner is known, and a refused query is a SERVFAIL ---------
 +    #[test]
 +    fn a_query_is_admitted_only_with_a_known_owner_that_is_not_over_its_limit() {

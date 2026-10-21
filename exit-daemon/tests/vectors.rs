@@ -79,5 +79,13 @@ fn every_vector_is_built_by_the_rust_codec_and_read_back() {
     both!("route_reply.ready", RouteReply::Ready { version: 1 }, encode_reply, decode_reply);
     both!("route_reply.applied", RouteReply::Applied { seq: 9, rules: 0x0102 }, encode_reply, decode_reply);
     both!("route_reply.error", RouteReply::Error { seq: 9, code: ErrorCode::Failed }, encode_reply, decode_reply);
+    // The addresses of the tunnel: the route helper writes them and the exit app registers them, so they are pinned here.
+    let (a4, p4) = exit_daemon::routes::spec::TUN_V4;
+    assert_eq!(v["const.tun_v4"], [a4.octets().as_slice(), &[p4]].concat());
+    let (a6, p6) = exit_daemon::routes::spec::TUN_V6;
+    assert_eq!(v["const.tun_v6"], [a6.octets().as_slice(), &[p6]].concat());
+    // The DNS listener's address is a constant of the vendored library; its test pins it, and the exit app's check pins it here.
+    assert_eq!(v["const.dns_v4"], vec![169, 254, 42, 53]);
+    checked += 3;
     assert_eq!(checked, v.len(), "every line of the file is checked, and every check has a line");
 }

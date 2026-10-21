@@ -2,7 +2,8 @@
 # routes/proto.rs by a script that uses neither codec. The Rust tests (tests/vectors.rs) and the Java host checks of the
 # exit app (privacy/exit/app/tests/HostChecks.java in freeholdos-platform, which keeps an identical copy of this file) build
 # or read each frame independently from it, so that the two codecs cannot drift. Changing a line is a change of the wire
-# format: bump the protocol version and both codecs.
+# format: bump the protocol version and both codecs. The `const.` lines are the addresses that the exit app registers for the
+# Tor network and that the route helper writes (address and prefix length, the DNS listener's address): they must be equal.
 to_daemon.hello	000000020102
 to_daemon.set_memory_max	0000000a02070000000004000000
 to_daemon.refresh_app	0000000603030000278b
@@ -23,3 +24,6 @@ route.get_applied	000000020404
 route_reply.ready	000000028101
 route_reply.applied	0000000486090102
 route_reply.error	00000003850905
+const.tun_v4	a9fe2a7f18
+const.tun_v6	fd66726565680001000000000000000240
+const.dns_v4	a9fe2a35

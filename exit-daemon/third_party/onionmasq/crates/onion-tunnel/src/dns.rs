@@ -1032,6 +1032,14 @@ mod test {
         }
     }
 
+    // The address of the daemon's DNS listener is also the DNS server of the Tor network that the exit app registers
+    // (AndroidPlatform.java in freeholdos-platform, checked against tests/vectors.txt of the daemon).
+    #[test]
+    fn the_dns_listener_is_at_the_address_the_exit_app_registers() {
+        use crate::dns::DnsManager;
+        assert_eq!(DnsManager::<()>::V4_ADDRESS, std::net::Ipv4Addr::new(169, 254, 42, 53));
+    }
+
     // FreeholdOS patch 0005: the per-app limit comes after the owner is known, and a refused query is a SERVFAIL ---------
     #[test]
     fn a_query_is_admitted_only_with_a_known_owner_that_is_not_over_its_limit() {
