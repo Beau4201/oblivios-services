@@ -21,10 +21,17 @@ or MPL-2.0. Three packages are MPL-2.0 (`colored`, `option-ext`, and `priority-q
 are used unmodified, which is what the MPL asks for. The licence texts of the packages are not bundled with the daemon: a
 binary that ships to users needs them in the platform's notices (open, platform `NOTICE`).
 
+## The control sockets are world-connectable
+
+`init` creates `/dev/socket/exitd` and `/dev/socket/exitd_route` with mode 0666 (`exit.rc` in `freeholdos-platform`). The exit
+app has its own uid, which is in no group of the services, so a group-only mode would refuse it. What keeps every other process
+out is the SELinux policy (only `exit_app` may `connectto` either socket, `[measured]` with `sesearch`) and the services' own
+check of the peer's SELinux context before they read a byte. That is one layer fewer than a mode that names the peer; it is
+accepted because the policy is the layer the rest of the platform relies on.
+
 ## Not run
 
-`cargo audit`: the advisory database is a download, which needs the owner's yes. The mutation list has not been run on the
-final code. See `README.md`, "Known gaps".
+`cargo audit`: the advisory database is a download, which needs the owner's yes. See `README.md`, "Known gaps".
 
 ## Availability
 
