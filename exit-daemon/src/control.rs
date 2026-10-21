@@ -1,15 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The typed control protocol between the exit app and the daemon (ADR-184). Safe Rust only. A frame is a `u32`
-//! big-endian length of tag plus payload, the tag byte, then the payload. A decoder checks the claimed length before it
-//! looks at anything else and never allocates from it: the only allocations are the bounded interface name and the
-//! output of the encoders.
+//! The typed control protocol between the exit app and the daemon (ADR-184, ADR-186), version 2. Safe Rust only. A frame is
+//! a `u32` big-endian length of tag plus payload, the tag byte, then the payload. A decoder checks the claimed length before
+//! it looks at anything else and never allocates from it: the only allocations are bounded by [`MAX_FRAME`] (the interface
+//! name, the class list, the company list) and the output of the encoders.
+//!
+//! Every request after `Hello` starts its payload with a sequence number that the reply echoes (`Ack` or `Error`), so the
+//! app can tell which request an answer belongs to. The daemon never pushes: `GetState` returns the state and the failure
+//! counts that are due, and the app asks every few seconds.
 
 /// The largest tag-plus-payload a peer may claim.
-pub const MAX_FRAME: usize = 1024;
+pub const MAX_FRAME: usize = 4096;
 /// The longest interface name the kernel accepts (IFNAMSIZ - 1).
 pub const IFNAME_MAX: usize = 15;
+/// The wire version of this module. A `Hello` of another version is answered with `Error { Unsupported }`.
+pub const PROTOCOL_VERSION: u8 = 2;
+/// The first uid of an ordinary app; ranges below it are never classified by the app.
+pub const FIRST_APP_UID: u32 = 10000;
+/// At most this many ranges in one class table.
+pub const MAX_CLASSES: usize = 256;
+/// At most this many companies in the override list of one uid.
+pub const MAX_OVERRIDES: usize = 32;
 
-/// Lower and upper bound of the Arti memory quota a peer may ask for. `[assumption]` until decision D-K.
+/// Lower and upper bound of the Arti memory quota a peer may ask for (D-K decided 64 MiB, ADR-186; the bounds leave room
+/// to tune it).
 const MEMORY_MIN: u64 = 32 * 1024 * 1024;
 const MEMORY_MAX: u64 = 1024 * 1024 * 1024;
 
@@ -18,17 +31,47 @@ const TAG_SET_MEMORY_MAX: u8 = 0x02;
 const TAG_REFRESH_APP: u8 = 0x03;
 const TAG_REFRESH_ALL: u8 = 0x04;
 const TAG_SHUTDOWN: u8 = 0x05;
+const TAG_GET_STATE: u8 = 0x06;
+const TAG_SET_POLICY: u8 = 0x07;
+const TAG_SET_OVERRIDES: u8 = 0x08;
 const TAG_READY: u8 = 0x81;
 const TAG_STATE: u8 = 0x82;
 const TAG_FAILURES: u8 = 0x83;
+const TAG_ACK: u8 = 0x84;
+const TAG_ERROR: u8 = 0x85;
+
+/// Bytes of one class entry on the wire: start, end (`u32` each) and the kind.
+const CLASS_BYTES: usize = 9;
+
+/// What the daemon does with the flows of an app uid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Kind {
+    /// All flows of the app leave through Tor.
+    Tor = 1,
+    /// Only flows to listed hosts leave through Tor (masked destinations).
+    Masked = 2,
+    /// The daemon does nothing for the app.
+    Exempt = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UidClass {
+    pub start: u32,
+    pub end: u32,
+    pub kind: Kind,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToDaemon {
     Hello { version: u8 },
-    SetMemoryMax { bytes: u64 },
-    RefreshApp { uid: u32 },
-    RefreshAll,
-    Shutdown,
+    SetMemoryMax { seq: u8, bytes: u64 },
+    RefreshApp { seq: u8, uid: u32 },
+    RefreshAll { seq: u8 },
+    Shutdown { seq: u8 },
+    GetState { seq: u8 },
+    SetPolicy { seq: u8, classes: Vec<UidClass> },
+    SetOverrides { seq: u8, uid: u32, companies: Vec<u16> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,11 +82,25 @@ pub enum DaemonState {
     Failed = 2,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ErrorCode {
+    BadValue = 1,
+    TooMany = 2,
+    Busy = 3,
+    Unsupported = 4,
+    /// The request was well formed and allowed, and the kernel refused it (the route helper).
+    Failed = 5,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FromDaemon {
-    Ready { iface: String },
+    Ready { version: u8, iface: String },
     State { state: DaemonState },
-    Failures { uid: u32, count: u32 },
+    /// A company id, never a host name (capability-boundaries.md).
+    Failures { uid: u32, company: u16, count: u32 },
+    Ack { seq: u8 },
+    Error { seq: u8, code: ErrorCode },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,7 +124,7 @@ pub enum PolicyError {
     TooLarge,
 }
 
-fn frame(tag: u8, payload: &[u8]) -> Vec<u8> {
+pub(crate) fn frame(tag: u8, payload: &[u8]) -> Vec<u8> {
     // Every payload built here is far below MAX_FRAME; the cast cannot truncate.
     let len = (payload.len() + 1) as u32;
     let mut v = Vec::with_capacity(4 + 1 + payload.len());
@@ -80,31 +137,66 @@ fn frame(tag: u8, payload: &[u8]) -> Vec<u8> {
 pub fn encode_to_daemon(m: &ToDaemon) -> Vec<u8> {
     match m {
         ToDaemon::Hello { version } => frame(TAG_HELLO, &[*version]),
-        ToDaemon::SetMemoryMax { bytes } => frame(TAG_SET_MEMORY_MAX, &bytes.to_be_bytes()),
-        ToDaemon::RefreshApp { uid } => frame(TAG_REFRESH_APP, &uid.to_be_bytes()),
-        ToDaemon::RefreshAll => frame(TAG_REFRESH_ALL, &[]),
-        ToDaemon::Shutdown => frame(TAG_SHUTDOWN, &[]),
+        ToDaemon::SetMemoryMax { seq, bytes } => {
+            let mut p = vec![*seq];
+            p.extend_from_slice(&bytes.to_be_bytes());
+            frame(TAG_SET_MEMORY_MAX, &p)
+        }
+        ToDaemon::RefreshApp { seq, uid } => {
+            let mut p = vec![*seq];
+            p.extend_from_slice(&uid.to_be_bytes());
+            frame(TAG_REFRESH_APP, &p)
+        }
+        ToDaemon::RefreshAll { seq } => frame(TAG_REFRESH_ALL, &[*seq]),
+        ToDaemon::Shutdown { seq } => frame(TAG_SHUTDOWN, &[*seq]),
+        ToDaemon::GetState { seq } => frame(TAG_GET_STATE, &[*seq]),
+        ToDaemon::SetPolicy { seq, classes } => {
+            // An encoder never emits more than the daemon accepts; a caller validates the table first.
+            let classes = &classes[..classes.len().min(MAX_CLASSES)];
+            let mut p = vec![*seq, classes.len() as u8];
+            for c in classes {
+                p.extend_from_slice(&c.start.to_be_bytes());
+                p.extend_from_slice(&c.end.to_be_bytes());
+                p.push(c.kind as u8);
+            }
+            frame(TAG_SET_POLICY, &p)
+        }
+        ToDaemon::SetOverrides { seq, uid, companies } => {
+            let companies = &companies[..companies.len().min(MAX_OVERRIDES)];
+            let mut p = vec![*seq];
+            p.extend_from_slice(&uid.to_be_bytes());
+            p.push(companies.len() as u8);
+            for c in companies {
+                p.extend_from_slice(&c.to_be_bytes());
+            }
+            frame(TAG_SET_OVERRIDES, &p)
+        }
     }
 }
 
 pub fn encode_from_daemon(m: &FromDaemon) -> Vec<u8> {
     match m {
-        FromDaemon::Ready { iface } => {
+        FromDaemon::Ready { version, iface } => {
             debug_assert!(valid_iface(iface.as_bytes()), "the caller validates the interface name");
-            frame(TAG_READY, iface.as_bytes())
+            let mut p = vec![*version];
+            p.extend_from_slice(iface.as_bytes());
+            frame(TAG_READY, &p)
         }
         FromDaemon::State { state } => frame(TAG_STATE, &[*state as u8]),
-        FromDaemon::Failures { uid, count } => {
-            let mut p = [0u8; 8];
+        FromDaemon::Failures { uid, company, count } => {
+            let mut p = [0u8; 10];
             p[..4].copy_from_slice(&uid.to_be_bytes());
-            p[4..].copy_from_slice(&count.to_be_bytes());
+            p[4..6].copy_from_slice(&company.to_be_bytes());
+            p[6..].copy_from_slice(&count.to_be_bytes());
             frame(TAG_FAILURES, &p)
         }
+        FromDaemon::Ack { seq } => frame(TAG_ACK, &[*seq]),
+        FromDaemon::Error { seq, code } => frame(TAG_ERROR, &[*seq, *code as u8]),
     }
 }
 
 /// Splits one frame off the front of `buf`: the tag, the payload and the number of bytes the frame uses.
-fn split(buf: &[u8]) -> Result<(u8, &[u8], usize), DecodeError> {
+pub(crate) fn split(buf: &[u8]) -> Result<(u8, &[u8], usize), DecodeError> {
     let head: [u8; 4] = buf
         .get(..4)
         .and_then(|h| <[u8; 4]>::try_from(h).ok())
@@ -121,26 +213,72 @@ fn split(buf: &[u8]) -> Result<(u8, &[u8], usize), DecodeError> {
     Ok((*tag, payload, end))
 }
 
-fn fixed<const N: usize>(payload: &[u8]) -> Result<[u8; N], DecodeError> {
+pub(crate) fn fixed<const N: usize>(payload: &[u8]) -> Result<[u8; N], DecodeError> {
     if payload.len() > N {
         return Err(DecodeError::Trailing);
     }
     <[u8; N]>::try_from(payload).map_err(|_| DecodeError::BadLength)
 }
 
+fn be32(b: &[u8]) -> Result<u32, DecodeError> {
+    <[u8; 4]>::try_from(b).map(u32::from_be_bytes).map_err(|_| DecodeError::BadLength)
+}
+
+fn be16(b: &[u8]) -> Result<u16, DecodeError> {
+    <[u8; 2]>::try_from(b).map(u16::from_be_bytes).map_err(|_| DecodeError::BadLength)
+}
+
+fn kind_from(b: u8) -> Result<Kind, DecodeError> {
+    match b {
+        1 => Ok(Kind::Tor),
+        2 => Ok(Kind::Masked),
+        3 => Ok(Kind::Exempt),
+        _ => Err(DecodeError::BadValue),
+    }
+}
+
+/// A payload that must be `head` bytes plus `count * unit` bytes, where the count byte sits at `count_at`.
+fn counted(payload: &[u8], count_at: usize, head: usize, unit: usize) -> Result<(usize, &[u8]), DecodeError> {
+    let count = usize::from(*payload.get(count_at).ok_or(DecodeError::BadLength)?);
+    let want = head + count * unit;
+    if payload.len() < want {
+        return Err(DecodeError::BadLength);
+    }
+    if payload.len() > want {
+        return Err(DecodeError::Trailing);
+    }
+    Ok((count, &payload[head..]))
+}
+
 pub fn decode_to_daemon(buf: &[u8]) -> Result<(ToDaemon, usize), DecodeError> {
     let (tag, payload, used) = split(buf)?;
     let msg = match tag {
         TAG_HELLO => ToDaemon::Hello { version: fixed::<1>(payload)?[0] },
-        TAG_SET_MEMORY_MAX => ToDaemon::SetMemoryMax { bytes: u64::from_be_bytes(fixed::<8>(payload)?) },
-        TAG_REFRESH_APP => ToDaemon::RefreshApp { uid: u32::from_be_bytes(fixed::<4>(payload)?) },
-        TAG_REFRESH_ALL => {
-            fixed::<0>(payload)?;
-            ToDaemon::RefreshAll
+        TAG_SET_MEMORY_MAX => {
+            let p = fixed::<9>(payload)?;
+            let mut b = [0u8; 8];
+            b.copy_from_slice(&p[1..]);
+            ToDaemon::SetMemoryMax { seq: p[0], bytes: u64::from_be_bytes(b) }
         }
-        TAG_SHUTDOWN => {
-            fixed::<0>(payload)?;
-            ToDaemon::Shutdown
+        TAG_REFRESH_APP => {
+            let p = fixed::<5>(payload)?;
+            ToDaemon::RefreshApp { seq: p[0], uid: be32(&p[1..])? }
+        }
+        TAG_REFRESH_ALL => ToDaemon::RefreshAll { seq: fixed::<1>(payload)?[0] },
+        TAG_SHUTDOWN => ToDaemon::Shutdown { seq: fixed::<1>(payload)?[0] },
+        TAG_GET_STATE => ToDaemon::GetState { seq: fixed::<1>(payload)?[0] },
+        TAG_SET_POLICY => {
+            let (_, entries) = counted(payload, 1, 2, CLASS_BYTES)?;
+            let mut classes = Vec::with_capacity(entries.len() / CLASS_BYTES);
+            for e in entries.chunks_exact(CLASS_BYTES) {
+                classes.push(UidClass { start: be32(&e[0..4])?, end: be32(&e[4..8])?, kind: kind_from(e[8])? });
+            }
+            ToDaemon::SetPolicy { seq: payload[0], classes }
+        }
+        TAG_SET_OVERRIDES => {
+            let (_, entries) = counted(payload, 5, 6, 2)?;
+            let companies = entries.chunks_exact(2).map(be16).collect::<Result<Vec<u16>, _>>()?;
+            ToDaemon::SetOverrides { seq: payload[0], uid: be32(&payload[1..5])?, companies }
         }
         other => return Err(DecodeError::UnknownTag(other)),
     };
@@ -161,11 +299,12 @@ pub fn decode_from_daemon(buf: &[u8]) -> Result<(FromDaemon, usize), DecodeError
     let (tag, payload, used) = split(buf)?;
     let msg = match tag {
         TAG_READY => {
-            if !valid_iface(payload) {
+            let (version, name) = payload.split_first().ok_or(DecodeError::BadIface)?;
+            if !valid_iface(name) {
                 return Err(DecodeError::BadIface);
             }
-            let iface = String::from_utf8(payload.to_vec()).map_err(|_| DecodeError::BadIface)?;
-            FromDaemon::Ready { iface }
+            let iface = String::from_utf8(name.to_vec()).map_err(|_| DecodeError::BadIface)?;
+            FromDaemon::Ready { version: *version, iface }
         }
         TAG_STATE => {
             let state = match fixed::<1>(payload)?[0] {
@@ -177,11 +316,21 @@ pub fn decode_from_daemon(buf: &[u8]) -> Result<(FromDaemon, usize), DecodeError
             FromDaemon::State { state }
         }
         TAG_FAILURES => {
-            let p = fixed::<8>(payload)?;
-            FromDaemon::Failures {
-                uid: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
-                count: u32::from_be_bytes([p[4], p[5], p[6], p[7]]),
-            }
+            let p = fixed::<10>(payload)?;
+            FromDaemon::Failures { uid: be32(&p[0..4])?, company: be16(&p[4..6])?, count: be32(&p[6..10])? }
+        }
+        TAG_ACK => FromDaemon::Ack { seq: fixed::<1>(payload)?[0] },
+        TAG_ERROR => {
+            let p = fixed::<2>(payload)?;
+            let code = match p[1] {
+                1 => ErrorCode::BadValue,
+                2 => ErrorCode::TooMany,
+                3 => ErrorCode::Busy,
+                4 => ErrorCode::Unsupported,
+                5 => ErrorCode::Failed,
+                _ => return Err(DecodeError::BadValue),
+            };
+            FromDaemon::Error { seq: p[0], code }
         }
         other => return Err(DecodeError::UnknownTag(other)),
     };
@@ -203,23 +352,58 @@ pub fn validate_memory_max(bytes: u64) -> Result<u64, PolicyError> {
 mod tests {
     use super::*;
 
-    fn frame(tag: u8, payload: &[u8]) -> Vec<u8> {
+    fn frm(tag: u8, payload: &[u8]) -> Vec<u8> {
         let mut v = ((payload.len() + 1) as u32).to_be_bytes().to_vec();
         v.push(tag);
         v.extend_from_slice(payload);
         v
     }
 
+    fn cls(start: u32, end: u32, kind: Kind) -> UidClass {
+        UidClass { start, end, kind }
+    }
+
+    fn all_to_daemon() -> Vec<(ToDaemon, usize)> {
+        vec![
+            (ToDaemon::Hello { version: 2 }, 1),
+            (ToDaemon::SetMemoryMax { seq: 1, bytes: 64 * 1024 * 1024 }, 9),
+            (ToDaemon::RefreshApp { seq: 2, uid: 10231 }, 5),
+            (ToDaemon::RefreshAll { seq: 3 }, 1),
+            (ToDaemon::Shutdown { seq: 4 }, 1),
+            (ToDaemon::GetState { seq: 5 }, 1),
+            (ToDaemon::SetPolicy { seq: 6, classes: vec![] }, 2),
+            (
+                ToDaemon::SetPolicy {
+                    seq: 7,
+                    classes: vec![cls(10000, 10230, Kind::Masked), cls(10231, 10231, Kind::Tor), cls(10232, 19999, Kind::Exempt)],
+                },
+                2 + 3 * CLASS_BYTES,
+            ),
+            (ToDaemon::SetOverrides { seq: 8, uid: 10231, companies: vec![] }, 6),
+            (ToDaemon::SetOverrides { seq: 9, uid: 10231, companies: vec![3, 9, 0xffff] }, 6 + 6),
+        ]
+    }
+
+    fn all_from_daemon() -> Vec<(FromDaemon, usize)> {
+        vec![
+            (FromDaemon::Ready { version: 2, iface: "tun0".into() }, 1 + 4),
+            (FromDaemon::Ready { version: 2, iface: "a".repeat(IFNAME_MAX) }, 1 + IFNAME_MAX),
+            (FromDaemon::State { state: DaemonState::Bootstrapping }, 1),
+            (FromDaemon::State { state: DaemonState::Up }, 1),
+            (FromDaemon::State { state: DaemonState::Failed }, 1),
+            (FromDaemon::Failures { uid: 10231, company: 12, count: 7 }, 10),
+            (FromDaemon::Ack { seq: 200 }, 1),
+            (FromDaemon::Error { seq: 3, code: ErrorCode::BadValue }, 2),
+            (FromDaemon::Error { seq: 3, code: ErrorCode::TooMany }, 2),
+            (FromDaemon::Error { seq: 3, code: ErrorCode::Busy }, 2),
+            (FromDaemon::Error { seq: 3, code: ErrorCode::Unsupported }, 2),
+            (FromDaemon::Error { seq: 3, code: ErrorCode::Failed }, 2),
+        ]
+    }
+
     #[test]
     fn every_message_to_the_daemon_round_trips() {
-        let cases = [
-            (ToDaemon::Hello { version: 1 }, 1),
-            (ToDaemon::SetMemoryMax { bytes: 64 * 1024 * 1024 }, 8),
-            (ToDaemon::RefreshApp { uid: 10231 }, 4),
-            (ToDaemon::RefreshAll, 0),
-            (ToDaemon::Shutdown, 0),
-        ];
-        for (msg, payload) in cases {
+        for (msg, payload) in all_to_daemon() {
             let bytes = encode_to_daemon(&msg);
             assert_eq!(bytes.len(), 4 + 1 + payload, "{msg:?}");
             assert_eq!(decode_to_daemon(&bytes), Ok((msg, 4 + 1 + payload)));
@@ -228,15 +412,7 @@ mod tests {
 
     #[test]
     fn every_message_from_the_daemon_round_trips() {
-        let cases = [
-            (FromDaemon::Ready { iface: "tun0".into() }, 4),
-            (FromDaemon::Ready { iface: "a".repeat(IFNAME_MAX) }, IFNAME_MAX),
-            (FromDaemon::State { state: DaemonState::Bootstrapping }, 1),
-            (FromDaemon::State { state: DaemonState::Up }, 1),
-            (FromDaemon::State { state: DaemonState::Failed }, 1),
-            (FromDaemon::Failures { uid: 10231, count: 7 }, 8),
-        ];
-        for (msg, payload) in cases {
+        for (msg, payload) in all_from_daemon() {
             let bytes = encode_from_daemon(&msg);
             assert_eq!(bytes.len(), 4 + 1 + payload, "{msg:?}");
             assert_eq!(decode_from_daemon(&bytes), Ok((msg, 4 + 1 + payload)));
@@ -245,43 +421,56 @@ mod tests {
 
     #[test]
     fn wire_layout_is_fixed() {
-        assert_eq!(encode_to_daemon(&ToDaemon::Hello { version: 7 }), [0, 0, 0, 2, 0x01, 7]);
+        // Wire-level contract with the exit app (its codec has the same vectors): a change here is a protocol change.
+        assert_eq!(encode_to_daemon(&ToDaemon::Hello { version: 2 }), [0, 0, 0, 2, 0x01, 2]);
         assert_eq!(
-            encode_to_daemon(&ToDaemon::SetMemoryMax { bytes: 0x0102_0304_0506_0708 }),
-            [0, 0, 0, 9, 0x02, 1, 2, 3, 4, 5, 6, 7, 8]
+            encode_to_daemon(&ToDaemon::SetMemoryMax { seq: 9, bytes: 0x0102_0304_0506_0708 }),
+            [0, 0, 0, 10, 0x02, 9, 1, 2, 3, 4, 5, 6, 7, 8]
         );
-        assert_eq!(encode_to_daemon(&ToDaemon::RefreshApp { uid: 0x0a0b_0c0d }), [0, 0, 0, 5, 0x03, 10, 11, 12, 13]);
-        assert_eq!(encode_to_daemon(&ToDaemon::RefreshAll), [0, 0, 0, 1, 0x04]);
-        assert_eq!(encode_to_daemon(&ToDaemon::Shutdown), [0, 0, 0, 1, 0x05]);
-        assert_eq!(encode_from_daemon(&FromDaemon::Ready { iface: "t".into() }), [0, 0, 0, 2, 0x81, b't']);
+        assert_eq!(encode_to_daemon(&ToDaemon::RefreshApp { seq: 1, uid: 0x0a0b_0c0d }), [0, 0, 0, 6, 0x03, 1, 10, 11, 12, 13]);
+        assert_eq!(encode_to_daemon(&ToDaemon::RefreshAll { seq: 4 }), [0, 0, 0, 2, 0x04, 4]);
+        assert_eq!(encode_to_daemon(&ToDaemon::Shutdown { seq: 5 }), [0, 0, 0, 2, 0x05, 5]);
+        assert_eq!(encode_to_daemon(&ToDaemon::GetState { seq: 6 }), [0, 0, 0, 2, 0x06, 6]);
+        assert_eq!(
+            encode_to_daemon(&ToDaemon::SetPolicy { seq: 7, classes: vec![cls(10000, 10230, Kind::Masked)] }),
+            [0, 0, 0, 12, 0x07, 7, 1, 0, 0, 0x27, 0x10, 0, 0, 0x27, 0xf6, 2]
+        );
+        assert_eq!(
+            encode_to_daemon(&ToDaemon::SetOverrides { seq: 8, uid: 10231, companies: vec![0x0102, 3] }),
+            [0, 0, 0, 11, 0x08, 8, 0, 0, 0x27, 0xf7, 2, 1, 2, 0, 3]
+        );
+        assert_eq!(encode_from_daemon(&FromDaemon::Ready { version: 2, iface: "t".into() }), [0, 0, 0, 3, 0x81, 2, b't']);
         assert_eq!(encode_from_daemon(&FromDaemon::State { state: DaemonState::Failed }), [0, 0, 0, 2, 0x82, 2]);
         assert_eq!(
-            encode_from_daemon(&FromDaemon::Failures { uid: 1, count: 2 }),
-            [0, 0, 0, 9, 0x83, 0, 0, 0, 1, 0, 0, 0, 2]
+            encode_from_daemon(&FromDaemon::Failures { uid: 1, company: 0x0203, count: 4 }),
+            [0, 0, 0, 11, 0x83, 0, 0, 0, 1, 2, 3, 0, 0, 0, 4]
         );
+        assert_eq!(encode_from_daemon(&FromDaemon::Ack { seq: 9 }), [0, 0, 0, 2, 0x84, 9]);
+        assert_eq!(encode_from_daemon(&FromDaemon::Error { seq: 9, code: ErrorCode::Unsupported }), [0, 0, 0, 3, 0x85, 9, 4]);
     }
 
     #[test]
     fn two_frames_in_one_buffer_decode_one_after_the_other() {
-        let mut buf = encode_to_daemon(&ToDaemon::RefreshApp { uid: 5 });
-        buf.extend(encode_to_daemon(&ToDaemon::Shutdown));
+        let mut buf = encode_to_daemon(&ToDaemon::RefreshApp { seq: 1, uid: 5 });
+        buf.extend(encode_to_daemon(&ToDaemon::Shutdown { seq: 2 }));
         let (first, used) = decode_to_daemon(&buf).unwrap();
-        assert_eq!(first, ToDaemon::RefreshApp { uid: 5 });
-        assert_eq!(decode_to_daemon(&buf[used..]), Ok((ToDaemon::Shutdown, 5)));
+        assert_eq!(first, ToDaemon::RefreshApp { seq: 1, uid: 5 });
+        assert_eq!(decode_to_daemon(&buf[used..]), Ok((ToDaemon::Shutdown { seq: 2 }, 6)));
     }
 
     #[test]
-    fn a_short_buffer_is_incomplete() {
-        for n in 0..4 {
-            assert_eq!(decode_to_daemon(&vec![0u8; n]), Err(DecodeError::Incomplete), "{n} bytes");
+    fn a_short_buffer_is_incomplete_at_every_cut() {
+        for (msg, _) in all_to_daemon() {
+            let full = encode_to_daemon(&msg);
+            for n in 0..full.len() {
+                assert_eq!(decode_to_daemon(&full[..n]), Err(DecodeError::Incomplete), "{msg:?} cut at {n}");
+            }
         }
-        let full = encode_to_daemon(&ToDaemon::SetMemoryMax { bytes: 1 });
-        for n in 4..full.len() {
-            assert_eq!(decode_to_daemon(&full[..n]), Err(DecodeError::Incomplete), "{n} bytes");
-        }
-        let full = encode_from_daemon(&FromDaemon::Failures { uid: 1, count: 1 });
-        for n in 0..full.len() {
-            assert_eq!(decode_from_daemon(&full[..n]), Err(DecodeError::Incomplete), "{n} bytes");
+        for (msg, _) in all_from_daemon() {
+            let full = encode_from_daemon(&msg);
+            for n in 0..full.len() {
+                assert_eq!(decode_from_daemon(&full[..n]), Err(DecodeError::Incomplete), "{msg:?} cut at {n}");
+            }
         }
     }
 
@@ -312,78 +501,168 @@ mod tests {
 
     #[test]
     fn an_unknown_tag_is_refused_in_both_directions() {
-        assert_eq!(decode_to_daemon(&frame(0x7f, &[])), Err(DecodeError::UnknownTag(0x7f)));
-        assert_eq!(decode_from_daemon(&frame(0x7f, &[])), Err(DecodeError::UnknownTag(0x7f)));
-        // A tag of the other direction is unknown here.
-        assert_eq!(decode_to_daemon(&frame(0x81, b"tun0")), Err(DecodeError::UnknownTag(0x81)));
-        assert_eq!(decode_from_daemon(&frame(0x01, &[1])), Err(DecodeError::UnknownTag(0x01)));
+        assert_eq!(decode_to_daemon(&frm(0x7f, &[])), Err(DecodeError::UnknownTag(0x7f)));
+        assert_eq!(decode_from_daemon(&frm(0x7f, &[])), Err(DecodeError::UnknownTag(0x7f)));
+        // A tag of the other direction is unknown here, and the next tag after each range is too.
+        assert_eq!(decode_to_daemon(&frm(0x81, b"tun0")), Err(DecodeError::UnknownTag(0x81)));
+        assert_eq!(decode_from_daemon(&frm(0x01, &[1])), Err(DecodeError::UnknownTag(0x01)));
+        assert_eq!(decode_to_daemon(&frm(0x09, &[1])), Err(DecodeError::UnknownTag(0x09)));
+        assert_eq!(decode_to_daemon(&frm(0x00, &[1])), Err(DecodeError::UnknownTag(0x00)));
+        assert_eq!(decode_from_daemon(&frm(0x86, &[1])), Err(DecodeError::UnknownTag(0x86)));
     }
 
     #[test]
     fn a_payload_of_the_wrong_size_is_refused() {
-        assert_eq!(decode_to_daemon(&frame(0x01, &[1, 2])), Err(DecodeError::Trailing));
-        assert_eq!(decode_to_daemon(&frame(0x01, &[])), Err(DecodeError::BadLength));
-        assert_eq!(decode_to_daemon(&frame(0x02, &[0; 7])), Err(DecodeError::BadLength));
-        assert_eq!(decode_to_daemon(&frame(0x02, &[0; 9])), Err(DecodeError::Trailing));
-        assert_eq!(decode_to_daemon(&frame(0x03, &[0; 3])), Err(DecodeError::BadLength));
-        assert_eq!(decode_to_daemon(&frame(0x03, &[0; 5])), Err(DecodeError::Trailing));
-        assert_eq!(decode_to_daemon(&frame(0x04, &[0])), Err(DecodeError::Trailing));
-        assert_eq!(decode_to_daemon(&frame(0x05, &[0])), Err(DecodeError::Trailing));
-        assert_eq!(decode_from_daemon(&frame(0x82, &[])), Err(DecodeError::BadLength));
-        assert_eq!(decode_from_daemon(&frame(0x82, &[1, 1])), Err(DecodeError::Trailing));
-        assert_eq!(decode_from_daemon(&frame(0x83, &[0; 7])), Err(DecodeError::BadLength));
-        assert_eq!(decode_from_daemon(&frame(0x83, &[0; 9])), Err(DecodeError::Trailing));
+        assert_eq!(decode_to_daemon(&frm(0x01, &[1, 2])), Err(DecodeError::Trailing));
+        assert_eq!(decode_to_daemon(&frm(0x01, &[])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x02, &[0; 8])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x02, &[0; 10])), Err(DecodeError::Trailing));
+        assert_eq!(decode_to_daemon(&frm(0x03, &[0; 4])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x03, &[0; 6])), Err(DecodeError::Trailing));
+        for tag in [0x04, 0x05, 0x06] {
+            assert_eq!(decode_to_daemon(&frm(tag, &[])), Err(DecodeError::BadLength), "tag {tag}");
+            assert_eq!(decode_to_daemon(&frm(tag, &[0, 0])), Err(DecodeError::Trailing), "tag {tag}");
+        }
+        assert_eq!(decode_from_daemon(&frm(0x82, &[])), Err(DecodeError::BadLength));
+        assert_eq!(decode_from_daemon(&frm(0x82, &[1, 1])), Err(DecodeError::Trailing));
+        assert_eq!(decode_from_daemon(&frm(0x83, &[0; 9])), Err(DecodeError::BadLength));
+        assert_eq!(decode_from_daemon(&frm(0x83, &[0; 11])), Err(DecodeError::Trailing));
+        assert_eq!(decode_from_daemon(&frm(0x84, &[])), Err(DecodeError::BadLength));
+        assert_eq!(decode_from_daemon(&frm(0x84, &[1, 1])), Err(DecodeError::Trailing));
+        assert_eq!(decode_from_daemon(&frm(0x85, &[1])), Err(DecodeError::BadLength));
+        assert_eq!(decode_from_daemon(&frm(0x85, &[1, 1, 1])), Err(DecodeError::Trailing));
+    }
+
+    #[test]
+    fn a_counted_list_must_match_its_count_exactly() {
+        let one = |extra: usize| {
+            let mut p = vec![7, 1];
+            p.extend_from_slice(&[0, 0, 0x27, 0x10, 0, 0, 0x27, 0x11, 1]);
+            p.extend(vec![0; extra]);
+            p
+        };
+        assert!(decode_to_daemon(&frm(0x07, &one(0))).is_ok());
+        assert_eq!(decode_to_daemon(&frm(0x07, &one(1))), Err(DecodeError::Trailing));
+        let mut short = one(0);
+        short.pop();
+        assert_eq!(decode_to_daemon(&frm(0x07, &short)), Err(DecodeError::BadLength));
+        // A count that claims more than the frame can hold is a length error, not an allocation.
+        assert_eq!(decode_to_daemon(&frm(0x07, &[7, 255])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x07, &[7])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x07, &[])), Err(DecodeError::BadLength));
+        // Overrides: the count byte is the sixth byte.
+        assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0, 1, 9])), Err(DecodeError::Trailing));
+        assert_eq!(
+            decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0, 9])),
+            Ok((ToDaemon::SetOverrides { seq: 1, uid: 5, companies: vec![9] }, 4 + 1 + 8))
+        );
+    }
+
+    #[test]
+    fn a_class_kind_outside_the_three_is_refused() {
+        let entry = |k: u8| frm(0x07, &[1, 1, 0, 0, 0x27, 0x10, 0, 0, 0x27, 0x10, k]);
+        for bad in [0u8, 4, 255] {
+            assert_eq!(decode_to_daemon(&entry(bad)), Err(DecodeError::BadValue), "kind {bad}");
+        }
+        for (good, kind) in [(1u8, Kind::Tor), (2, Kind::Masked), (3, Kind::Exempt)] {
+            assert_eq!(
+                decode_to_daemon(&entry(good)).map(|(m, _)| m),
+                Ok(ToDaemon::SetPolicy { seq: 1, classes: vec![cls(10000, 10000, kind)] })
+            );
+        }
     }
 
     #[test]
     fn an_interface_name_is_bounded_and_plain() {
-        assert_eq!(decode_from_daemon(&frame(0x81, &[b'a'; IFNAME_MAX + 1])), Err(DecodeError::BadIface));
-        assert_eq!(decode_from_daemon(&frame(0x81, &[])), Err(DecodeError::BadIface));
-        assert_eq!(decode_from_daemon(&frame(0x81, b"tun/0")), Err(DecodeError::BadIface));
-        assert_eq!(decode_from_daemon(&frame(0x81, b"tun\0")), Err(DecodeError::BadIface));
-        assert_eq!(decode_from_daemon(&frame(0x81, b"tun 0")), Err(DecodeError::BadIface));
-        assert_eq!(decode_from_daemon(&frame(0x81, &[0xc3, 0xa9])), Err(DecodeError::BadIface));
-        assert_eq!(decode_from_daemon(&frame(0x81, b".")), Err(DecodeError::BadIface));
-        assert_eq!(decode_from_daemon(&frame(0x81, b"..")), Err(DecodeError::BadIface));
+        let ready = |name: &[u8]| {
+            let mut p = vec![2];
+            p.extend_from_slice(name);
+            frm(0x81, &p)
+        };
+        assert_eq!(decode_from_daemon(&ready(&[b'a'; IFNAME_MAX + 1])), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&ready(&[])), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&frm(0x81, &[])), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&ready(b"tun/0")), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&ready(b"tun\0")), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&ready(b"tun 0")), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&ready(&[0xc3, 0xa9])), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&ready(b".")), Err(DecodeError::BadIface));
+        assert_eq!(decode_from_daemon(&ready(b"..")), Err(DecodeError::BadIface));
         assert_eq!(
-            decode_from_daemon(&frame(0x81, b"Az09_.-")),
-            Ok((FromDaemon::Ready { iface: "Az09_.-".into() }, 4 + 1 + 7))
+            decode_from_daemon(&ready(b"Az09_.-")),
+            Ok((FromDaemon::Ready { version: 2, iface: "Az09_.-".into() }, 4 + 1 + 1 + 7))
         );
-        assert_eq!(decode_from_daemon(&frame(0x81, &[b'a'; IFNAME_MAX])).map(|(_, n)| n), Ok(4 + 1 + IFNAME_MAX));
+        assert_eq!(decode_from_daemon(&ready(&[b'a'; IFNAME_MAX])).map(|(_, n)| n), Ok(4 + 1 + 1 + IFNAME_MAX));
     }
 
     #[test]
-    fn a_state_outside_the_three_is_refused() {
-        assert_eq!(decode_from_daemon(&frame(0x82, &[3])), Err(DecodeError::BadValue));
-        assert_eq!(decode_from_daemon(&frame(0x82, &[255])), Err(DecodeError::BadValue));
+    fn a_state_or_error_code_outside_the_defined_ones_is_refused() {
+        assert_eq!(decode_from_daemon(&frm(0x82, &[3])), Err(DecodeError::BadValue));
+        assert_eq!(decode_from_daemon(&frm(0x82, &[255])), Err(DecodeError::BadValue));
         assert_eq!(
-            decode_from_daemon(&frame(0x82, &[0])),
+            decode_from_daemon(&frm(0x82, &[0])),
             Ok((FromDaemon::State { state: DaemonState::Bootstrapping }, 6))
         );
+        assert_eq!(decode_from_daemon(&frm(0x85, &[1, 0])), Err(DecodeError::BadValue));
+        assert_eq!(decode_from_daemon(&frm(0x85, &[1, 6])), Err(DecodeError::BadValue));
+        assert_eq!(decode_from_daemon(&frm(0x85, &[1, 255])), Err(DecodeError::BadValue));
     }
 
     #[test]
     fn the_limits_are_the_documented_values() {
         // Wire-level contract with the app: a changed limit is a protocol change, not a refactoring.
-        assert_eq!(MAX_FRAME, 1024);
+        assert_eq!(MAX_FRAME, 4096);
         assert_eq!(IFNAME_MAX, 15);
-        assert_eq!(decode_from_daemon(&frame(0x81, &[b'a'; 16])), Err(DecodeError::BadIface));
-        assert!(decode_from_daemon(&frame(0x81, &[b'a'; 15])).is_ok());
-        let mut at_limit = 1024u32.to_be_bytes().to_vec();
-        at_limit.extend(vec![0x7f; 1024]);
+        assert_eq!(PROTOCOL_VERSION, 2);
+        assert_eq!(FIRST_APP_UID, 10000);
+        assert_eq!(MAX_CLASSES, 256);
+        assert_eq!(MAX_OVERRIDES, 32);
+        let ready = |n: usize| {
+            let mut p = vec![2];
+            p.extend(vec![b'a'; n]);
+            frm(0x81, &p)
+        };
+        assert_eq!(decode_from_daemon(&ready(16)), Err(DecodeError::BadIface));
+        assert!(decode_from_daemon(&ready(15)).is_ok());
+        let mut at_limit = 4096u32.to_be_bytes().to_vec();
+        at_limit.extend(vec![0x7f; 4096]);
         assert_eq!(decode_to_daemon(&at_limit), Err(DecodeError::UnknownTag(0x7f)));
-        assert_eq!(decode_to_daemon(&1025u32.to_be_bytes()), Err(DecodeError::TooLong(1025)));
+        assert_eq!(decode_to_daemon(&4097u32.to_be_bytes()), Err(DecodeError::TooLong(4097)));
+    }
+
+    #[test]
+    fn the_encoder_never_emits_more_than_the_daemon_accepts() {
+        let many: Vec<UidClass> = (0..400u32).map(|i| cls(10000 + 2 * i, 10000 + 2 * i, Kind::Tor)).collect();
+        let bytes = encode_to_daemon(&ToDaemon::SetPolicy { seq: 1, classes: many });
+        assert_eq!(bytes.len(), 4 + 1 + 2 + MAX_CLASSES * CLASS_BYTES);
+        assert!(bytes.len() - 4 <= MAX_FRAME);
+        let companies: Vec<u16> = (0..100).collect();
+        let bytes = encode_to_daemon(&ToDaemon::SetOverrides { seq: 1, uid: 10000, companies });
+        assert_eq!(bytes.len(), 4 + 1 + 6 + MAX_OVERRIDES * 2);
     }
 
     #[test]
     fn no_input_makes_the_decoders_panic() {
         // Every tag byte with payloads of every size up to a few bytes, and every prefix of each frame.
         for tag in 0..=255u8 {
-            for size in 0..12usize {
-                let f = frame(tag, &vec![0x41; size]);
+            for size in 0..24usize {
+                let f = frm(tag, &vec![0x41; size]);
                 for cut in 0..=f.len() {
                     let _ = decode_to_daemon(&f[..cut]);
                     let _ = decode_from_daemon(&f[..cut]);
+                }
+                // The same with a count byte that is zero, small and large where a list is expected.
+                for count in [0u8, 1, 2, 255] {
+                    let mut p = vec![0x41; size];
+                    if let Some(b) = p.get_mut(1) {
+                        *b = count;
+                    }
+                    if let Some(b) = p.get_mut(5) {
+                        *b = count;
+                    }
+                    let _ = decode_to_daemon(&frm(tag, &p));
                 }
             }
         }

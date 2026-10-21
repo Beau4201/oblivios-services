@@ -2,8 +2,13 @@
 //! The command line of `exitd`. Every error names an option and never echoes a value: nothing a caller types ends up in
 //! the output of the daemon.
 //!
-//!     exitd --state-dir <p> --cache-dir <p> --memory-max <bytes> --control <socket-path> --peer-uid <uid>
+//!     exitd --state-dir <p> --cache-dir <p> --memory-max <bytes>
+//!           ( --control <socket-path> | --control-fd-env <ANDROID_SOCKET_name> )
+//!           ( --peer-uid <uid> | --peer-context <selinux-type> )
 //!           [--device <ifname>] [--disable-fs-permission-checks]
+//!
+//! The service definition gives the socket (`--control-fd-env`) and names the exit app's SELinux type
+//! (`--peer-context`); the path and the uid are for runs on a phone as root and for the tests.
 
 use crate::control::{valid_iface, validate_memory_max};
 use std::fmt;
@@ -17,11 +22,28 @@ pub struct Args {
     pub state_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub memory_max: u64,
-    pub control: PathBuf,
-    pub peer_uid: u32,
+    pub control: ControlSource,
+    pub peer: Peer,
     pub device: String,
     /// Arti's permission checks of its own directories stay on unless this is given (`--disable-fs-permission-checks`).
     pub disable_fs_permission_checks: bool,
+}
+
+/// Where the control socket comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ControlSource {
+    /// The daemon creates it (mode 0600).
+    Path(PathBuf),
+    /// `init` created it; the descriptor number is in this environment variable (`ANDROID_SOCKET_<name>`).
+    InheritedFd(String),
+}
+
+/// Who may use the control socket.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Peer {
+    Uid(u32),
+    /// An SELinux type, for example `exit_app`.
+    Context(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,10 +74,24 @@ const CACHE_DIR: &str = "--cache-dir";
 const MEMORY_MAX: &str = "--memory-max";
 const CONTROL: &str = "--control";
 const PEER_UID: &str = "--peer-uid";
+const CONTROL_FD_ENV: &str = "--control-fd-env";
+const PEER_CONTEXT: &str = "--peer-context";
 const DEVICE: &str = "--device";
 /// The one option without a value.
 const NO_FS_CHECKS: &str = "--disable-fs-permission-checks";
-const OPTIONS: [&str; 6] = [STATE_DIR, CACHE_DIR, MEMORY_MAX, CONTROL, PEER_UID, DEVICE];
+const OPTIONS: [&str; 8] = [STATE_DIR, CACHE_DIR, MEMORY_MAX, CONTROL, PEER_UID, CONTROL_FD_ENV, PEER_CONTEXT, DEVICE];
+
+/// `ANDROID_SOCKET_` and a name of letters, digits and underscores (what `init` writes), at most 64 bytes in all.
+fn valid_socket_var(v: &str) -> bool {
+    v.strip_prefix("ANDROID_SOCKET_")
+        .is_some_and(|n| !n.is_empty() && v.len() <= 64 && n.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
+}
+
+/// An SELinux type name: lower case letters, digits and underscores, starting with a letter, at most 64 bytes.
+fn valid_selinux_type(v: &str) -> bool {
+    let mut b = v.bytes();
+    v.len() <= 64 && b.next().is_some_and(|c| c.is_ascii_lowercase()) && b.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_')
+}
 
 fn set<T>(slot: &mut Option<T>, name: &'static str, value: T) -> Result<(), ArgError> {
     if slot.is_some() {
@@ -77,6 +113,7 @@ fn digits(name: &'static str, s: &str) -> Result<u64, ArgError> {
 pub fn parse_args(args: &[String]) -> Result<Args, ArgError> {
     let (mut state_dir, mut cache_dir, mut control) = (None, None, None);
     let (mut memory_max, mut peer_uid, mut device) = (None, None, None);
+    let (mut control_fd_env, mut peer_context) = (None, None);
     let mut no_fs_checks = None;
     let mut i = 0;
     while i < args.len() {
@@ -91,6 +128,18 @@ pub fn parse_args(args: &[String]) -> Result<Args, ArgError> {
             STATE_DIR => set(&mut state_dir, name, PathBuf::from(value))?,
             CACHE_DIR => set(&mut cache_dir, name, PathBuf::from(value))?,
             CONTROL => set(&mut control, name, PathBuf::from(value))?,
+            CONTROL_FD_ENV => {
+                if !valid_socket_var(value) {
+                    return Err(ArgError::Value(name));
+                }
+                set(&mut control_fd_env, name, value.clone())?
+            }
+            PEER_CONTEXT => {
+                if !valid_selinux_type(value) {
+                    return Err(ArgError::Value(name));
+                }
+                set(&mut peer_context, name, value.clone())?
+            }
             MEMORY_MAX => set(&mut memory_max, name, digits(name, value)?)?,
             PEER_UID => {
                 let uid = u32::try_from(digits(name, value)?).map_err(|_| ArgError::Value(name))?;
@@ -109,15 +158,26 @@ pub fn parse_args(args: &[String]) -> Result<Args, ArgError> {
     let state_dir = state_dir.ok_or(ArgError::Missing(STATE_DIR))?;
     let cache_dir = cache_dir.ok_or(ArgError::Missing(CACHE_DIR))?;
     let memory_max = memory_max?;
-    let control = control.ok_or(ArgError::Missing(CONTROL))?;
-    let peer_uid = peer_uid.ok_or(ArgError::Missing(PEER_UID))?;
+    // Exactly one source of the socket and exactly one way to name the peer: both would leave it open which one counts.
+    let control = match (control, control_fd_env) {
+        (Some(path), None) => ControlSource::Path(path),
+        (None, Some(var)) => ControlSource::InheritedFd(var),
+        (Some(_), Some(_)) => return Err(ArgError::Duplicate(CONTROL)),
+        (None, None) => return Err(ArgError::Missing(CONTROL)),
+    };
+    let peer = match (peer_uid, peer_context) {
+        (Some(uid), None) => Peer::Uid(uid),
+        (None, Some(t)) => Peer::Context(t),
+        (Some(_), Some(_)) => return Err(ArgError::Duplicate(PEER_UID)),
+        (None, None) => return Err(ArgError::Missing(PEER_UID)),
+    };
     let memory_max = validate_memory_max(memory_max).map_err(|_| ArgError::MemoryMax)?;
     Ok(Args {
         state_dir,
         cache_dir,
         memory_max,
         control,
-        peer_uid,
+        peer,
         device: device.unwrap_or_else(|| DEFAULT_DEVICE.into()),
         disable_fs_permission_checks: no_fs_checks.unwrap_or(false),
     })
@@ -140,9 +200,51 @@ mod tests {
         assert_eq!(a.state_dir, std::path::PathBuf::from("/data/s"));
         assert_eq!(a.cache_dir, std::path::PathBuf::from("/data/c"));
         assert_eq!(a.memory_max, 67108864);
-        assert_eq!(a.control, std::path::PathBuf::from("/data/ctl"));
-        assert_eq!(a.peer_uid, 1000);
+        assert_eq!(a.control, ControlSource::Path("/data/ctl".into()));
+        assert_eq!(a.peer, Peer::Uid(1000));
         assert_eq!(a.device, DEFAULT_DEVICE);
+    }
+
+    #[test]
+    fn the_service_form_names_a_socket_variable_and_an_selinux_type() {
+        let svc = |var: &str, ty: &str| {
+            v(&["--state-dir", "/s", "--cache-dir", "/c", "--memory-max", "67108864", "--control-fd-env", var, "--peer-context", ty])
+        };
+        let a = parse_args(&svc("ANDROID_SOCKET_exitd", "exit_app")).unwrap();
+        assert_eq!(a.control, ControlSource::InheritedFd("ANDROID_SOCKET_exitd".into()));
+        assert_eq!(a.peer, Peer::Context("exit_app".into()));
+        for bad in ["", "exitd", "ANDROID_SOCKET_", "ANDROID_SOCKET_a b", "ANDROID_SOCKET_a/b", "android_socket_exitd", "ANDROID_SOCKET_é"] {
+            assert_eq!(parse_args(&svc(bad, "exit_app")), Err(ArgError::Value("--control-fd-env")), "{bad:?}");
+        }
+        let long = format!("ANDROID_SOCKET_{}", "a".repeat(50));
+        assert_eq!(parse_args(&svc(&long, "exit_app")), Err(ArgError::Value("--control-fd-env")), "65 bytes");
+        assert!(parse_args(&svc(&format!("ANDROID_SOCKET_{}", "a".repeat(49)), "exit_app")).is_ok(), "64 bytes");
+        for bad in ["", "Exit_app", "1app", "exit-app", "exit app", "exit_app:s0", "u:r:exit_app", &"a".repeat(65)] {
+            assert_eq!(parse_args(&svc("ANDROID_SOCKET_exitd", bad)), Err(ArgError::Value("--peer-context")), "{bad:?}");
+        }
+        assert!(parse_args(&svc("ANDROID_SOCKET_exitd", &"a".repeat(64))).is_ok());
+    }
+
+    #[test]
+    fn the_socket_and_the_peer_each_come_from_exactly_one_option() {
+        let base = ["--state-dir", "/s", "--cache-dir", "/c", "--memory-max", "67108864"];
+        let with = |more: &[&str]| {
+            let mut a = v(&base);
+            a.extend(v(more));
+            parse_args(&a)
+        };
+        assert_eq!(with(&["--peer-uid", "1"]), Err(ArgError::Missing("--control")));
+        assert_eq!(with(&["--control", "/x"]), Err(ArgError::Missing("--peer-uid")));
+        assert_eq!(
+            with(&["--control", "/x", "--control-fd-env", "ANDROID_SOCKET_a", "--peer-uid", "1"]),
+            Err(ArgError::Duplicate("--control"))
+        );
+        assert_eq!(
+            with(&["--control", "/x", "--peer-uid", "1", "--peer-context", "exit_app"]),
+            Err(ArgError::Duplicate("--peer-uid"))
+        );
+        assert!(with(&["--control", "/x", "--peer-context", "exit_app"]).is_ok());
+        assert!(with(&["--control-fd-env", "ANDROID_SOCKET_a", "--peer-uid", "1"]).is_ok());
     }
 
     #[test]

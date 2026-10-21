@@ -4,23 +4,58 @@
 //! is too long, unknown or malformed ends the connection; the buffer never grows past one frame plus one read.
 
 use crate::control::{
-    decode_to_daemon, encode_from_daemon, validate_memory_max, DecodeError, FromDaemon, ToDaemon, MAX_FRAME,
+    decode_to_daemon, encode_from_daemon, validate_memory_max, DecodeError, ErrorCode, FromDaemon, ToDaemon, MAX_FRAME,
+    PROTOCOL_VERSION,
 };
+use crate::policy::{Policy, SharedPolicy};
 use crate::scaffolding::ExitScaffolding;
-use crate::sockdiag::peer_uid as socket_peer_uid;
+use crate::sockdiag::{
+    listener_from_fd, peer_context as socket_peer_context, peer_uid as socket_peer_uid,
+};
 use std::io::{self, Read, Write};
 use std::os::fd::AsFd;
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
+use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
-/// The only protocol version this daemon speaks.
-pub const PROTOCOL_VERSION: u8 = 1;
 /// A peer that sends nothing for this long is dropped; one that does not take a reply within `WRITE_TIMEOUT` too.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 const READ_CHUNK: usize = 512;
+
+/// What the daemon answers to one message: the frames to write, in order, and whether the connection ends after them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+    pub msgs: Vec<FromDaemon>,
+    pub close: bool,
+}
+
+impl Reply {
+    fn one(m: FromDaemon) -> Self {
+        Self { msgs: vec![m], close: false }
+    }
+
+    fn closing(m: FromDaemon) -> Self {
+        Self { msgs: vec![m], close: true }
+    }
+
+    fn ack(seq: u8) -> Self {
+        Self::one(FromDaemon::Ack { seq })
+    }
+
+    fn error(seq: u8, code: ErrorCode) -> Self {
+        Self::one(FromDaemon::Error { seq, code })
+    }
+
+    fn result(seq: u8, r: Result<(), ErrorCode>) -> Self {
+        match r {
+            Ok(()) => Self::ack(seq),
+            Err(code) => Self::error(seq, code),
+        }
+    }
+}
 
 /// What the daemon does with each message of the peer.
 pub struct Control {
@@ -28,15 +63,21 @@ pub struct Control {
     iface: String,
     memory_max: u64,
     shutdown: bool,
+    policy: SharedPolicy,
 }
 
 impl Control {
     pub fn new(scaffolding: ExitScaffolding, iface: String, memory_max: u64) -> Self {
-        Self { scaffolding, iface, memory_max, shutdown: false }
+        Self::with_policy(scaffolding, iface, memory_max, Arc::new(RwLock::new(Policy::default())))
+    }
+
+    /// Like [`Control::new`], with the policy table that the packet path reads too.
+    pub fn with_policy(scaffolding: ExitScaffolding, iface: String, memory_max: u64, policy: SharedPolicy) -> Self {
+        Self { scaffolding, iface, memory_max, shutdown: false, policy }
     }
 
     /// The memory quota the daemon will use the next time it builds its configuration. Applying a new value to a
-    /// running Arti and keeping it across a restart belong to the service definition (milestone 3).
+    /// running Arti and keeping it across a restart belong to the service definition.
     pub fn memory_max(&self) -> u64 {
         self.memory_max
     }
@@ -45,34 +86,45 @@ impl Control {
         self.shutdown
     }
 
-    fn state(&self) -> Option<FromDaemon> {
-        Some(FromDaemon::State { state: self.scaffolding.state() })
+    pub fn policy(&self) -> SharedPolicy {
+        self.policy.clone()
     }
 
-    pub fn handle(&mut self, m: ToDaemon) -> Option<FromDaemon> {
+    pub fn handle(&mut self, m: ToDaemon) -> Reply {
         match m {
             ToDaemon::Hello { version } if version == PROTOCOL_VERSION => {
-                Some(FromDaemon::Ready { iface: self.iface.clone() })
+                Reply::one(FromDaemon::Ready { version: PROTOCOL_VERSION, iface: self.iface.clone() })
             }
-            // A peer of another version gets no Ready, so it cannot mistake this daemon for one it understands.
-            ToDaemon::Hello { .. } => None,
-            ToDaemon::SetMemoryMax { bytes } => {
-                if let Ok(valid) = validate_memory_max(bytes) {
+            // A peer of another version learns that at once and the connection ends, so it cannot go on speaking a
+            // protocol this daemon does not understand.
+            ToDaemon::Hello { .. } => Reply::closing(FromDaemon::Error { seq: 0, code: ErrorCode::Unsupported }),
+            ToDaemon::SetMemoryMax { seq, bytes } => match validate_memory_max(bytes) {
+                Ok(valid) => {
                     self.memory_max = valid;
+                    Reply::ack(seq)
                 }
-                self.state()
-            }
-            ToDaemon::RefreshApp { uid } => {
+                Err(_) => Reply::error(seq, ErrorCode::BadValue),
+            },
+            ToDaemon::RefreshApp { seq, uid } => {
                 self.scaffolding.refresh_app(uid);
-                self.state()
+                Reply::ack(seq)
             }
-            ToDaemon::RefreshAll => {
+            ToDaemon::RefreshAll { seq } => {
                 self.scaffolding.refresh_all();
-                self.state()
+                Reply::ack(seq)
             }
-            ToDaemon::Shutdown => {
+            ToDaemon::Shutdown { seq } => {
                 self.shutdown = true;
-                None
+                Reply::closing(FromDaemon::Ack { seq })
+            }
+            ToDaemon::GetState { .. } => Reply::one(FromDaemon::State { state: self.scaffolding.state() }),
+            ToDaemon::SetPolicy { seq, classes } => {
+                let mut p = self.policy.write().unwrap_or_else(PoisonError::into_inner);
+                Reply::result(seq, p.set_classes(classes))
+            }
+            ToDaemon::SetOverrides { seq, uid, companies } => {
+                let mut p = self.policy.write().unwrap_or_else(PoisonError::into_inner);
+                Reply::result(seq, p.set_overrides(uid, companies))
             }
         }
     }
@@ -102,29 +154,107 @@ fn invalid(e: DecodeError) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, format!("control frame: {e:?}"))
 }
 
-/// Serves one connection until the peer closes it, sends `Shutdown` or sends something invalid.
-pub fn serve(
-    mut stream: UnixStream,
-    peer_uid: u32,
-    mut on_message: impl FnMut(ToDaemon) -> Option<FromDaemon>,
-) -> io::Result<()> {
-    if socket_peer_uid(stream.as_fd())? != peer_uid {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "control peer has the wrong uid"));
+/// Who may talk to the daemon. Production uses the SELinux type of the exit app (`Context`), because a platform app gets
+/// its uid at install time; a uid is for the runs on a phone as root and for the tests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Auth {
+    Uid(u32),
+    /// The SELinux type (for example `exit_app`) that the peer's context must have.
+    Context(String),
+}
+
+/// True when `ctx` is a context `u:r:<want>:...` of the given type. The level and categories after the type are not
+/// compared; the user and role must be the ones of Android's single-user policy. A type that only starts with `want`,
+/// an empty field or a missing field does not match.
+pub fn context_has_type(ctx: &str, want: &str) -> bool {
+    let mut fields = ctx.split(':');
+    matches!((fields.next(), fields.next(), fields.next()), (Some("u"), Some("r"), Some(t)) if t == want && !want.is_empty())
+}
+
+fn denied(why: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::PermissionDenied, why)
+}
+
+/// The uid decision: the peer is accepted only when its uid was read and is the wanted one.
+fn check_uid(got: io::Result<u32>, want: u32) -> io::Result<()> {
+    match got {
+        Ok(uid) if uid == want => Ok(()),
+        Ok(_) => Err(denied("control peer has the wrong uid")),
+        Err(_) => Err(denied("control peer uid unknown")),
     }
+}
+
+/// The context decision: accepted only when the context was read and has the wanted type.
+fn check_context(got: io::Result<String>, want: &str) -> io::Result<()> {
+    match got {
+        Ok(ctx) if context_has_type(&ctx, want) => Ok(()),
+        Ok(_) => Err(denied("control peer has the wrong SELinux context")),
+        Err(_) => Err(denied("control peer context unknown")),
+    }
+}
+
+/// The check `serve` makes before it reads a byte. Every failure to learn who the peer is counts as a refusal.
+pub(crate) fn check_peer(stream: &UnixStream, auth: &Auth) -> io::Result<()> {
+    match auth {
+        Auth::Uid(want) => check_uid(socket_peer_uid(stream.as_fd()), *want),
+        Auth::Context(want) => check_context(socket_peer_context(stream.as_fd()), want),
+    }
+}
+
+/// The listening socket that `init` created for this service: the descriptor number is in the environment variable
+/// `var` (`ANDROID_SOCKET_<name>`). Nothing is created or removed on disk.
+pub fn inherited_control(var: &str) -> io::Result<UnixListener> {
+    let value = std::env::var(var).map_err(|_| io::Error::new(io::ErrorKind::NotFound, "control socket variable not set"))?;
+    // Plain decimal digits only, as for the command line.
+    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "control socket variable is not a number"));
+    }
+    let raw: i32 = value.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "control socket number out of range"))?;
+    listener_from_fd(raw)
+}
+
+/// Serves one connection until the peer closes it, sends `Shutdown` or sends something invalid.
+pub fn serve(stream: UnixStream, auth: &Auth, on_message: impl FnMut(ToDaemon) -> Reply) -> io::Result<()> {
+    serve_checked(stream, |s| check_peer(s, auth), on_message)
+}
+
+/// [`serve`] with the peer check passed in, so that a test can stand in for a peer whose SELinux context it cannot set.
+pub(crate) fn serve_checked(
+    stream: UnixStream,
+    check: impl FnOnce(&UnixStream) -> io::Result<()>,
+    mut on_message: impl FnMut(ToDaemon) -> Reply,
+) -> io::Result<()> {
+    serve_framed(stream, check, decode_to_daemon, encode_from_daemon, |m| {
+        let r = on_message(m);
+        (r.msgs, r.close)
+    })
+}
+
+/// The connection loop that both control sockets use (the daemon's and the route helper's): check the peer before a byte
+/// is read, read frames into a buffer that never grows past one frame plus one read, answer each frame in order, and end
+/// on a frame the handler marks as the last, on the peer's close, or on a frame that does not decode.
+pub(crate) fn serve_framed<M, R>(
+    mut stream: UnixStream,
+    check: impl FnOnce(&UnixStream) -> io::Result<()>,
+    decode: fn(&[u8]) -> Result<(M, usize), DecodeError>,
+    encode: fn(&R) -> Vec<u8>,
+    mut on_message: impl FnMut(M) -> (Vec<R>, bool),
+) -> io::Result<()> {
+    check(&stream)?;
     stream.set_read_timeout(Some(IDLE_TIMEOUT))?;
     stream.set_write_timeout(Some(WRITE_TIMEOUT))?;
     let mut buf: Vec<u8> = Vec::with_capacity(4 + MAX_FRAME + READ_CHUNK);
     let mut chunk = [0u8; READ_CHUNK];
     loop {
         loop {
-            match decode_to_daemon(&buf) {
+            match decode(&buf) {
                 Ok((msg, used)) => {
                     buf.drain(..used);
-                    let shutdown = matches!(msg, ToDaemon::Shutdown);
-                    if let Some(reply) = on_message(msg) {
-                        stream.write_all(&encode_from_daemon(&reply))?;
+                    let (replies, close) = on_message(msg);
+                    for m in &replies {
+                        stream.write_all(&encode(m))?;
                     }
-                    if shutdown {
+                    if close {
                         return Ok(());
                     }
                 }
@@ -146,12 +276,12 @@ pub fn serve(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::control::{
-        decode_from_daemon, encode_to_daemon, DaemonState, DecodeError, FromDaemon, ToDaemon, MAX_FRAME,
+        decode_from_daemon, encode_to_daemon, DaemonState, DecodeError, ErrorCode, FromDaemon, Kind, ToDaemon, UidClass,
+        MAX_FRAME,
     };
     use crate::scaffolding::ExitScaffolding;
     use std::io::{ErrorKind, Read, Write};
@@ -179,7 +309,7 @@ mod tests {
         let (server, client) = UnixStream::pair().unwrap();
         client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         let mut c = control();
-        let h = thread::spawn(move || serve(server, peer_uid, |m| c.handle(m)));
+        let h = thread::spawn(move || serve(server, &Auth::Uid(peer_uid), |m| c.handle(m)));
         (client, h)
     }
 
@@ -215,7 +345,7 @@ mod tests {
     fn a_peer_with_the_expected_uid_gets_ready_for_hello() {
         let (mut client, h) = start(my_uid());
         client.write_all(&encode_to_daemon(&ToDaemon::Hello { version: PROTOCOL_VERSION })).unwrap();
-        assert_eq!(read_reply(&mut client), FromDaemon::Ready { iface: "exit0".into() });
+        assert_eq!(read_reply(&mut client), FromDaemon::Ready { version: PROTOCOL_VERSION, iface: "exit0".into() });
         drop(client);
         assert!(h.join().unwrap().is_ok(), "an orderly close of the peer ends serve without error");
     }
@@ -226,6 +356,121 @@ mod tests {
         let e = h.join().unwrap().unwrap_err();
         assert_eq!(e.kind(), ErrorKind::PermissionDenied);
         assert!(sees_eof(&mut client), "no reply of any kind");
+    }
+
+    #[test]
+    fn a_context_is_matched_on_user_role_and_type_only() {
+        assert!(context_has_type("u:r:exit_app:s0", "exit_app"));
+        assert!(context_has_type("u:r:exit_app:s0:c512,c768", "exit_app"));
+        assert!(context_has_type("u:r:exit_app", "exit_app"), "the level is not compared");
+        assert!(!context_has_type("u:r:exit_app_x:s0", "exit_app"), "a longer type is another type");
+        assert!(!context_has_type("u:r:exit:s0", "exit_app"));
+        assert!(!context_has_type("u:r:platform_app:s0", "exit_app"));
+        assert!(!context_has_type("u:object_r:exit_app:s0", "exit_app"), "a file type is not a process domain");
+        assert!(!context_has_type("x:r:exit_app:s0", "exit_app"));
+        assert!(!context_has_type("u:exit_app:s0", "exit_app"), "a missing role");
+        assert!(!context_has_type("u:r:", "exit_app"));
+        assert!(!context_has_type("u:r", "exit_app"));
+        assert!(!context_has_type("", "exit_app"));
+        assert!(!context_has_type("exit_app", "exit_app"));
+        assert!(!context_has_type("u:r:exit_app\0:s0", "exit_app"), "a NUL inside the type");
+        assert!(!context_has_type(" u:r:exit_app:s0", "exit_app"));
+        assert!(!context_has_type("u:r::s0", ""), "an empty wanted type never matches");
+        assert!(!context_has_type("", ""));
+    }
+
+    #[test]
+    fn the_uid_decision_accepts_only_a_uid_that_was_read_and_matches() {
+        assert!(check_uid(Ok(1000), 1000).is_ok());
+        assert_eq!(check_uid(Ok(1001), 1000).unwrap_err().kind(), ErrorKind::PermissionDenied);
+        assert_eq!(check_uid(Ok(0), 1000).unwrap_err().kind(), ErrorKind::PermissionDenied);
+        assert_eq!(check_uid(Err(ErrorKind::Other.into()), 1000).unwrap_err().kind(), ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn the_context_decision_accepts_only_a_context_that_was_read_and_has_the_type() {
+        assert!(check_context(Ok("u:r:exit_app:s0:c1,c2".into()), "exit_app").is_ok());
+        for bad in ["u:r:platform_app:s0", "u:r:exit_app_x:s0", "", "u:r:system_app:s0"] {
+            assert_eq!(check_context(Ok(bad.into()), "exit_app").unwrap_err().kind(), ErrorKind::PermissionDenied, "{bad:?}");
+        }
+        let unreadable = io::Error::from_raw_os_error(libc::ENOPROTOOPT);
+        assert_eq!(check_context(Err(unreadable), "exit_app").unwrap_err().kind(), ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn a_peer_the_check_refuses_gets_nothing_and_nothing_is_read() {
+        let (server, mut client) = UnixStream::pair().unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        // A frame that would be an error if it were read.
+        client.write_all(&[0xff; 4]).unwrap();
+        let h = thread::spawn(move || {
+            serve_checked(server, |_| Err(io::Error::new(ErrorKind::PermissionDenied, "no")), |_| unreachable!("a refused peer"))
+        });
+        assert_eq!(h.join().unwrap().unwrap_err().kind(), ErrorKind::PermissionDenied);
+        assert!(sees_eof(&mut client));
+    }
+
+    #[test]
+    fn the_context_check_fails_closed_when_the_context_cannot_be_read() {
+        // A socket pair of this process: on a kernel without SELinux the read fails, on one with it the context is not
+        // the exit app's. Either way the peer is refused before a byte is read.
+        let (server, mut client) = UnixStream::pair().unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        client.write_all(&[0xff; 4]).unwrap();
+        let h = thread::spawn(move || serve(server, &Auth::Context("exit_app".into()), |_| unreachable!("a refused peer")));
+        assert_eq!(h.join().unwrap().unwrap_err().kind(), ErrorKind::PermissionDenied);
+        assert!(sees_eof(&mut client));
+    }
+
+    #[test]
+    fn the_uid_check_names_the_refusal_as_permission_denied() {
+        let (server, _client) = UnixStream::pair().unwrap();
+        let e = serve(server, &Auth::Uid(my_uid().wrapping_add(1)), |_| unreachable!("a refused peer")).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn a_listening_socket_from_init_is_taken_over() {
+        use std::os::fd::IntoRawFd;
+        let d = sockdir("inherit");
+        let l = std::os::unix::net::UnixListener::bind(d.join("ctl")).unwrap();
+        let var = "EXITD_TEST_FD_OK";
+        std::env::set_var(var, l.into_raw_fd().to_string());
+        let inherited = inherited_control(var).unwrap();
+        let _client = UnixStream::connect(d.join("ctl")).unwrap();
+        assert!(inherited.accept().is_ok());
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_descriptor_that_is_not_a_listening_unix_socket_is_refused() {
+        use std::os::fd::AsRawFd;
+        let d = sockdir("notlisten");
+        let check = |var: &str, raw: i32| {
+            std::env::set_var(var, raw.to_string());
+            inherited_control(var).unwrap_err().kind()
+        };
+        let file = std::fs::File::open("/dev/null").unwrap();
+        check("EXITD_TEST_FD_FILE", file.as_raw_fd()); // a regular file: not a socket, whatever the error kind
+        let (a, _b) = UnixStream::pair().unwrap();
+        assert_eq!(check("EXITD_TEST_FD_STREAM", a.as_raw_fd()), ErrorKind::InvalidInput, "connected, not listening");
+        let tcp = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        assert_eq!(check("EXITD_TEST_FD_TCP", tcp.as_raw_fd()), ErrorKind::InvalidInput, "not a Unix socket");
+        let dgram = std::os::unix::net::UnixDatagram::bind(d.join("dg")).unwrap();
+        assert_eq!(check("EXITD_TEST_FD_DGRAM", dgram.as_raw_fd()), ErrorKind::InvalidInput, "not a stream socket");
+        assert_eq!(check("EXITD_TEST_FD_LOW", 2), ErrorKind::InvalidInput, "standard streams are never taken");
+        check("EXITD_TEST_FD_CLOSED", 1_000_000); // not open
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_control_socket_variable_must_be_a_plain_number() {
+        assert_eq!(inherited_control("EXITD_TEST_FD_UNSET").unwrap_err().kind(), ErrorKind::NotFound);
+        for (i, bad) in ["", "abc", "-4", "+4", " 4", "4 ", "0x4", "4.0", "99999999999999999999"].iter().enumerate() {
+            let var = format!("EXITD_TEST_FD_BAD{i}");
+            std::env::set_var(&var, bad);
+            assert_eq!(inherited_control(&var).unwrap_err().kind(), ErrorKind::InvalidInput, "{bad:?}");
+        }
     }
 
     #[test]
@@ -254,7 +499,7 @@ mod tests {
     #[test]
     fn a_stream_that_ends_inside_a_frame_is_an_error() {
         let (mut client, h) = start(my_uid());
-        client.write_all(&encode_to_daemon(&ToDaemon::SetMemoryMax { bytes: 1 })[..6]).unwrap();
+        client.write_all(&encode_to_daemon(&ToDaemon::SetMemoryMax { seq: 1, bytes: 1 })[..6]).unwrap();
         drop(client);
         assert_eq!(h.join().unwrap().unwrap_err().kind(), ErrorKind::UnexpectedEof);
     }
@@ -266,7 +511,7 @@ mod tests {
             client.write_all(&[b]).unwrap();
             thread::sleep(Duration::from_millis(2));
         }
-        assert_eq!(read_reply(&mut client), FromDaemon::Ready { iface: "exit0".into() });
+        assert_eq!(read_reply(&mut client), FromDaemon::Ready { version: PROTOCOL_VERSION, iface: "exit0".into() });
         drop(client);
         assert!(h.join().unwrap().is_ok());
     }
@@ -275,10 +520,10 @@ mod tests {
     fn two_frames_in_one_write_get_two_replies_in_order() {
         let (mut client, h) = start(my_uid());
         let mut both = encode_to_daemon(&ToDaemon::Hello { version: PROTOCOL_VERSION });
-        both.extend(encode_to_daemon(&ToDaemon::RefreshAll));
+        both.extend(encode_to_daemon(&ToDaemon::RefreshAll { seq: 11 }));
         client.write_all(&both).unwrap();
-        assert_eq!(read_reply(&mut client), FromDaemon::Ready { iface: "exit0".into() });
-        assert_eq!(read_reply(&mut client), FromDaemon::State { state: DaemonState::Bootstrapping });
+        assert_eq!(read_reply(&mut client), FromDaemon::Ready { version: PROTOCOL_VERSION, iface: "exit0".into() });
+        assert_eq!(read_reply(&mut client), FromDaemon::Ack { seq: 11 });
         drop(client);
         assert!(h.join().unwrap().is_ok());
     }
@@ -286,10 +531,11 @@ mod tests {
     #[test]
     fn shutdown_ends_serve_and_nothing_after_it_is_read() {
         let (mut client, h) = start(my_uid());
-        let mut bytes = encode_to_daemon(&ToDaemon::Shutdown);
+        let mut bytes = encode_to_daemon(&ToDaemon::Shutdown { seq: 3 });
         bytes.extend([0xff; 4]); // would be an error if it were read
         client.write_all(&bytes).unwrap();
         assert!(h.join().unwrap().is_ok());
+        assert_eq!(read_reply(&mut client), FromDaemon::Ack { seq: 3 }, "the shutdown is acknowledged before the end");
     }
 
     #[test]
@@ -299,10 +545,26 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_another_protocol_version_gets_no_ready() {
+    fn hello_with_another_protocol_version_gets_an_error_and_the_connection_ends() {
         let mut c = control();
-        assert_eq!(c.handle(ToDaemon::Hello { version: PROTOCOL_VERSION + 1 }), None);
-        assert_eq!(c.handle(ToDaemon::Hello { version: 0 }), None);
+        let refusal = Reply { msgs: vec![FromDaemon::Error { seq: 0, code: ErrorCode::Unsupported }], close: true };
+        assert_eq!(c.handle(ToDaemon::Hello { version: PROTOCOL_VERSION + 1 }), refusal);
+        assert_eq!(c.handle(ToDaemon::Hello { version: 0 }), refusal);
+        assert_eq!(c.handle(ToDaemon::Hello { version: 1 }), refusal, "the old protocol is not spoken");
+        // Through the socket: the error arrives, then the stream ends and serve returns without an error.
+        let (mut client, h) = start(my_uid());
+        client.write_all(&encode_to_daemon(&ToDaemon::Hello { version: 1 })).unwrap();
+        assert_eq!(read_reply(&mut client), FromDaemon::Error { seq: 0, code: ErrorCode::Unsupported });
+        assert!(sees_eof(&mut client));
+        assert!(h.join().unwrap().is_ok());
+    }
+
+    #[test]
+    fn hello_of_the_current_version_gets_ready_and_keeps_the_connection() {
+        let mut c = control();
+        let r = c.handle(ToDaemon::Hello { version: PROTOCOL_VERSION });
+        assert_eq!(r.msgs, vec![FromDaemon::Ready { version: PROTOCOL_VERSION, iface: "exit0".into() }]);
+        assert!(!r.close);
     }
 
     #[test]
@@ -310,11 +572,12 @@ mod tests {
         let mut c = control();
         let before = c.memory_max();
         for bytes in [0, 1, 31 * MIB, 1024 * MIB + 1, u64::MAX] {
-            let r = c.handle(ToDaemon::SetMemoryMax { bytes });
-            assert_eq!(r, Some(FromDaemon::State { state: DaemonState::Bootstrapping }), "{bytes}");
+            let r = c.handle(ToDaemon::SetMemoryMax { seq: 5, bytes });
+            assert_eq!(r.msgs, vec![FromDaemon::Error { seq: 5, code: ErrorCode::BadValue }], "{bytes}");
             assert_eq!(c.memory_max(), before, "{bytes} changed the quota");
         }
-        c.handle(ToDaemon::SetMemoryMax { bytes: 128 * MIB });
+        let r = c.handle(ToDaemon::SetMemoryMax { seq: 6, bytes: 128 * MIB });
+        assert_eq!(r.msgs, vec![FromDaemon::Ack { seq: 6 }]);
         assert_eq!(c.memory_max(), 128 * MIB);
     }
 
@@ -324,7 +587,7 @@ mod tests {
         let s = scaffolding();
         let mut stream = Box::into_pin(onion_tunnel::TunnelScaffolding::command_stream(&s).unwrap());
         let mut c = Control::new(s, "exit0".into(), 64 * MIB);
-        c.handle(ToDaemon::RefreshApp { uid: 10231 });
+        assert_eq!(c.handle(ToDaemon::RefreshApp { seq: 8, uid: 10231 }).msgs, vec![FromDaemon::Ack { seq: 8 }]);
         match futures::executor::block_on(stream.next()) {
             Some(onion_tunnel::scaffolding::TunnelCommand::RefreshCircuitsForApp { isolation_key }) => {
                 assert_eq!(isolation_key, 10231)
@@ -337,8 +600,12 @@ mod tests {
     fn the_state_reply_follows_the_tunnel() {
         let s = scaffolding();
         let mut c = Control::new(s.clone(), "exit0".into(), 64 * MIB);
+        assert_eq!(
+            c.handle(ToDaemon::GetState { seq: 1 }).msgs,
+            vec![FromDaemon::State { state: DaemonState::Bootstrapping }]
+        );
         s.set_failed();
-        assert_eq!(c.handle(ToDaemon::RefreshAll), Some(FromDaemon::State { state: DaemonState::Failed }));
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 2 }).msgs, vec![FromDaemon::State { state: DaemonState::Failed }]);
     }
 
     /// A fresh 0700 directory for socket files.
@@ -418,7 +685,85 @@ mod tests {
     fn shutdown_is_remembered() {
         let mut c = control();
         assert!(!c.shutdown_requested());
-        assert_eq!(c.handle(ToDaemon::Shutdown), None);
+        let r = c.handle(ToDaemon::Shutdown { seq: 4 });
+        assert_eq!(r, Reply { msgs: vec![FromDaemon::Ack { seq: 4 }], close: true });
         assert!(c.shutdown_requested());
+    }
+
+    #[test]
+    fn refresh_all_is_acknowledged_with_its_own_sequence_number() {
+        let mut c = control();
+        assert_eq!(c.handle(ToDaemon::RefreshAll { seq: 77 }).msgs, vec![FromDaemon::Ack { seq: 77 }]);
+    }
+
+    fn cls(start: u32, end: u32, kind: Kind) -> UidClass {
+        UidClass { start, end, kind }
+    }
+
+    #[test]
+    fn set_policy_is_stored_and_visible_to_the_packet_path() {
+        let mut c = control();
+        let policy = c.policy();
+        let r = c.handle(ToDaemon::SetPolicy {
+            seq: 3,
+            classes: vec![cls(10000, 10230, Kind::Masked), cls(10231, 10231, Kind::Tor)],
+        });
+        assert_eq!(r.msgs, vec![FromDaemon::Ack { seq: 3 }]);
+        assert!(!r.close);
+        let p = policy.read().unwrap();
+        assert_eq!(p.kind_of(10100), Some(Kind::Masked));
+        assert_eq!(p.kind_of(10231), Some(Kind::Tor));
+        assert_eq!(p.kind_of(10232), None);
+    }
+
+    #[test]
+    fn a_refused_policy_changes_nothing_and_is_answered_with_the_code() {
+        let mut c = control();
+        c.handle(ToDaemon::SetPolicy { seq: 1, classes: vec![cls(10000, 10010, Kind::Tor)] });
+        let bad = [
+            (vec![cls(9999, 10005, Kind::Tor)], ErrorCode::BadValue),
+            (vec![cls(10010, 10009, Kind::Tor)], ErrorCode::BadValue),
+            (vec![cls(10000, 10010, Kind::Tor), cls(10010, 10020, Kind::Masked)], ErrorCode::BadValue),
+            ((0..257u32).map(|i| cls(10000 + 2 * i, 10000 + 2 * i, Kind::Tor)).collect(), ErrorCode::TooMany),
+        ];
+        for (classes, code) in bad {
+            let r = c.handle(ToDaemon::SetPolicy { seq: 9, classes });
+            assert_eq!(r.msgs, vec![FromDaemon::Error { seq: 9, code }]);
+            assert!(!r.close, "a refused request does not end the connection");
+        }
+        assert_eq!(c.policy().read().unwrap().kind_of(10005), Some(Kind::Tor));
+        assert_eq!(c.policy().read().unwrap().class_count(), 1);
+    }
+
+    #[test]
+    fn set_overrides_is_stored_and_a_refused_one_is_answered_with_the_code() {
+        let mut c = control();
+        assert_eq!(
+            c.handle(ToDaemon::SetOverrides { seq: 2, uid: 10231, companies: vec![4, 5] }).msgs,
+            vec![FromDaemon::Ack { seq: 2 }]
+        );
+        assert!(c.policy().read().unwrap().overridden(10231, 5));
+        assert_eq!(
+            c.handle(ToDaemon::SetOverrides { seq: 3, uid: 5, companies: vec![1] }).msgs,
+            vec![FromDaemon::Error { seq: 3, code: ErrorCode::BadValue }]
+        );
+        assert_eq!(
+            c.handle(ToDaemon::SetOverrides { seq: 4, uid: 10231, companies: (0..33).collect() }).msgs,
+            vec![FromDaemon::Error { seq: 4, code: ErrorCode::TooMany }]
+        );
+        assert!(c.policy().read().unwrap().overridden(10231, 5), "the refused list left the old one");
+    }
+
+    #[test]
+    fn a_policy_over_the_socket_is_acknowledged() {
+        let (mut client, h) = start(my_uid());
+        client
+            .write_all(&encode_to_daemon(&ToDaemon::SetPolicy { seq: 21, classes: vec![cls(10000, 19999, Kind::Masked)] }))
+            .unwrap();
+        assert_eq!(read_reply(&mut client), FromDaemon::Ack { seq: 21 });
+        client.write_all(&encode_to_daemon(&ToDaemon::GetState { seq: 22 })).unwrap();
+        assert_eq!(read_reply(&mut client), FromDaemon::State { state: DaemonState::Bootstrapping });
+        drop(client);
+        assert!(h.join().unwrap().is_ok());
     }
 }

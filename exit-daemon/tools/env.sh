@@ -8,6 +8,7 @@
 # Host-side build scripts and proc macros link with the same clang against the AOSP glibc 2.17 sysroot.
 #   AOSP_TREE  default /srv/freeholdos/platform-primary      AOSP_OUT  default out-lynx (must hold a finished build)
 #   EXIT_WORK  default /srv/freeholdos/exit-daemon-work      (source copy, cargo home, target directories)
+#   EXIT_CARGO_HOME  default $EXIT_WORK/cargo-home    (a second work directory can share the downloaded crates)
 # -Qunused-arguments: compile-only calls (aws-lc-sys builds with -Werror) would otherwise fail on -fuse-ld.
 # Nothing here is deleted: links are replaced in place.
 T="${AOSP_TREE:-/srv/freeholdos/platform-primary}"
@@ -45,7 +46,7 @@ EOT
 chmod +x "$WORK/toolchain/android-clang" "$WORK/toolchain/host-clang"
 
 export PATH="$T/prebuilts/rust-toolchain/linux-x86/1.93.1/bin:$PATH"
-export CARGO_HOME="$WORK/cargo-home" CARGO_INCREMENTAL=0
+export CARGO_HOME="${EXIT_CARGO_HOME:-$WORK/cargo-home}" CARGO_INCREMENTAL=0
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$WORK/toolchain/android-clang"
 # rustc links with -nodefaultlibs, so the compiler runtime must be named: the C code of aws-lc-sys is compiled with outline
 # atomics and calls __aarch64_cas4_acq_rel and its siblings, which only libclang_rt.builtins provides.

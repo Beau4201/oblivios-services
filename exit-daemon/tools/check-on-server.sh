@@ -7,13 +7,20 @@
 #   EXIT_SRC         the source directory to test (default: the exit-daemon/ next to tools/); the mutation runner
 #                    points it at a mutated copy
 #   arguments        passed to `cargo test`, e.g. a test name filter such as `control::`
-# The whole workspace is tested: the vendored crates and their patches are part of what ships.
+# The whole workspace is tested: the vendored crates and their patches are part of what ships. EXIT_ONLY_DAEMON=1 tests only
+# the daemon's own crate (the mutation runner uses it for a mutation of the daemon's own sources, where the vendored tests
+# cannot be affected).
 # One run at a time (flock on the server).
 set -o errexit -o nounset -o pipefail
 WORK="${EXIT_WORK:-/srv/freeholdos/exit-daemon-work}"
 
 if [[ "${EXIT_REMOTE:-}" != 1 ]]; then
   : "${EXIT_BUILD_SSH:?set EXIT_BUILD_SSH=user@host}"
+  # One run at a time from this workstation, taken BEFORE the copy: the copy replaces the whole work directory on the
+  # server, so a second run (a mutation run and a test run, say) would otherwise overwrite the source that the first one
+  # is compiling, and a mutation could be judged against the wrong code. The lock on the server (below) stays.
+  exec 8> "${EXIT_LOCAL_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/exit-daemon-check.lock}"
+  flock 8
   SRC="${EXIT_SRC:-$(cd "$(dirname "$0")/.." && pwd)}"
   [[ -f "$SRC/Cargo.toml" ]] || { echo "no Cargo.toml in $SRC" >&2; exit 2; }
   ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "mkdir -p $WORK/src"
@@ -23,7 +30,7 @@ if [[ "${EXIT_REMOTE:-}" != 1 ]]; then
   # keep using the stale build (found after the first mutation run).
   rsync -rlpgoD --checksum --delete --exclude target --exclude .git -e "ssh -o BatchMode=yes" "$SRC"/ "$EXIT_BUILD_SSH:$WORK/src/"
   printf -v ARGS ' %q' "$@"
-  exec ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "EXIT_REMOTE=1 EXIT_WORK=$WORK bash $WORK/src/tools/check-on-server.sh$ARGS"
+  exec ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "EXIT_REMOTE=1 EXIT_WORK=$WORK EXIT_ONLY_DAEMON=${EXIT_ONLY_DAEMON:-0} EXIT_CARGO_HOME=${EXIT_CARGO_HOME:-} EXIT_TARGET=${EXIT_TARGET:-} bash $WORK/src/tools/check-on-server.sh$ARGS"
 fi
 
 exec 9> "$WORK/check.lock"
@@ -37,7 +44,8 @@ if [[ ! -d "$CARGO_HOME/registry" ]]; then
   cargo fetch --locked
 fi
 set +o errexit
-cargo test --locked --offline --workspace --target-dir "$WORK/target-test" "$@" 2>&1 | tee "$LOG"
+if [[ "${EXIT_ONLY_DAEMON:-0}" == 1 ]]; then scope=(-p exit-daemon); else scope=(--workspace); fi
+cargo test --locked --offline "${scope[@]}" --target-dir "${EXIT_TARGET:-$WORK/target-test}" "$@" 2>&1 | tee "$LOG"
 rc=${PIPESTATUS[0]}
 set -o errexit
 if [[ $rc -ne 0 ]]; then

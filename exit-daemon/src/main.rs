@@ -2,11 +2,11 @@
 //! `exitd`: the exit daemon of Compartments (ADR-184). It prints fixed messages only, never a destination, a host name or
 //! a value it was given. Status 2: the command line was refused. Status 1: it could not start or the tunnel stopped.
 
-use exit_daemon::args::{parse_args, Args};
+use exit_daemon::args::{parse_args, Args, ControlSource, Peer};
 use exit_daemon::config::{tunnel_config, DaemonConfig};
 use exit_daemon::control::DaemonState;
 use exit_daemon::scaffolding::ExitScaffolding;
-use exit_daemon::server::{bind_control, serve, Control};
+use exit_daemon::server::{bind_control, inherited_control, serve, Auth, Control};
 use exit_daemon::sockdiag;
 use onion_tunnel::OnionTunnel;
 use std::os::unix::net::UnixListener;
@@ -39,7 +39,7 @@ fn main() -> ExitCode {
 
 /// Listens on the control socket. One connection at a time; a connection that ends in an error is dropped and the next
 /// one is accepted. Returns after a peer asked for shutdown.
-fn control_loop(listener: UnixListener, peer_uid: u32, control: Arc<Mutex<Control>>, shutdown: Arc<Notify>) {
+fn control_loop(listener: UnixListener, auth: Auth, control: Arc<Mutex<Control>>, shutdown: Arc<Notify>) {
     for stream in listener.incoming() {
         let Ok(stream) = stream else {
             // A persistent accept error (no descriptors left) must not become a busy loop.
@@ -47,7 +47,7 @@ fn control_loop(listener: UnixListener, peer_uid: u32, control: Arc<Mutex<Contro
             continue;
         };
         let handler = control.clone();
-        let _ = serve(stream, peer_uid, |m| handler.lock().unwrap_or_else(PoisonError::into_inner).handle(m));
+        let _ = serve(stream, &auth, |m| handler.lock().unwrap_or_else(PoisonError::into_inner).handle(m));
         if control.lock().unwrap_or_else(PoisonError::into_inner).shutdown_requested() {
             shutdown.notify_one();
             return;
@@ -82,11 +82,19 @@ fn run(a: Args) -> Result<(), &'static str> {
             .await
             .map_err(|_| "tunnel could not be created")?;
 
-        let listener = bind_control(&a.control).map_err(|_| "control socket could not be created")?;
+        let listener = match &a.control {
+            ControlSource::Path(path) => bind_control(path),
+            ControlSource::InheritedFd(var) => inherited_control(var),
+        }
+        .map_err(|_| "control socket could not be created")?;
+        let auth = match &a.peer {
+            Peer::Uid(uid) => Auth::Uid(*uid),
+            Peer::Context(t) => Auth::Context(t.clone()),
+        };
         let control = Arc::new(Mutex::new(Control::new(scaffolding.clone(), a.device.clone(), a.memory_max)));
         let shutdown = Arc::new(Notify::new());
-        let (peer_uid, notify) = (a.peer_uid, shutdown.clone());
-        std::thread::spawn(move || control_loop(listener, peer_uid, control, notify));
+        let notify = shutdown.clone();
+        std::thread::spawn(move || control_loop(listener, auth, control, notify));
 
         // One fixed line when the tunnel is up: the device scripts and the service wait for it. Nothing else is printed.
         let watch = scaffolding.clone();

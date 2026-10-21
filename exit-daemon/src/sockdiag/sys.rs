@@ -91,3 +91,78 @@ pub fn peer_uid(fd: BorrowedFd<'_>) -> io::Result<u32> {
     }
     Ok(cred.uid)
 }
+
+/// The longest SELinux context this module reads. A real one is about 40 bytes; a longer answer is refused.
+const CONTEXT_MAX: usize = 256;
+
+/// The SELinux context of the process on the other end of a connected Unix socket (`SO_PEERSEC`), without the NUL that
+/// the kernel appends. A kernel without SELinux answers with an error, which the caller must treat as a refusal.
+pub fn peer_context(fd: BorrowedFd<'_>) -> io::Result<String> {
+    let mut buf = [0u8; CONTEXT_MAX];
+    let mut len = buf.len() as libc::socklen_t;
+    // SAFETY: the pointers describe `buf` and `len`, which outlive the call; `len` tells the kernel the room it has.
+    cvt(unsafe { libc::getsockopt(fd.as_raw_fd(), libc::SOL_SOCKET, libc::SO_PEERSEC, buf.as_mut_ptr().cast(), &mut len) })?;
+    context_from(&buf, len as usize)
+}
+
+/// The context text in the first `len` bytes of `buf`: the kernel counts the trailing NUL in `len`, the text does not.
+fn context_from(buf: &[u8], len: usize) -> io::Result<String> {
+    let got = buf
+        .get(..len)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "SO_PEERSEC length out of range"))?;
+    let got = got.strip_suffix(&[0]).unwrap_or(got);
+    String::from_utf8(got.to_vec()).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "SO_PEERSEC is not UTF-8"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::context_from;
+
+    #[test]
+    fn the_context_loses_the_nul_the_kernel_counts() {
+        assert_eq!(context_from(b"u:r:exit_app:s0\0\0\0", 16).unwrap(), "u:r:exit_app:s0");
+        assert_eq!(context_from(b"u:r:exit_app:s0", 15).unwrap(), "u:r:exit_app:s0", "no NUL to strip");
+        assert_eq!(context_from(b"abc\0", 4).unwrap(), "abc");
+        assert_eq!(context_from(b"", 0).unwrap(), "");
+        assert_eq!(context_from(b"\0", 1).unwrap(), "");
+    }
+
+    #[test]
+    fn a_length_beyond_the_buffer_or_bytes_that_are_not_text_are_refused() {
+        assert!(context_from(b"abc", 4).is_err());
+        assert!(context_from(&[], 1).is_err());
+        assert!(context_from(&[0xff, 0xfe, 0], 3).is_err());
+    }
+
+    #[test]
+    fn only_the_first_len_bytes_count() {
+        assert_eq!(context_from(b"abcdef", 3).unwrap(), "abc");
+    }
+}
+
+/// Takes over a listening Unix socket that `init` created for this service (`socket <name> stream ...` in the rc file)
+/// and handed down as descriptor `raw`. The descriptor is touched only after it is shown to be a listening Unix socket
+/// (a datagram socket never listens); a number below 3 (standard streams) is refused outright.
+pub fn listener_from_fd(raw: i32) -> io::Result<std::os::unix::net::UnixListener> {
+    use std::os::unix::net::UnixListener;
+    if raw < 3 {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "descriptor below 3"));
+    }
+    let get = |opt: libc::c_int| -> io::Result<libc::c_int> {
+        let mut v: libc::c_int = 0;
+        let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+        // SAFETY: the pointers describe `v` and `len`, which outlive the call; an unopened `raw` is an EBADF error.
+        cvt(unsafe { libc::getsockopt(raw, libc::SOL_SOCKET, opt, (&mut v as *mut libc::c_int).cast(), &mut len) })?;
+        Ok(v)
+    };
+    let not_ours = |what: &'static str| io::Error::new(io::ErrorKind::InvalidInput, what);
+    if get(libc::SO_DOMAIN)? != libc::AF_UNIX {
+        return Err(not_ours("descriptor is not a Unix socket"));
+    }
+    if get(libc::SO_ACCEPTCONN)? != 1 {
+        return Err(not_ours("descriptor is not listening"));
+    }
+    // SAFETY: `raw` is an open descriptor that `init` passed to this process for this purpose and that nothing else in
+    // the process owns; the checks above show that it is a listening Unix stream socket.
+    Ok(unsafe { UnixListener::from_raw_fd(raw) })
+}

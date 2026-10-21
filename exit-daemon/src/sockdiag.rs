@@ -178,6 +178,16 @@ pub fn peer_uid(fd: std::os::fd::BorrowedFd<'_>) -> io::Result<u32> {
     sys::peer_uid(fd)
 }
 
+/// The SELinux context of the process on the other end of a connected Unix socket (`SO_PEERSEC`).
+pub fn peer_context(fd: std::os::fd::BorrowedFd<'_>) -> io::Result<String> {
+    sys::peer_context(fd)
+}
+
+/// A listening Unix socket that `init` handed down as descriptor `raw` (see `sys::listener_from_fd`).
+pub fn listener_from_fd(raw: i32) -> io::Result<std::os::unix::net::UnixListener> {
+    sys::listener_from_fd(raw)
+}
+
 /// The uid that owns the socket with this local and remote end, `Ok(None)` when the kernel knows no such socket.
 pub fn owner_uid(proto: Proto, local: SocketAddr, remote: SocketAddr) -> io::Result<Option<u32>> {
     let request = build_request(proto, local, remote)?;
