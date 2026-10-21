@@ -244,6 +244,15 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
         DnsDecision::Tor
     }
 
+    /// Whether the app with this isolation key may ask one more DNS question now (FreeholdOS patch 0004). A question that
+    /// is not allowed is answered with SERVFAIL. Upstream has one limit for all apps together and then drops every
+    /// question for the rest of the window; with every app's DNS passing here, that would silence the whole phone because of
+    /// one app. The default allows everything.
+    fn dns_allow(&self, isolation_key: u64) -> bool {
+        let _ = isolation_key;
+        true
+    }
+
     /// Return a country code to be used for a connection, in order to make it appear to the
     /// destination that the traffic is coming from somewhere in the given country.
     ///

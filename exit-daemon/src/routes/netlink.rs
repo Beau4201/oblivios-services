@@ -287,10 +287,8 @@ pub fn messages(buf: &[u8]) -> Result<Vec<Msg<'_>>, NlError> {
     while at < buf.len() {
         let head = buf.get(at..at + NLMSG_HDR).ok_or(NlError::Truncated)?;
         let len = ne_u32(&head[0..4])? as usize;
-        if len < NLMSG_HDR {
-            return Err(NlError::BadLength);
-        }
         let end = at.checked_add(len).ok_or(NlError::BadLength)?;
+        // A length below the header's own size makes `at + NLMSG_HDR..end` an empty-or-reversed range, which `get` refuses.
         let payload = buf.get(at + NLMSG_HDR..end).ok_or(NlError::BadLength)?;
         out.push(Msg { kind: ne_u16(&head[4..6])?, seq: ne_u32(&head[8..12])?, payload });
         at = at.checked_add(align4(len)).ok_or(NlError::BadLength)?;
@@ -313,11 +311,9 @@ fn attrs(mut b: &[u8]) -> Result<Vec<(u16, &[u8])>, NlError> {
     while !b.is_empty() {
         let head = b.get(..4).ok_or(NlError::Truncated)?;
         let len = ne_u16(&head[0..2])? as usize;
-        if len < 4 {
-            return Err(NlError::BadLength);
-        }
-        // The nested and byte-order flags live in the top bits of the type.
-        let kind = ne_u16(&head[2..4])? & 0x3fff;
+        // The nested and byte-order flags live in the top bits of the type; an attribute that has one is not one of ours.
+        let kind = ne_u16(&head[2..4])?;
+        // A length below 4 makes `4..len` a reversed range, which `get` refuses.
         let payload = b.get(4..len).ok_or(NlError::BadLength)?;
         out.push((kind, payload));
         b = b.get(align4(len)..).unwrap_or(&[]);
@@ -767,6 +763,18 @@ mod tests {
         proto.attr_u32(FRA_PRIORITY, 13523);
         proto.attr(FRA_PROTOCOL, &[3]);
         assert_eq!(parse_rule(payload(&proto.finish())).unwrap(), None);
+    }
+
+    #[test]
+    fn an_attribute_with_a_flag_in_its_type_is_not_one_this_helper_writes() {
+        let base = sample().into_iter().find(|x| x.dport.is_some()).unwrap();
+        let mut m = rule_msg(Verb::Add, &base, 1);
+        // The type of the first attribute (the priority) sits two bytes into it: set the nested flag.
+        let at = NLMSG_HDR + FIB_RULE_HDR + 2;
+        let ty = u16::from_ne_bytes([m[at], m[at + 1]]) | 0x8000;
+        m[at..at + 2].copy_from_slice(&ty.to_ne_bytes());
+        assert_eq!(parse_rule(payload(&m)).unwrap(), None);
+        assert_eq!(rule_priority(payload(&m)).unwrap(), None, "and its priority is then not found either");
     }
 
     #[test]

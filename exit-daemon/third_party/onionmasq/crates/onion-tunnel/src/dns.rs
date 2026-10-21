@@ -191,13 +191,10 @@ const TIME_TO_LIVE_IN_DNS: u64 = 60;
 /// could get a weird race condition.
 const SECONDS_TO_LIVE_IN_CACHE: u64 = 70;
 
-/// The amount in seconds on how long a rate limit window is open.
+/// The amount in seconds between two flushes of the fake address caches (upstream: also the length of a rate limit
+/// window; FreeholdOS patch 0004 limits each app on its own instead, see `TunnelScaffolding::dns_allow`).
 const RATE_LIMIT_WINDOW: u64 = 180;
 
-/// The amount of requests that are processed in the time span of one rate limit
-/// window.  Once this limit has been reached, all further requests are ignored
-/// until the rate limit gets reset.
-const RATE_LIMIT_MAX_REQS: u64 = 65535;
 
 // Static assertion for TTL_DNS < TTL_CACHE < REGULAR_CLEANUP.
 static_assertions::const_assert!(TIME_TO_LIVE_IN_DNS < SECONDS_TO_LIVE_IN_CACHE);
@@ -750,6 +747,11 @@ where
                 return;
             }
         };
+        if !self.scaffolding.dns_allow(key) {
+            trace!("DNS query from {} refused: the app asks too fast", sensitive(from));
+            self.reply(&Self::make_answer(&query, RCode::ServFail, vec![]), from, meta.local_address);
+            return;
+        }
         let scaffolding = self.scaffolding.clone();
         match route_query(&query, |name| scaffolding.dns_decision(key, name)) {
             Route::Ignore => trace!("no DNS answer for {}", sensitive(from)),
@@ -803,39 +805,24 @@ where
     pub async fn start(&mut self) {
         info!("Starting DNS manager");
 
+        // FreeholdOS patch 0004: no global limit with a discard phase (see `TunnelScaffolding::dns_allow`); the caches are
+        // flushed at the end of every window to save space, as before.
+        let mut flush = tokio::time::interval(Duration::from_secs(RATE_LIMIT_WINDOW));
         loop {
-            let _ = timeout(Duration::from_secs(RATE_LIMIT_WINDOW), async {
-            // Process at most `RATE_LIMIT_MAX_REQS` requests.
-            for _ in 0..RATE_LIMIT_MAX_REQS {
-                tokio::select! {
-                    r = self.listener_udp.next() => match r {
-                        Some((payload, meta)) => self.handle(payload, meta),
-                        None => unreachable!(),
-                    },
-                    Some(r) = self.forward_rx.recv() => self.send_to(&r.bytes, r.client, r.from),
+            tokio::select! {
+                r = self.listener_udp.next() => match r {
+                    Some((payload, meta)) => self.handle(payload, meta),
+                    None => unreachable!(),
+                },
+                Some(r) = self.forward_rx.recv() => self.send_to(&r.bytes, r.client, r.from),
+                _ = flush.tick() => {
+                    if let Ok(mut lock) = self.cookies.lock() {
+                        lock.cookies.iter_mut().for_each(|(_, cookies)| {
+                            cookies.map_v4.flush();
+                            cookies.map_v6.flush();
+                        });
+                    }
                 }
-            }
-
-            // We have reached the limit; until tokio terminates us due to the
-            // `RATE_LIMIT_WINDOW` being reached, lets endlessly read on the
-            // socket and discard all incoming datagrams. Replies to queries that
-            // were already forwarded are still delivered.
-            loop {
-                tokio::select! {
-                    _ = self.listener_udp.next() => {},
-                    Some(r) = self.forward_rx.recv() => self.send_to(&r.bytes, r.client, r.from),
-                }
-            }
-        })
-        .await;
-
-            // Flush the cache at the end of the rate limit window to save
-            // space.
-            if let Ok(mut lock) = self.cookies.lock() {
-                lock.cookies.iter_mut().for_each(|(_, cookies)| {
-                    cookies.map_v4.flush();
-                    cookies.map_v6.flush();
-                });
             }
         }
     }

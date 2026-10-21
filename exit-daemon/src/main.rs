@@ -6,12 +6,11 @@ use exit_daemon::args::{parse_args, Args, ControlSource, Peer};
 use exit_daemon::config::{tunnel_config, DaemonConfig};
 use exit_daemon::control::DaemonState;
 use exit_daemon::scaffolding::ExitScaffolding;
-use exit_daemon::server::{bind_control, inherited_control, serve, Auth, Control};
+use exit_daemon::server::{bind_control, inherited_control, serve_connections, Auth, Control};
 use exit_daemon::sockdiag;
 use onion_tunnel::OnionTunnel;
-use std::os::unix::net::UnixListener;
 use std::process::ExitCode;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 
 fn main() -> ExitCode {
@@ -33,24 +32,6 @@ fn main() -> ExitCode {
         Err(msg) => {
             eprintln!("exitd: {msg}");
             ExitCode::from(1)
-        }
-    }
-}
-
-/// Listens on the control socket. One connection at a time; a connection that ends in an error is dropped and the next
-/// one is accepted. Returns after a peer asked for shutdown.
-fn control_loop(listener: UnixListener, auth: Auth, control: Arc<Mutex<Control>>, shutdown: Arc<Notify>) {
-    for stream in listener.incoming() {
-        let Ok(stream) = stream else {
-            // A persistent accept error (no descriptors left) must not become a busy loop.
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            continue;
-        };
-        let handler = control.clone();
-        let _ = serve(stream, &auth, |m| handler.lock().unwrap_or_else(PoisonError::into_inner).handle(m));
-        if control.lock().unwrap_or_else(PoisonError::into_inner).shutdown_requested() {
-            shutdown.notify_one();
-            return;
         }
     }
 }
@@ -94,7 +75,7 @@ fn run(a: Args) -> Result<(), &'static str> {
         let control = Arc::new(Mutex::new(Control::new(scaffolding.clone(), a.device.clone(), a.memory_max)));
         let shutdown = Arc::new(Notify::new());
         let notify = shutdown.clone();
-        std::thread::spawn(move || control_loop(listener, auth, control, notify));
+        std::thread::spawn(move || serve_connections(listener, auth, control, move || notify.notify_one()));
 
         // One fixed line when the tunnel is up: the device scripts and the service wait for it. Nothing else is printed.
         let watch = scaffolding.clone();

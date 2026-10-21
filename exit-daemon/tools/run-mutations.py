@@ -22,7 +22,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 D = "third_party/onionmasq/crates/onion-tunnel/src/dns.rs"
-C, S, V, G, A, F, P, Y, R, N, K, O, H, W = (
+C, S, V, G, A, F, P, Y, R, N, K, O, H, W, L, LD, RL = (
     "src/control.rs",
     "src/sockdiag.rs",
     "src/server.rs",
@@ -37,6 +37,9 @@ C, S, V, G, A, F, P, Y, R, N, K, O, H, W = (
     "src/routes/proto.rs",
     "src/routes/helper.rs",
     "src/routes/sys.rs",
+    "src/masklist.rs",
+    "src/ladder.rs",
+    "src/ratelimit.rs",
 )
 
 # (name, file, old, new)
@@ -85,9 +88,9 @@ MUTATIONS = [
     ("control: error code swapped", C, "FromDaemon::Error { seq, code } => frame(TAG_ERROR, &[*seq, *code as u8]),", "FromDaemon::Error { seq, code } => frame(TAG_ERROR, &[*code as u8, *seq]),"),
     ("control: failures company dropped", C, "p[4..6].copy_from_slice(&company.to_be_bytes());", "p[4..6].copy_from_slice(&0u16.to_be_bytes());"),
     # policy.rs
-    ("policy: overlap allowed", P, "if c.start < FIRST_APP_UID || c.start > c.end || u64::from(c.start) < next_free {", "if c.start < FIRST_APP_UID || c.start > c.end {"),
-    ("policy: ranges below the first app uid allowed", P, "if c.start < FIRST_APP_UID || c.start > c.end || u64::from(c.start) < next_free {", "if c.start > c.end || u64::from(c.start) < next_free {"),
-    ("policy: start after end allowed", P, "if c.start < FIRST_APP_UID || c.start > c.end || u64::from(c.start) < next_free {", "if c.start < FIRST_APP_UID || u64::from(c.start) < next_free {"),
+    ("policy: overlap allowed", P, "if c.start > c.end || u64::from(c.start) < next_free {", "if c.start > c.end {"),
+    ("policy: start after end allowed", P, "if c.start > c.end || u64::from(c.start) < next_free {", "if u64::from(c.start) < next_free {"),
+    ("policy: ranges below the first app uid allowed", P, "let mut next_free: u64 = u64::from(FIRST_APP_UID);", "let mut next_free: u64 = 0;"),
     ("policy: too many classes by one", P, "if classes.len() > MAX_CLASSES {", "if classes.len() > MAX_CLASSES + 1 {"),
     ("policy: too many classes at the limit", P, "if classes.len() > MAX_CLASSES {", "if classes.len() >= MAX_CLASSES {"),
     ("policy: adjacent ranges refused", P, "next_free = u64::from(c.end) + 1;", "next_free = u64::from(c.end) + 2;"),
@@ -111,7 +114,7 @@ MUTATIONS = [
     ("server: context mismatch accepted", V, "Ok(ctx) if context_has_type(&ctx, want) => Ok(()),", "Ok(ctx) if !context_has_type(&ctx, want) => Ok(()),"),
     ("server: context check skipped", V, "Auth::Context(want) => check_context(socket_peer_context(stream.as_fd()), want),", "Auth::Context(_) => Ok(()),"),
     ("server: control variable not digits only", V, "if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {", "if value.is_empty() {"),
-    ("server: peer check after the first read", V, "    check(&stream)?;\n    stream.set_read_timeout", "    stream.set_read_timeout"),
+    ("server: the peer is not checked", V, "    check(&stream)?;\n    stream.set_write_timeout(Some(WRITE_TIMEOUT))?;", "    stream.set_write_timeout(Some(WRITE_TIMEOUT))?;"),
     ("sys: descriptor below 3 allowed", Y, "if raw < 3 {", "if raw < 0 {"),
     ("sys: a socket that does not listen accepted", Y, "if get(libc::SO_ACCEPTCONN)? != 1 {", "if false {"),
     ("sys: a socket of another family accepted", Y, "if get(libc::SO_DOMAIN)? != libc::AF_UNIX {", "if false {"),
@@ -174,15 +177,11 @@ MUTATIONS = [
     ("spec: guard oem rule always added", R, "            if let Some(id) = spec.oem_netid {\n                rules.push(Rule {", "            if let Some(id) = Some(spec.oem_netid.unwrap_or(1)) {\n                rules.push(Rule {"),
     ("spec: order by family first", R, "(r.priority, r.uids.map(|u| u.start), r.family == Family::V6)", "(r.family == Family::V6, r.priority, r.uids.map(|u| u.start))"),
     # Task 6: netlink encoding, the stand-in and the real kernel, reconcile, the helper protocol and the helper
-    ("netlink: a message shorter than its header", N, "if len < NLMSG_HDR {", "if len < NLMSG_HDR - 1 {"),
-    ("netlink: a length of exactly the header is refused", N, "if len < NLMSG_HDR {", "if len <= NLMSG_HDR {"),
     ("netlink: padding not counted", N, "at = at.checked_add(align4(len)).ok_or(NlError::BadLength)?;", "at = at.checked_add(len).ok_or(NlError::BadLength)?;"),
     ("netlink: attribute padding not added", N, "self.buf.resize(align4(self.buf.len()), 0);", "// no padding"),
     ("netlink: align rounds down", N, "(n + 3) & !3", "n & !3"),
     ("netlink: length of the message not filled in", N, "self.buf[..4].copy_from_slice(&len.to_ne_bytes());", "let _ = len;"),
     ("netlink: error code not negated", N, "Ok(e.checked_neg().unwrap_or(i32::MAX))", "Ok(e)"),
-    ("netlink: attribute shorter than its header", N, "        if len < 4 {\n            return Err(NlError::BadLength);\n        }\n        // The nested", "        if len < 3 {\n            return Err(NlError::BadLength);\n        }\n        // The nested"),
-    ("netlink: attribute flags kept in the type", N, "ne_u16(&head[2..4])? & 0x3fff", "ne_u16(&head[2..4])?"),
     ("netlink: source prefix ignored", N, "if hdr[2] != 0 || hdr[3] != 0 || flags != 0 {", "if hdr[3] != 0 || flags != 0 {"),
     ("netlink: tos ignored", N, "if hdr[2] != 0 || hdr[3] != 0 || flags != 0 {", "if hdr[2] != 0 || flags != 0 {"),
     ("netlink: header flags ignored", N, "if hdr[2] != 0 || hdr[3] != 0 || flags != 0 {", "if hdr[2] != 0 || hdr[3] != 0 {"),
@@ -214,8 +213,8 @@ MUTATIONS = [
     ("reconcile: existing rule is an error", K, "ack(k, &nl::rule_msg(Verb::Add, r, seq.next()), &[EEXIST])?;", "ack(k, &nl::rule_msg(Verb::Add, r, seq.next()), &[])?;"),
     ("reconcile: a missing rule is an error", K, "ack(k, &nl::rule_msg(Verb::Del, r, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    for (family, prio) in &band.foreign {\n        ack(k, &nl::rule_del_priority_msg(*family, *prio, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    for family in", "ack(k, &nl::rule_msg(Verb::Del, r, seq.next()), &[])?;\n        out.removed += 1;\n    }\n    for (family, prio) in &band.foreign {\n        ack(k, &nl::rule_del_priority_msg(*family, *prio, seq.next()), &[ENOENT])?;\n        out.removed += 1;\n    }\n    for family in"),
     ("reconcile: an existing address is an error", K, "ack(k, &msg, &[EEXIST])?;", "ack(k, &msg, &[])?;"),
+    ("reconcile: the acknowledgement is not required", K, "        .ok_or_else(|| bad_reply(\"no acknowledgement in the netlink reply\"))?\n        .map_err(", "        .unwrap_or(Ok(0))\n        .map_err("),
     ("reconcile: any errno is fine", K, "    if code == 0 || tolerated.contains(&code) {", "    if true {"),
-    ("reconcile: the acknowledgement is not required", K, "        .ok_or_else(|| bad_reply(\"no acknowledgement in the netlink reply\"))?", "        .unwrap_or(Ok(0))?"),
     ("reconcile: a dump without an end is accepted", K, "        if !done {\n            return Err(bad_reply(\"the rule dump did not end\"));\n        }", "        let _ = done;"),
     ("reconcile: only the first family is read", K, "    for family in [Family::V4, Family::V6] {\n        let reply = k.request(&nl::dump_rules_msg", "    for family in [Family::V4] {\n        let reply = k.request(&nl::dump_rules_msg"),
     ("reconcile: clear leaves the routes", K, "    for family in [Family::V4, Family::V6] {\n        ack(k, &nl::route_default_del_msg(family, TABLE, seq.next()), &[ESRCH, ENOENT])?;\n    }", ""),
@@ -243,6 +242,92 @@ MUTATIONS = [
     ("sys: replies of other requests are kept", W, "let ours: Vec<_> = msgs.iter().filter(|m| m.seq == seq).collect();", "let ours: Vec<_> = msgs.iter().collect();"),
     ("sys: the reply size is not bounded", W, "if all.len() > REPLY_MAX {", "if false {"),
     ("sys: the ack is not looked for", W, "m.kind == NLMSG_ERROR || (dump", "m.kind == NLMSG_DONE || (dump"),
+    # Tasks 7 to 11: the mask list, the DNS split, the admission of flows, the ladder, the limits
+    ("masklist: a protected row masks", L, "return (id != 0).then_some(id);", "return Some(id);"),
+    ("masklist: only the exact name is looked up", L, "rest = &rest[rest.find('.')? + 1..];", "rest = &rest[rest.len()..];"),
+    ("masklist: the trailing dot is kept", L, "let n = name.strip_suffix('.').unwrap_or(name);", "let n = name;"),
+    ("masklist: case is not folded", L, "let lower = n.to_ascii_lowercase();", "let lower = n.to_string();"),
+    ("masklist: a label of 64 bytes", L, "&& l.len() <= 63", "&& l.len() <= 64"),
+    ("masklist: a label may start with a hyphen", L, "&& !l.starts_with('-')", ""),
+    ("masklist: a label may end with a hyphen", L, "&& !l.ends_with('-')", ""),
+    ("masklist: a domain over 253 bytes", L, "d.len() <= MAX_DOMAIN", "d.len() <= MAX_DOMAIN + 10"),
+    ("masklist: the header is not checked", L, "if lines.next() != Some(HEADER) {", "if false {"),
+    ("masklist: a duplicate row is taken", L, "if rows.insert(domain.to_owned(), id).is_some() {", "if false {"),
+    ("masklist: an empty name is taken", L, "if name.is_empty() || name.len() > MAX_NAME", "if name.len() > MAX_NAME"),
+    ("masklist: a long name is taken", L, "if name.is_empty() || name.len() > MAX_NAME", "if name.is_empty()"),
+    ("masklist: a control character in a name is taken", L, "|| name.chars().any(|c| c.is_control())", ""),
+    ("masklist: the entry limit is one more", L, "if rows.len() >= MAX_ENTRIES {", "if rows.len() > MAX_ENTRIES {"),
+    ("masklist: an id with a sign is taken", L, "if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {", "if id.is_empty() {"),
+    ("masklist: a row with a fourth field is taken", L, "let (Some(domain), Some(id), Some(name), None) = (f.next(), f.next(), f.next(), f.next()) else {", "let (Some(domain), Some(id), Some(name), _) = (f.next(), f.next(), f.next(), f.next()) else {"),
+    ("ladder: the threshold is four", LD, "e.failures >= FAILURE_THRESHOLD || e.slow", "e.failures > FAILURE_THRESHOLD || e.slow"),
+    ("ladder: a slow connection is not enough", LD, "e.failures >= FAILURE_THRESHOLD || e.slow", "e.failures >= FAILURE_THRESHOLD"),
+    ("ladder: failures and slowness must both happen", LD, "e.failures >= FAILURE_THRESHOLD || e.slow", "e.failures >= FAILURE_THRESHOLD && e.slow"),
+    ("ladder: reported more than once", LD, ".filter(|(_, e)| !e.reported && (", ".filter(|(_, e)| (true) && ("),
+    ("ladder: the window is over one tick early", LD, "now.saturating_duration_since(e.first) > WINDOW);\n        if stale", "now.saturating_duration_since(e.first) >= WINDOW);\n        if stale"),
+    ("ladder: expired keys are kept", LD, "self.map.retain(|_, e| now.saturating_duration_since(e.first) <= WINDOW);", "self.map.retain(|_, _| true);"),
+    ("ladder: the count of a slow connection is zero", LD, "count: e.failures.max(1) })", "count: e.failures })"),
+    ("ladder: the table is one too big", LD, "self.map.len() >= MAX_KEYS {", "self.map.len() > MAX_KEYS {"),
+    ("ladder: the newest key is evicted", LD, ".min_by_key(|(_, e)| e.first)", ".max_by_key(|(_, e)| e.first)"),
+    ("ladder: all due keys are returned", LD, "        keys.truncate(max);\n", ""),
+    ("ladder: a v6 host keeps its brackets", LD, "return rest.split(']').next().unwrap_or(\"\");", "return addr;"),
+    ("ladder: a port is not stripped", LD, "Some((host, port)) if !host.contains(':') && port.bytes().all(|b| b.is_ascii_digit()) => host,", "Some((_host, _port)) => addr,"),
+    ("ladder: a v6 address loses its last group", LD, "Some((host, port)) if !host.contains(':') && port.bytes().all(|b| b.is_ascii_digit()) => host,", "Some((host, _port)) => host,"),
+    ("ratelimit: the second is one tick long", RL, "if now.saturating_duration_since(b.second_start) >= Duration::from_secs(1) {", "if now.saturating_duration_since(b.second_start) > Duration::from_secs(1) {"),
+    ("ratelimit: the minute is one tick long", RL, "if now.saturating_duration_since(b.minute_start) >= Duration::from_secs(60) {", "if now.saturating_duration_since(b.minute_start) > Duration::from_secs(60) {"),
+    ("ratelimit: only one of the limits counts", RL, "b.in_second <= PER_SECOND && b.in_minute <= PER_MINUTE", "b.in_second <= PER_SECOND || b.in_minute <= PER_MINUTE"),
+    ("ratelimit: the second limit is one lower", RL, "b.in_second <= PER_SECOND &&", "b.in_second < PER_SECOND &&"),
+    ("ratelimit: the minute limit is one lower", RL, "b.in_minute <= PER_MINUTE", "b.in_minute < PER_MINUTE"),
+    ("ratelimit: the table is one too big", RL, "self.buckets.len() >= MAX_UIDS {", "self.buckets.len() > MAX_UIDS {"),
+    ("ratelimit: the newest uid is evicted", RL, ".min_by_key(|(_, b)| b.last_seen)", ".max_by_key(|(_, b)| b.last_seen)"),
+    ("ratelimit: the count wraps", RL, "b.in_second = b.in_second.saturating_add(1);", "b.in_second = b.in_second.wrapping_add(1);"),
+    ("scaffolding: a stray flow of a masked app is admitted", G, "Some(Kind::Masked) if is_fake_address(&dst.addr) => Ok(()),", "Some(Kind::Masked) => Ok(()),"),
+    ("scaffolding: an app of class tor is refused", G, "Some(Kind::Tor) => Ok(()),\n            Some(Kind::Masked)", "Some(Kind::Masked)"),
+    ("scaffolding: an app without a class is admitted", G, "            _ => Err(io::Error::new(io::ErrorKind::PermissionDenied, \"the flow is not allowed for this app\")),", "            _ => Ok(()),"),
+    ("scaffolding: tcp flows are not admitted", G, "        if proto == Proto::Tcp {\n            self.admit_tcp(uid, &dst)?;", "        if false {\n            self.admit_tcp(uid, &dst)?;"),
+    ("scaffolding: udp flows are admitted like tcp", G, "        if proto == Proto::Tcp {\n            self.admit_tcp(uid, &dst)?;", "        if proto == Proto::Tcp || proto == Proto::Udp {\n            self.admit_tcp(uid, &dst)?;"),
+    ("scaffolding: the flow limit is one more", G, "if m.len() >= MAX_FLOWS && !m.contains_key(&(src, dst)) {", "if m.len() > MAX_FLOWS && !m.contains_key(&(src, dst)) {"),
+    ("scaffolding: a known flow counts again", G, "if m.len() >= MAX_FLOWS && !m.contains_key(&(src, dst)) {", "if m.len() >= MAX_FLOWS {"),
+    ("scaffolding: the flow table is not bounded", G, "if m.len() >= MAX_FLOWS && !m.contains_key(&(src, dst)) {", "if false {"),
+    ("scaffolding: a close leaves the start", G, ".remove(&(src, dst));\n    }", ".len();\n    }"),
+    ("scaffolding: slow from six seconds", G, "now.saturating_duration_since(s) >= SLOW", "now.saturating_duration_since(s) > SLOW"),
+    ("scaffolding: an unlisted host has a company", G, "self.inner.list.classify(host).unwrap_or(0)", "self.inner.list.classify(host).unwrap_or(1)"),
+    ("scaffolding: an app of class tor is passed on", G, "Some(Kind::Tor) => DnsDecision::Tor,", "Some(Kind::Tor) => DnsDecision::Forward,"),
+    ("scaffolding: an override is ignored", G, "Some(company) if !policy.overridden(uid, company) => DnsDecision::Tor,", "Some(_) => DnsDecision::Tor,"),
+    ("scaffolding: an override applies to every app", G, "Some(company) if !policy.overridden(uid, company) => DnsDecision::Tor,", "Some(company) if !policy.overridden(10100, company) => DnsDecision::Tor,"),
+    ("scaffolding: an exempt app is resolved through tor", G, "Some(Kind::Exempt) | None => DnsDecision::Forward,", "Some(Kind::Exempt) | None => DnsDecision::Tor,"),
+    ("scaffolding: a key that is no uid is resolved through tor", G, "let Ok(uid) = u32::try_from(isolation_key) else { return DnsDecision::Forward };", "let Ok(uid) = u32::try_from(isolation_key) else { return DnsDecision::Tor };"),
+    ("scaffolding: a masked app resolves unlisted names through tor", G, "                _ => DnsDecision::Forward,\n            },", "                _ => DnsDecision::Tor,\n            },"),
+    ("scaffolding: a key that is no uid is limited", G, "let Ok(uid) = u32::try_from(isolation_key) else { return true };", "let Ok(uid) = u32::try_from(isolation_key) else { return false };"),
+    ("scaffolding: the limit is not applied", G, "self.inner.dns_limit.lock().unwrap_or_else(PoisonError::into_inner).allow(uid, Instant::now())", "true"),
+    ("server: the ladder is not sent", V, "                msgs.extend(\n                    self.scaffolding\n                        .due_failures(MAX_FAILURES_PER_STATE)", "                msgs.extend(\n                    self.scaffolding\n                        .due_failures(0)"),
+    ("server: more failures per state", V, "const MAX_FAILURES_PER_STATE: usize = 16;", "const MAX_FAILURES_PER_STATE: usize = 17;"),
+    ("server: the frame deadline is the idle limit", V, "            Some(t) => frame_deadline.saturating_sub(t.elapsed()),", "            Some(_) => idle,"),
+    ("server: a rest of a buffer starts no deadline", V, "frame_began = if buf.is_empty() { None } else { Some(Instant::now()) };", "frame_began = None;"),
+    ("server: a first byte starts no deadline", V, "        if buf.is_empty() {\n            frame_began = Some(Instant::now());\n        }", "        if false {\n            frame_began = Some(Instant::now());\n        }"),
+    ("server: the read time-out is a would-block", V, "return Err(io::Error::new(io::ErrorKind::TimedOut, \"no control frame arrived in time\"));", "return Err(io::Error::from(io::ErrorKind::WouldBlock));"),
+    ("server: a stranger may replace the peer", V, "        if check_peer(&stream, &auth).is_err() {\n            continue; // dropped: closed without a byte read\n        }\n", ""),
+    ("server: the old connection is kept", V, "                let _ = old.shutdown(Shutdown::Both);", "                let _ = old;"),
+    ("server: the shutdown hook is not called", V, "                on_shutdown();", "                let _ = &on_shutdown;"),
+    ("sys: the context lookup timeout is long", Y, "const TIMEOUT_USEC: libc::suseconds_t = 250_000;", "const TIMEOUT_USEC: libc::suseconds_t = 2_500_000;"),
+    ("dns: the response bit is ignored", D, "    if query.flags.qr {\n        return Route::Ignore;\n    }", "    if false {\n        return Route::Ignore;\n    }"),
+    ("dns: another opcode is routed", D, "if query.flags.opcode != dns_message_parser::Opcode::Query || query.questions.is_empty() {", "if query.questions.is_empty() {"),
+    ("dns: no questions are routed", D, "if query.flags.opcode != dns_message_parser::Opcode::Query || query.questions.is_empty() {", "if query.flags.opcode != dns_message_parser::Opcode::Query {"),
+    ("dns: tor and forward are swapped", D, "        (true, false) => Route::Tor,\n        (false, true) => Route::Forward,", "        (true, false) => Route::Forward,\n        (false, true) => Route::Tor,"),
+    ("dns: a mixed query is sent to tor", D, "        (false, true) => Route::Forward,\n        _ => Route::Refuse,", "        (false, true) => Route::Forward,\n        _ => Route::Tor,"),
+    ("dns: loopback is a resolver", D, "!(a.is_loopback() || a.is_unspecified() || a.is_multicast() || a.is_broadcast() ||", "!(a.is_unspecified() || a.is_multicast() || a.is_broadcast() ||"),
+    ("dns: the tunnel's own range is a resolver", D, "a.octets()[..3] == [169, 254, 42])", "false)"),
+    ("dns: multicast is a resolver", D, "!(a.is_loopback() || a.is_unspecified() || a.is_multicast() || (a.segments()[0] & 0xffc0) == 0xfe80)", "!(a.is_loopback() || a.is_unspecified() || (a.segments()[0] & 0xffc0) == 0xfe80)"),
+    ("dns: link-local v6 is a resolver", D, "|| (a.segments()[0] & 0xffc0) == 0xfe80)", "|| false)"),
+    ("dns: a reply with another id is taken", D, "if buf[..n].get(..2) == Some(id) {", "if true {"),
+    ("dns: a reply over the limit is taken", D, "if n > MAX_UDP_DNS {", "if n > MAX_UDP_DNS * 2 {"),
+    ("dns: a reply at the limit is refused", D, "if n > MAX_UDP_DNS {", "if n >= MAX_UDP_DNS {"),
+    ("dns: the second half of the /15 is not fake", D, "o[0] == FAKE_V4_PREFIX[0] && (o[1] & 0xfe) == FAKE_V4_PREFIX[1]", "o[0] == FAKE_V4_PREFIX[0] && o[1] == FAKE_V4_PREFIX[1]"),
+    ("dns: the lower half of the v6 /48 is fake", D, "o[..6] == FAKE_V6_PREFIX && o[6] & 0x80 != 0", "o[..6] == FAKE_V6_PREFIX"),
+    ("dns: the v6 fake range has no top bit", D, "            octets[6] |= 0x80;\n", ""),
+    ("dns: the v4 fake range is a /16", D, "FAKE_V4_PREFIX[1] | (r[0] & 1)", "FAKE_V4_PREFIX[1]"),
+    ("dns: a full range is not refused", D, "if self.map_v4.cache_size() >= self.max_v4 {\n            return None;\n        }", ""),
+    ("dns: an app over its limit is answered", D, "        if !self.scaffolding.dns_allow(key) {", "        if false {"),
+    ("dns: an app with no owner is answered", D, "        let key = match Self::attribute(&query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {\n            Ok(key) => key,", "        let key = match Self::attribute(&query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {\n            Ok(key) => key,"),
     # sockdiag.rs
     ("sockdiag: udp ends not swapped", S, "Proto::Udp => (remote, local, IPPROTO_UDP),", "Proto::Udp => (local, remote, IPPROTO_UDP),"),
     ("sockdiag: enoent is an error", S, "if errno == ENOENT {", "if errno != ENOENT {"),
@@ -258,7 +343,7 @@ MUTATIONS = [
     # scaffolding.rs
     ("scaffolding: tcp isolated as udp", G, "IPPROTO_TCP => Proto::Tcp,", "IPPROTO_TCP => Proto::Udp,"),
     ("scaffolding: unknown protocol accepted", G, "_ => return Err(io::Error::new(io::ErrorKind::InvalidInput, \"unsupported IP protocol\")),", "_ => Proto::Tcp,"),
-    ("scaffolding: no owner gets key 0", G, "None => Err(io::Error::new(io::ErrorKind::NotFound, \"no owner for the flow\")),", "None => Ok(0),"),
+    ("scaffolding: no owner gets key 0", G, "None => return Err(io::Error::new(io::ErrorKind::NotFound, \"no owner for the flow\")),", "None => return Ok(0),"),
     ("scaffolding: lookup error swallowed", G, "match (self.inner.lookup)(proto, to_socket_addr(src), to_socket_addr(dst))? {", "match (self.inner.lookup)(proto, to_socket_addr(src), to_socket_addr(dst)).unwrap_or(None) {"),
     ("scaffolding: protect fails", G, "fn protect(&self, _fd: RawFd, _addr: &SocketAddr) -> io::Result<()> {\n        Ok(())", "fn protect(&self, _fd: RawFd, _addr: &SocketAddr) -> io::Result<()> {\n        Err(io::Error::from(io::ErrorKind::Other))"),
     ("scaffolding: should_protect true", G, "fn should_protect(&self, _isolation_key: u64) -> bool {\n        false", "fn should_protect(&self, _isolation_key: u64) -> bool {\n        true"),
@@ -266,7 +351,7 @@ MUTATIONS = [
     ("scaffolding: key truncated to a uid", G, "if let Ok(uid) = u32::try_from(isolation_key) {", "if let Ok(uid) = u32::try_from(isolation_key % 4294967296) {"),
     ("scaffolding: late bootstrap revives a failed tunnel", G, "DaemonState::Bootstrapping as u8,\n            DaemonState::Up as u8,\n            Ordering::SeqCst,", "DaemonState::Failed as u8,\n            DaemonState::Up as u8,\n            Ordering::SeqCst,"),
     ("scaffolding: ipv4 port dropped", G, "IpAddr::V4(a), ep.port)", "IpAddr::V4(a), 0)"),
-    ("scaffolding: refresh all is per app", G, "let _ = self.inner.commands.send(TunnelCommand::RefreshCircuits);", "let _ = self.inner.commands.send(TunnelCommand::RefreshCircuitsForApp { isolation_key: 0 });"),
+    ("scaffolding: refresh all is per app", G, "let _ = self.inner.commands.try_send(TunnelCommand::RefreshCircuits);", "let _ = self.inner.commands.try_send(TunnelCommand::RefreshCircuitsForApp { isolation_key: 0 });"),
     # server.rs
     ("server: hello of any version", V, "ToDaemon::Hello { version } if version == PROTOCOL_VERSION =>", "ToDaemon::Hello { version } if version != PROTOCOL_VERSION =>"),
     ("server: memory quota not validated", V, "self.memory_max = valid;", "self.memory_max = valid + 1;"),
@@ -327,7 +412,10 @@ def constant_mutations(files, label):
     return out
 
 
-MUTATIONS += constant_mutations(["src/routes/netlink.rs", "src/routes/proto.rs", "src/routes/reconcile.rs"], "const")
+MUTATIONS += constant_mutations(
+    ["src/routes/netlink.rs", "src/routes/proto.rs", "src/routes/reconcile.rs", "src/masklist.rs", "src/ladder.rs", "src/ratelimit.rs"],
+    "const",
+)
 
 
 def killed(output: str, rc: int) -> str:
@@ -336,7 +424,9 @@ def killed(output: str, rc: int) -> str:
         return "survived"
     if "could not compile" in output or "error[E" in output:
         return "does-not-compile"
-    if "test result: FAILED" in output or "panicked at" in output:
+    # A test binary that crashed (an abort on a descriptor closed twice, say) was stopped by the mutation as much as one
+    # that failed an assertion.
+    if "test result: FAILED" in output or "panicked at" in output or "fatal runtime error" in output or "(signal:" in output:
         return "killed"
     return "inconclusive"
 

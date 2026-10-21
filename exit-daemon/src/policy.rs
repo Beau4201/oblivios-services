@@ -19,7 +19,8 @@ pub fn validate_classes(classes: &[UidClass]) -> Result<(), ErrorCode> {
     }
     let mut next_free: u64 = u64::from(FIRST_APP_UID);
     for c in classes {
-        if c.start < FIRST_APP_UID || c.start > c.end || u64::from(c.start) < next_free {
+        // `next_free` starts at the first app uid, so a range below it fails the last test.
+        if c.start > c.end || u64::from(c.start) < next_free {
             return Err(ErrorCode::BadValue);
         }
         next_free = u64::from(c.end) + 1;

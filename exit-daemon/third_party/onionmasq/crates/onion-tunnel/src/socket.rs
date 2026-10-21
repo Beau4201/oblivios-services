@@ -54,6 +54,7 @@ impl UdpSocket {
             .get_mut::<udp::Socket>(self.handle))
     }
 
+    #[allow(dead_code)]
     pub fn bind(&mut self, addr: smoltcp::wire::IpAddress, port: u16) -> Result<(), BindError> {
         self.with(|s| s.bind((addr, port)))
     }

@@ -1,5 +1,5 @@
 diff --git a/crates/onion-tunnel/src/dns.rs b/crates/onion-tunnel/src/dns.rs
-index c989174..ae7fb9e 100644
+index c989174..23d0d24 100644
 --- a/crates/onion-tunnel/src/dns.rs
 +++ b/crates/onion-tunnel/src/dns.rs
 @@ -10,7 +10,7 @@
@@ -159,7 +159,23 @@ index c989174..ae7fb9e 100644
  /// The time to live value returned in DNS responses (in seconds).
  const TIME_TO_LIVE_IN_DNS: u64 = 60;
  
-@@ -100,6 +215,7 @@ impl IsolatedCookies {
+@@ -76,13 +191,10 @@ const TIME_TO_LIVE_IN_DNS: u64 = 60;
+ /// could get a weird race condition.
+ const SECONDS_TO_LIVE_IN_CACHE: u64 = 70;
+ 
+-/// The amount in seconds on how long a rate limit window is open.
++/// The amount in seconds between two flushes of the fake address caches (upstream: also the length of a rate limit
++/// window; FreeholdOS patch 0004 limits each app on its own instead, see `TunnelScaffolding::dns_allow`).
+ const RATE_LIMIT_WINDOW: u64 = 180;
+ 
+-/// The amount of requests that are processed in the time span of one rate limit
+-/// window.  Once this limit has been reached, all further requests are ignored
+-/// until the rate limit gets reset.
+-const RATE_LIMIT_MAX_REQS: u64 = 65535;
+ 
+ // Static assertion for TTL_DNS < TTL_CACHE < REGULAR_CLEANUP.
+ static_assertions::const_assert!(TIME_TO_LIVE_IN_DNS < SECONDS_TO_LIVE_IN_CACHE);
+@@ -100,6 +212,7 @@ impl IsolatedCookies {
              isolation_token: IsolationToken::new(),
              map_v4: TimedCache::with_lifespan(Duration::from_secs(SECONDS_TO_LIVE_IN_CACHE)),
              map_v6: TimedCache::with_lifespan(Duration::from_secs(SECONDS_TO_LIVE_IN_CACHE)),
@@ -167,7 +183,7 @@ index c989174..ae7fb9e 100644
              #[cfg(feature = "experimental-udp-tunnel")]
              resolver_map: Default::default(),
              #[cfg(feature = "experimental-udp-tunnel")]
-@@ -119,13 +235,10 @@ impl IsolatedCookies {
+@@ -119,13 +232,10 @@ impl IsolatedCookies {
      /// Test whether an IP is in the correct range to possibly be an output from make_for_v4/make_for_v6
      #[cfg(feature = "experimental-udp-tunnel")]
      fn ip_in_randomized_range(addr: &IpAddress) -> bool {
@@ -183,7 +199,7 @@ index c989174..ae7fb9e 100644
      ///
      /// Returns the IPv4 address or [`None`], if the address space is exhausteed.
      fn make_for_v4<S: TunnelScaffolding>(
-@@ -145,28 +258,22 @@ impl IsolatedCookies {
+@@ -145,28 +255,22 @@ impl IsolatedCookies {
              self.begin_resolve(arti.clone(), hostname.clone());
          }
  
@@ -225,7 +241,7 @@ index c989174..ae7fb9e 100644
  
          self.map_v4.cache_set(ret, hostname);
          Some(ret)
-@@ -189,30 +296,21 @@ impl IsolatedCookies {
+@@ -189,30 +293,21 @@ impl IsolatedCookies {
              self.begin_resolve(arti.clone(), hostname.clone());
          }
  
@@ -268,7 +284,7 @@ index c989174..ae7fb9e 100644
  
          self.map_v6.cache_set(ret, hostname);
          Some(ret)
-@@ -427,14 +525,25 @@ impl DnsCookies {
+@@ -427,14 +522,25 @@ impl DnsCookies {
      }
  }
  
@@ -296,7 +312,7 @@ index c989174..ae7fb9e 100644
  }
  
  impl<S> DnsManager<S>
-@@ -451,30 +560,33 @@ where
+@@ -451,30 +557,33 @@ where
      const V6_ADDRESS: Ipv6Addr = Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 0x53);
  
      pub fn new<D>(tunnel: &OnionTunnel<S, D>) -> TunnelResult<Self> {
@@ -339,7 +355,7 @@ index c989174..ae7fb9e 100644
              .expect("bind error when creating DNS listener?");
  
          Ok(listener)
-@@ -520,35 +632,16 @@ where
+@@ -520,35 +629,16 @@ where
          result.map_err(|_| Self::make_answer(query, RCode::ServFail, vec![]))
      }
  
@@ -382,7 +398,7 @@ index c989174..ae7fb9e 100644
          let mut answers = vec![];
  
          for question in query.questions.iter() {
-@@ -557,14 +650,14 @@ where
+@@ -557,14 +647,14 @@ where
                  &QType::A => {
                      #[allow(clippy::expect_used)]
                      let mut cookies = self.cookies.lock().expect("cookie poisoned");
@@ -400,7 +416,7 @@ index c989174..ae7fb9e 100644
                          let _ = self.udp_prebuild.try_send(UdpPrebuildRequest {
                              isolation_key,
                              country_code,
-@@ -581,13 +674,13 @@ where
+@@ -581,13 +671,13 @@ where
                  &QType::AAAA => {
                      #[allow(clippy::expect_used)]
                      let mut cookies = self.cookies.lock().expect("cookie poisoned");
@@ -417,7 +433,7 @@ index c989174..ae7fb9e 100644
                          let _ = self.udp_prebuild.try_send(UdpPrebuildRequest {
                              isolation_key,
                              country_code,
-@@ -607,7 +700,7 @@ where
+@@ -607,7 +697,7 @@ where
                          question.q_type,
                      );
                      // return "not implemented".
@@ -426,7 +442,7 @@ index c989174..ae7fb9e 100644
                  }
                  // TODO(eta): implement PTR
                  x => {
-@@ -616,32 +709,94 @@ where
+@@ -616,96 +706,124 @@ where
                          x
                      );
                      // return "not implemented" -- at least it's better than nothing!
@@ -485,8 +501,13 @@ index c989174..ae7fb9e 100644
 +                trace!("DNS query from {} refused: its owner could not be found", sensitive(from));
 +                self.reply(&refusal, from, meta.local_address);
 +                return;
-+            }
+             }
 +        };
++        if !self.scaffolding.dns_allow(key) {
++            trace!("DNS query from {} refused: the app asks too fast", sensitive(from));
++            self.reply(&Self::make_answer(&query, RCode::ServFail, vec![]), from, meta.local_address);
++            return;
++        }
 +        let scaffolding = self.scaffolding.clone();
 +        match route_query(&query, |name| scaffolding.dns_decision(key, name)) {
 +            Route::Ignore => trace!("no DNS answer for {}", sensitive(from)),
@@ -515,7 +536,7 @@ index c989174..ae7fb9e 100644
 +            let bytes = forward_udp(target, &payload, FORWARD_WAIT).await.unwrap_or(fallback);
 +            if !bytes.is_empty() {
 +                let _ = tx.send(ForwardedReply { bytes, client, from }).await;
-             }
++            }
 +            // Held until the reply is queued, so that at most MAX_FORWARDS replies wait for the loop.
 +            drop(permit);
 +        });
@@ -537,10 +558,17 @@ index c989174..ae7fb9e 100644
          }
      }
  
-@@ -653,46 +808,22 @@ where
-             // Process at most `RATE_LIMIT_MAX_REQS` requests.
-             for _ in 0..RATE_LIMIT_MAX_REQS {
-                 tokio::select! {
+     pub async fn start(&mut self) {
+         info!("Starting DNS manager");
+ 
++        // FreeholdOS patch 0004: no global limit with a discard phase (see `TunnelScaffolding::dns_allow`); the caches are
++        // flushed at the end of every window to save space, as before.
++        let mut flush = tokio::time::interval(Duration::from_secs(RATE_LIMIT_WINDOW));
+         loop {
+-            let _ = timeout(Duration::from_secs(RATE_LIMIT_WINDOW), async {
+-            // Process at most `RATE_LIMIT_MAX_REQS` requests.
+-            for _ in 0..RATE_LIMIT_MAX_REQS {
+-                tokio::select! {
 -                    r = self.listener_udp_v4.next() => match r {
 -                        Some((payload, endpoint)) => {
 -                            if let Some(reply) = self.decode(payload, endpoint) {
@@ -554,10 +582,8 @@ index c989174..ae7fb9e 100644
 -                                }
 -                            }
 -                        }
-+                    r = self.listener_udp.next() => match r {
-+                        Some((payload, meta)) => self.handle(payload, meta),
-                         None => unreachable!(),
-                     },
+-                        None => unreachable!(),
+-                    },
 -                    r = self.listener_udp_v6.next() => match r {
 -                        Some((payload, endpoint)) => {
 -                            if let Some(reply) = self.decode(payload, endpoint) {
@@ -572,26 +598,46 @@ index c989174..ae7fb9e 100644
 -                            }
 -                        }
 -                        None => unreachable!(),
--                    }
-+                    Some(r) = self.forward_rx.recv() => self.send_to(&r.bytes, r.client, r.from),
++            tokio::select! {
++                r = self.listener_udp.next() => match r {
++                    Some((payload, meta)) => self.handle(payload, meta),
++                    None => unreachable!(),
++                },
++                Some(r) = self.forward_rx.recv() => self.send_to(&r.bytes, r.client, r.from),
++                _ = flush.tick() => {
++                    if let Ok(mut lock) = self.cookies.lock() {
++                        lock.cookies.iter_mut().for_each(|(_, cookies)| {
++                            cookies.map_v4.flush();
++                            cookies.map_v6.flush();
++                        });
+                     }
                  }
              }
- 
-             // We have reached the limit; until tokio terminates us due to the
-             // `RATE_LIMIT_WINDOW` being reached, lets endlessly read on the
+-
+-            // We have reached the limit; until tokio terminates us due to the
+-            // `RATE_LIMIT_WINDOW` being reached, lets endlessly read on the
 -            // sockets and discard all incoming datagrams.
-+            // socket and discard all incoming datagrams. Replies to queries that
-+            // were already forwarded are still delivered.
-             loop {
-                 tokio::select! {
+-            loop {
+-                tokio::select! {
 -                    _ = self.listener_udp_v4.next() => {},
 -                    _ = self.listener_udp_v6.next() => {},
-+                    _ = self.listener_udp.next() => {},
-+                    Some(r) = self.forward_rx.recv() => self.send_to(&r.bytes, r.client, r.from),
-                 }
-             }
-         })
-@@ -892,4 +1023,236 @@ mod test {
+-                }
+-            }
+-        })
+-        .await;
+-
+-            // Flush the cache at the end of the rate limit window to save
+-            // space.
+-            if let Ok(mut lock) = self.cookies.lock() {
+-                lock.cookies.iter_mut().for_each(|(_, cookies)| {
+-                    cookies.map_v4.flush();
+-                    cookies.map_v6.flush();
+-                });
+-            }
+         }
+     }
+ }
+@@ -892,4 +1010,236 @@ mod test {
              assert_eq!(answer.questions, query.questions);
          }
      }
@@ -842,7 +888,7 @@ index 5cb1e34..aea199a 100644
  use crate::{parser::Parser, socket::TcpSocket};
  pub use arti_client::config as tor_config;
 diff --git a/crates/onion-tunnel/src/scaffolding.rs b/crates/onion-tunnel/src/scaffolding.rs
-index f1848a3..d76f67a 100644
+index f1848a3..260a12f 100644
 --- a/crates/onion-tunnel/src/scaffolding.rs
 +++ b/crates/onion-tunnel/src/scaffolding.rs
 @@ -165,6 +165,19 @@ pub enum UdpTunnelChoice {
@@ -865,7 +911,7 @@ index f1848a3..d76f67a 100644
  /// Support functions used to integrate an [`crate::OnionTunnel`] into its environment.
  ///
  /// An `OnionTunnel` can be parameterized on a type implementing this trait in
-@@ -221,6 +234,16 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
+@@ -221,6 +234,25 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
          Ok(0)
      }
  
@@ -879,11 +925,20 @@ index f1848a3..d76f67a 100644
 +        DnsDecision::Tor
 +    }
 +
++    /// Whether the app with this isolation key may ask one more DNS question now (FreeholdOS patch 0004). A question that
++    /// is not allowed is answered with SERVFAIL. Upstream has one limit for all apps together and then drops every
++    /// question for the rest of the window; with every app's DNS passing here, that would silence the whole phone because of
++    /// one app. The default allows everything.
++    fn dns_allow(&self, isolation_key: u64) -> bool {
++        let _ = isolation_key;
++        true
++    }
++
      /// Return a country code to be used for a connection, in order to make it appear to the
      /// destination that the traffic is coming from somewhere in the given country.
      ///
 diff --git a/crates/onion-tunnel/src/socket.rs b/crates/onion-tunnel/src/socket.rs
-index 77a3b29..cc389b6 100644
+index 77a3b29..5c8a9a1 100644
 --- a/crates/onion-tunnel/src/socket.rs
 +++ b/crates/onion-tunnel/src/socket.rs
 @@ -8,7 +8,7 @@ use crate::{OnionTunnel, TunnelScaffolding};
@@ -895,7 +950,12 @@ index 77a3b29..cc389b6 100644
  use smoltcp::socket::{tcp, udp};
  use smoltcp::{iface::SocketHandle, wire::IpEndpoint};
  use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-@@ -58,8 +58,15 @@ impl UdpSocket {
+@@ -54,12 +54,20 @@ impl UdpSocket {
+             .get_mut::<udp::Socket>(self.handle))
+     }
+ 
++    #[allow(dead_code)]
+     pub fn bind(&mut self, addr: smoltcp::wire::IpAddress, port: u16) -> Result<(), BindError> {
          self.with(|s| s.bind((addr, port)))
      }
  
@@ -913,7 +973,7 @@ index 77a3b29..cc389b6 100644
          self.notify.notify_one();
          ret
      }
-@@ -73,15 +80,13 @@ impl Drop for UdpSocket {
+@@ -73,15 +81,13 @@ impl Drop for UdpSocket {
  }
  
  impl Stream for UdpSocket {

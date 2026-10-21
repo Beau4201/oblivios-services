@@ -172,6 +172,33 @@ mod tests {
     }
 
     #[test]
+    fn get_applied_counts_the_rules_this_helper_cannot_describe_too() {
+        let mut h = helper();
+        h.handle(RouteMsg::Apply { seq: 1, spec: spec(vec![r(10000, 10230)]) });
+        h.nl.foreign_unreadable.push((crate::routes::spec::Family::V4, 13600));
+        assert_eq!(h.handle(RouteMsg::GetApplied { seq: 2 }), HelperReply::one(RouteReply::Applied { seq: 2, rules: 7 }));
+    }
+
+    #[test]
+    fn get_applied_stops_at_the_largest_count_the_message_can_carry() {
+        use crate::routes::spec::{Action, Family, Rule};
+        let mut h = helper();
+        for i in 0..70_000u32 {
+            h.nl.rules.push(Rule {
+                priority: 13_100 + (i % 800),
+                family: Family::V4,
+                uids: Some(UidRange { start: 10_000 + i, end: 10_000 + i }),
+                proto: None,
+                dport: None,
+                dst: None,
+                fwmark: None,
+                action: Action::Lookup(1),
+            });
+        }
+        assert_eq!(h.handle(RouteMsg::GetApplied { seq: 5 }), HelperReply::one(RouteReply::Applied { seq: 5, rules: u16::MAX }));
+    }
+
+    #[test]
     fn a_kernel_that_does_not_answer_sensibly_is_failed_not_a_panic() {
         let mut h = helper();
         h.nl.garbage = true;

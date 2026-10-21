@@ -518,6 +518,16 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn clear_tolerates_a_rule_that_is_already_gone() {
+        let mut k = FakeKernel::default();
+        apply(&mut k, &plan_of(vec![r(10000, 10230)], vec![], None)).unwrap();
+        // Somebody removed each rule between the read and the delete: ENOENT for every deletion.
+        k.fail_with = Some((nl::RTM_DELRULE, ENOENT));
+        let out = clear(&mut k).unwrap();
+        assert_eq!(out.removed, 6);
+    }
+
+    #[test]
     fn the_band_is_read_for_both_families() {
         let mut k = FakeKernel::default();
         apply(&mut k, &plan_of(vec![r(10000, 10230)], vec![], None)).unwrap();

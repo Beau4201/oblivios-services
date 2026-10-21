@@ -18,12 +18,16 @@ use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, PoisonError, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-/// A peer that sends nothing for this long is dropped; one that does not take a reply within `WRITE_TIMEOUT` too.
+/// A peer that sends nothing for this long is dropped; one that does not take a reply within `WRITE_TIMEOUT` too. A frame
+/// that has begun must be complete within `FRAME_DEADLINE`: a byte now and then does not keep a connection for ever.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+const FRAME_DEADLINE: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 const READ_CHUNK: usize = 512;
+/// The most failure reports one `GetState` carries; the rest are sent with the next one.
+const MAX_FAILURES_PER_STATE: usize = 16;
 
 /// What the daemon answers to one message: the frames to write, in order, and whether the connection ends after them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,7 +121,17 @@ impl Control {
                 self.shutdown = true;
                 Reply::closing(FromDaemon::Ack { seq })
             }
-            ToDaemon::GetState { .. } => Reply::one(FromDaemon::State { state: self.scaffolding.state() }),
+            ToDaemon::GetState { .. } => {
+                // The state, then the apps and companies whose failures crossed a threshold since the last call.
+                let mut msgs = vec![FromDaemon::State { state: self.scaffolding.state() }];
+                msgs.extend(
+                    self.scaffolding
+                        .due_failures(MAX_FAILURES_PER_STATE)
+                        .into_iter()
+                        .map(|d| FromDaemon::Failures { uid: d.uid, company: d.company, count: d.count }),
+                );
+                Reply { msgs, close: false }
+            }
             ToDaemon::SetPolicy { seq, classes } => {
                 let mut p = self.policy.write().unwrap_or_else(PoisonError::into_inner);
                 Reply::result(seq, p.set_classes(classes))
@@ -213,6 +227,44 @@ pub fn inherited_control(var: &str) -> io::Result<UnixListener> {
     listener_from_fd(raw)
 }
 
+/// Accepts connections on the control socket and serves each in its own thread, one at a time in effect: a new connection
+/// of the exit app replaces the old one (the old one is shut down), because an exit app that restarted must not wait for
+/// the dead connection to time out. The peer is checked before it can replace anything, so a stranger cannot cut off the
+/// exit app. Returns when the listener fails; `on_shutdown` is called after a peer asked the daemon to shut down.
+pub fn serve_connections(
+    listener: UnixListener,
+    auth: Auth,
+    control: Arc<std::sync::Mutex<Control>>,
+    on_shutdown: impl Fn() + Send + Sync + 'static,
+) {
+    use std::net::Shutdown;
+    let current: Arc<std::sync::Mutex<Option<UnixStream>>> = Arc::new(std::sync::Mutex::new(None));
+    let on_shutdown = Arc::new(on_shutdown);
+    for stream in listener.incoming() {
+        let Ok(stream) = stream else {
+            // A persistent accept error (no descriptors left) must not become a busy loop.
+            std::thread::sleep(Duration::from_millis(100));
+            continue;
+        };
+        if check_peer(&stream, &auth).is_err() {
+            continue; // dropped: closed without a byte read
+        }
+        if let Ok(handle) = stream.try_clone() {
+            let mut cur = current.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(old) = cur.replace(handle) {
+                let _ = old.shutdown(Shutdown::Both);
+            }
+        }
+        let (control, auth, on_shutdown) = (control.clone(), auth.clone(), on_shutdown.clone());
+        std::thread::spawn(move || {
+            let _ = serve(stream, &auth, |m| control.lock().unwrap_or_else(PoisonError::into_inner).handle(m));
+            if control.lock().unwrap_or_else(PoisonError::into_inner).shutdown_requested() {
+                on_shutdown();
+            }
+        });
+    }
+}
+
 /// Serves one connection until the peer closes it, sends `Shutdown` or sends something invalid.
 pub fn serve(stream: UnixStream, auth: &Auth, on_message: impl FnMut(ToDaemon) -> Reply) -> io::Result<()> {
     serve_checked(stream, |s| check_peer(s, auth), on_message)
@@ -234,22 +286,37 @@ pub(crate) fn serve_checked(
 /// is read, read frames into a buffer that never grows past one frame plus one read, answer each frame in order, and end
 /// on a frame the handler marks as the last, on the peer's close, or on a frame that does not decode.
 pub(crate) fn serve_framed<M, R>(
+    stream: UnixStream,
+    check: impl FnOnce(&UnixStream) -> io::Result<()>,
+    decode: fn(&[u8]) -> Result<(M, usize), DecodeError>,
+    encode: fn(&R) -> Vec<u8>,
+    on_message: impl FnMut(M) -> (Vec<R>, bool),
+) -> io::Result<()> {
+    serve_framed_with(stream, check, decode, encode, on_message, IDLE_TIMEOUT, FRAME_DEADLINE)
+}
+
+/// [`serve_framed`] with the two time limits passed in, so that a test need not wait for the real ones.
+pub(crate) fn serve_framed_with<M, R>(
     mut stream: UnixStream,
     check: impl FnOnce(&UnixStream) -> io::Result<()>,
     decode: fn(&[u8]) -> Result<(M, usize), DecodeError>,
     encode: fn(&R) -> Vec<u8>,
     mut on_message: impl FnMut(M) -> (Vec<R>, bool),
+    idle: Duration,
+    frame_deadline: Duration,
 ) -> io::Result<()> {
     check(&stream)?;
-    stream.set_read_timeout(Some(IDLE_TIMEOUT))?;
     stream.set_write_timeout(Some(WRITE_TIMEOUT))?;
     let mut buf: Vec<u8> = Vec::with_capacity(4 + MAX_FRAME + READ_CHUNK);
     let mut chunk = [0u8; READ_CHUNK];
+    // When the bytes now in `buf` began: a partial frame must be complete by `frame_deadline` after this.
+    let mut frame_began: Option<Instant> = None;
     loop {
         loop {
             match decode(&buf) {
                 Ok((msg, used)) => {
                     buf.drain(..used);
+                    frame_began = if buf.is_empty() { None } else { Some(Instant::now()) };
                     let (replies, close) = on_message(msg);
                     for m in &replies {
                         stream.write_all(&encode(m))?;
@@ -262,15 +329,31 @@ pub(crate) fn serve_framed<M, R>(
                 Err(e) => return Err(invalid(e)),
             }
         }
+        // How long to wait for more: the idle limit between frames, the rest of the deadline inside one.
+        let wait = match frame_began {
+            Some(t) => frame_deadline.saturating_sub(t.elapsed()),
+            None => idle,
+        };
+        if wait.is_zero() {
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "a control frame did not arrive in time"));
+        }
+        stream.set_read_timeout(Some(wait))?;
         let n = loop {
             match stream.read(&mut chunk) {
                 Ok(n) => break n,
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                // The read time-out of a socket is reported as WouldBlock: say what it is.
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    return Err(io::Error::new(io::ErrorKind::TimedOut, "no control frame arrived in time"));
+                }
                 Err(e) => return Err(e),
             }
         };
         if n == 0 {
             return if buf.is_empty() { Ok(()) } else { Err(io::ErrorKind::UnexpectedEof.into()) };
+        }
+        if buf.is_empty() {
+            frame_began = Some(Instant::now());
         }
         buf.extend_from_slice(&chunk[..n]);
     }
@@ -688,6 +771,160 @@ mod tests {
         let r = c.handle(ToDaemon::Shutdown { seq: 4 });
         assert_eq!(r, Reply { msgs: vec![FromDaemon::Ack { seq: 4 }], close: true });
         assert!(c.shutdown_requested());
+    }
+
+    fn flow_failures(s: &ExitScaffolding, uid: u32, host: &str, n: u32) {
+        for _ in 0..n {
+            s.flow_failed(uid, host, std::time::Instant::now());
+        }
+    }
+
+    #[test]
+    fn get_state_carries_the_failures_that_are_due_and_each_only_once() {
+        let policy: SharedPolicy = Arc::new(RwLock::new(Policy::default()));
+        let list = crate::masklist::MaskList::parse("exit-mask-list\t1\nads.example.com\t7\tExample Ads\n").unwrap();
+        let s = ExitScaffolding::with_policy(Box::new(|_, _, _| Ok(Some(1))), policy, Arc::new(list));
+        let mut c = Control::new(s.clone(), "exit0".into(), 64 * MIB);
+        flow_failures(&s, 10100, "ads.example.com", 3);
+        flow_failures(&s, 10101, "www.example.org", 2);
+        let first = c.handle(ToDaemon::GetState { seq: 1 }).msgs;
+        assert_eq!(
+            first,
+            vec![
+                FromDaemon::State { state: DaemonState::Bootstrapping },
+                FromDaemon::Failures { uid: 10100, company: 7, count: 3 }
+            ]
+        );
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 2 }).msgs.len(), 1, "reported once");
+        flow_failures(&s, 10101, "www.example.org", 1);
+        assert_eq!(
+            c.handle(ToDaemon::GetState { seq: 3 }).msgs[1],
+            FromDaemon::Failures { uid: 10101, company: 0, count: 3 },
+            "an unlisted host is company 0"
+        );
+    }
+
+    #[test]
+    fn get_state_carries_at_most_sixteen_failures_and_leaves_the_rest_for_the_next_call() {
+        let s = scaffolding();
+        let mut c = Control::new(s.clone(), "exit0".into(), 64 * MIB);
+        for uid in 10000..10020u32 {
+            flow_failures(&s, uid, "x.example", 3);
+        }
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 1 }).msgs.len(), 1 + 16);
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 2 }).msgs.len(), 1 + 4);
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 3 }).msgs.len(), 1);
+    }
+
+    fn dummy_decode(buf: &[u8]) -> Result<(u8, usize), DecodeError> {
+        // Frames of the daemon's protocol, decoded to a small number: enough for the timing tests.
+        crate::control::decode_to_daemon(buf).map(|(m, n)| (if matches!(m, ToDaemon::Hello { .. }) { 1 } else { 2 }, n))
+    }
+
+    fn dummy_encode(_: &u8) -> Vec<u8> {
+        vec![0, 0, 0, 2, 0x84, 0]
+    }
+
+    #[test]
+    fn a_frame_that_trickles_in_is_dropped_at_its_deadline_however_often_a_byte_arrives() {
+        let (server, mut client) = UnixStream::pair().unwrap();
+        let started = Instant::now();
+        let h = thread::spawn(move || {
+            serve_framed_with(server, |_| Ok(()), dummy_decode, dummy_encode, |_| (vec![], false), Duration::from_secs(30), Duration::from_millis(400))
+        });
+        // The header of a frame that claims 1000 bytes; then one byte every 60 ms, which never completes it.
+        client.write_all(&1000u32.to_be_bytes()).unwrap();
+        for _ in 0..40 {
+            if client.write_all(&[0x41]).is_err() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(60));
+        }
+        let e = h.join().unwrap().unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
+    }
+
+    #[test]
+    fn a_peer_that_says_nothing_is_dropped_at_the_idle_limit() {
+        let (server, _client) = UnixStream::pair().unwrap();
+        let started = Instant::now();
+        let e = serve_framed_with(server, |_| Ok(()), dummy_decode, dummy_encode, |_| (vec![], false), Duration::from_millis(300), Duration::from_secs(30))
+            .unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TimedOut);
+        assert!(started.elapsed() >= Duration::from_millis(250) && started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn complete_frames_keep_a_connection_alive_past_the_frame_deadline() {
+        let (server, mut client) = UnixStream::pair().unwrap();
+        let h = thread::spawn(move || {
+            serve_framed_with(server, |_| Ok(()), dummy_decode, dummy_encode, |_| (vec![], false), Duration::from_secs(30), Duration::from_millis(300))
+        });
+        for _ in 0..12 {
+            client.write_all(&encode_to_daemon(&ToDaemon::Hello { version: 2 })).unwrap();
+            thread::sleep(Duration::from_millis(100));
+        }
+        drop(client);
+        assert!(h.join().unwrap().is_ok(), "four times the deadline in all, but every frame was complete in time");
+    }
+
+    #[test]
+    fn a_new_connection_of_the_peer_replaces_the_old_one() {
+        let d = sockdir("replace");
+        let path = d.join("ctl");
+        let listener = bind_control(&path).unwrap();
+        let ctl = Arc::new(std::sync::Mutex::new(control()));
+        let c2 = ctl.clone();
+        thread::spawn(move || serve_connections(listener, Auth::Uid(my_uid()), c2, || {}));
+        let mut first = UnixStream::connect(&path).unwrap();
+        first.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        first.write_all(&encode_to_daemon(&ToDaemon::Hello { version: PROTOCOL_VERSION })).unwrap();
+        assert!(matches!(read_reply(&mut first), FromDaemon::Ready { .. }));
+        // The exit app restarted: its new connection is served at once, and the old one ends.
+        let mut second = UnixStream::connect(&path).unwrap();
+        second.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        second.write_all(&encode_to_daemon(&ToDaemon::GetState { seq: 9 })).unwrap();
+        assert!(matches!(read_reply(&mut second), FromDaemon::State { .. }));
+        assert!(sees_eof(&mut first), "the old connection was shut down");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_stranger_is_dropped_without_a_byte_read() {
+        let d = sockdir("stranger");
+        let path = d.join("ctl");
+        let listener = bind_control(&path).unwrap();
+        let ctl = Arc::new(std::sync::Mutex::new(control()));
+        // Nobody of this process's uid is the peer: every connection is a stranger.
+        let c2 = ctl.clone();
+        thread::spawn(move || serve_connections(listener, Auth::Uid(my_uid().wrapping_add(1)), c2, || {}));
+        let mut s = UnixStream::connect(&path).unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let _ = s.write_all(&encode_to_daemon(&ToDaemon::Hello { version: PROTOCOL_VERSION }));
+        assert!(sees_eof(&mut s), "no reply of any kind");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_shutdown_over_the_socket_calls_the_shutdown_hook() {
+        let d = sockdir("shutdown");
+        let path = d.join("ctl");
+        let listener = bind_control(&path).unwrap();
+        let ctl = Arc::new(std::sync::Mutex::new(control()));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let c2 = ctl.clone();
+        thread::spawn(move || {
+            serve_connections(listener, Auth::Uid(my_uid()), c2, move || {
+                let _ = tx.send(());
+            })
+        });
+        let mut c = UnixStream::connect(&path).unwrap();
+        c.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        c.write_all(&encode_to_daemon(&ToDaemon::Shutdown { seq: 1 })).unwrap();
+        assert_eq!(read_reply(&mut c), FromDaemon::Ack { seq: 1 });
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]

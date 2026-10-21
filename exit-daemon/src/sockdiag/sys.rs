@@ -9,8 +9,9 @@ use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 
 /// A reply to one exact-socket lookup is about 90 bytes; anything larger is not an answer to this request.
 const REPLY_MAX: usize = 8192;
-/// A kernel that does not answer must not hold a flow forever.
-const TIMEOUT_SECS: libc::time_t = 2;
+/// A kernel that does not answer must not hold the packet loop: the lookup runs inside it. A lookup takes microseconds, so a
+/// quarter of a second is a kernel in trouble, and the flow is refused.
+const TIMEOUT_USEC: libc::suseconds_t = 250_000;
 
 fn cvt(ret: libc::c_int) -> io::Result<libc::c_int> {
     if ret < 0 {
@@ -27,7 +28,7 @@ pub fn query(request: &[u8]) -> io::Result<Vec<u8>> {
     // SAFETY: `raw` is a valid descriptor that nothing else owns; the OwnedFd closes it on every path out.
     let fd = unsafe { OwnedFd::from_raw_fd(raw) };
 
-    let timeout = libc::timeval { tv_sec: TIMEOUT_SECS, tv_usec: 0 };
+    let timeout = libc::timeval { tv_sec: 0, tv_usec: TIMEOUT_USEC };
     for opt in [libc::SO_RCVTIMEO, libc::SO_SNDTIMEO] {
         // SAFETY: the pointer and length describe `timeout`, which outlives the call.
         cvt(unsafe {
