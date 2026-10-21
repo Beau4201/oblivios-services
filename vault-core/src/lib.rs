@@ -2,12 +2,16 @@
 //! Core of the FreeholdOS Passwords app (ADR-185).
 #![deny(unsafe_code)]
 
+mod codec;
 pub mod envelope;
 pub mod error;
 mod ffi;
 pub mod kdf;
 pub mod keys;
+pub mod secret;
 mod selftest;
+pub mod store;
+pub mod vault;
 
 /// Version of the core, from `Cargo.toml`.
 pub fn core_version() -> &'static str {
