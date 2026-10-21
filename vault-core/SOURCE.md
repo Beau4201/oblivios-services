@@ -38,16 +38,13 @@ A standalone cargo build cannot reach that copy either, so every crate comes fro
 
 ## Build record
 
-| Item | Value (Task 1, 2026-10-21) |
+| Item | Value |
 | --- | --- |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `--release`, `panic = "abort"`, `lto`, `opt-level = "z"` |
-| `libvault_core.so` | 1 336 264 bytes, SHA-256 `4069ed693fe70d12c82ac83e5da62ab7433658e2718aff0b7b8203d1eb8024ed` |
-| Reproducible | two builds into two target directories gave the same SHA-256 |
-| Needed libraries | `libc.so`, `libdl.so` (`readelf -d`, read on the workstation) |
-| Exports | `freeholdos_vault_selftest` |
-
-The size and hash are snapshots of the Task 1 build (a known-answer self-check of each crate, no vault code yet); they
-change with the first real module and are re-recorded by Task 9.
+| `libvault_core.so` | the hash, size and commit of the library that ships are in `freeholdos-platform/passwords/core/SOURCE.md`; this file does not repeat them |
+| Reproducible | two builds from a `git archive` of a commit into two target directories give the same SHA-256 (checked again for every library that ships) |
+| Needed libraries | `libc.so`, `libdl.so`, `libm.so` |
+| Exports | exactly the functions of `jni.rs`, listed in `tools/build-android.sh` |
 
 ## Common-password list (`data/common-passwords.txt`)
 
