@@ -24,6 +24,10 @@ Left out on purpose, and why:
   * the size check before reading in store.rs read_bounded (the check after reading gives the same answer; the first one
     only keeps a hostile file from being read and from being allocated up front, which a test cannot show without
     allocating tens of gigabytes);
+  * equivalent mutants (the same answer by another route): the single-character test of checkup's pattern rule (the
+    repeated-block rule with a unit of one catches it), the length-below-class-count test of the generator (the attempt cap
+    gives the same Corrupt, only slower), and the history, list and field limits of exchange's take_* helpers (the final
+    `validate` of every imported entry refuses the same input with the same TooLarge);
   * equivalent mutants: the header bound into the envelope's authenticated data (magic and version are checked first),
     the second validation of the Argon2 parameters in unwrap_with_passphrase, and the bracket check of
     registrable_domain (bare and bracketed IPv6 both end as None).
@@ -197,7 +201,6 @@ MUTATIONS = [
     ("checkup: seven characters are fine", C, "if p.chars().count() < 8 {", "if p.chars().count() < 7 {"),
     ("checkup: decorated common words pass", C, "(base.chars().count() >= 4 && common().contains(base))", "false"),
     ("checkup: common list is case sensitive", C, "let lower = password.to_lowercase();\n    let base", "let lower = password.to_string();\n    let base"),
-    ("checkup: one repeated character passes", C, "if chars.iter().all(|&c| c == chars[0]) {", "if false {"),
     ("checkup: ascending runs pass", C, "if diffs.iter().all(|&d| d == 1) ||", "if false ||"),
     ("checkup: descending runs pass", C, "|| diffs.iter().all(|&d| d == -1) {", "|| false {"),
     ("checkup: keyboard rows pass", C, "if chars.len() >= 4 && KEYBOARD_ROWS", "if false && KEYBOARD_ROWS"),
@@ -224,7 +227,6 @@ MUTATIONS = [
     ("generator: no rejection", G, "if x < zone {", "if true {"),
     ("generator: zone is not a multiple", G, "let zone = (1u64 << 32) / n * n;", "let zone = (1u64 << 32) / n;"),
     ("generator: length limit (>=)", G, "if opts.length > MAX_LENGTH {", "if opts.length >= MAX_LENGTH {"),
-    ("generator: length below class count passes", G, "opts.length < classes.len()", "opts.length < 1"),
     ("generator: length equal to class count refused", G, "opts.length < classes.len()", "opts.length <= classes.len()"),
     ("generator: one class is enough", G, "classes.iter().all(|set| candidate.iter().any(|c| set.contains(c)))", "classes.iter().any(|set| candidate.iter().any(|c| set.contains(c)))"),
     ("generator: no class check", G, "classes.iter().all(|set| candidate.iter().any(|c| set.contains(c)))", "true"),
@@ -239,12 +241,9 @@ MUTATIONS = [
     ("exchange: entry limit (>=)", X, "if items.len() > MAX_ENTRIES {", "if items.len() >= MAX_ENTRIES {"),
     ("exchange: entry limit removed", X, "if items.len() > MAX_ENTRIES {", "if false {"),
     ("exchange: history limit (>=)", X, "if items.len() > MAX_HISTORY {", "if items.len() >= MAX_HISTORY {"),
-    ("exchange: history limit removed", X, "if items.len() > MAX_HISTORY {", "if false {"),
     ("exchange: list limit (>=)", X, "if items.len() > MAX_LIST {", "if items.len() >= MAX_LIST {"),
-    ("exchange: list limit removed", X, "if items.len() > MAX_LIST {", "if false {"),
     ("exchange: field limit (<)", X, "Some(Value::String(s)) if s.len() <= MAX_FIELD => Ok(s),", "Some(Value::String(s)) if s.len() < MAX_FIELD => Ok(s),"),
-    ("exchange: field limit removed", X, "Some(Value::String(s)) if s.len() <= MAX_FIELD => Ok(s),", "Some(Value::String(s)) => Ok(s),"),
-    ("exchange: duplicate ids kept", X, "while !seen.insert(e.id) {", "while false {"),
+    ("exchange: duplicate ids kept", X, "while !seen.insert(e.id) {", "while !seen.insert(e.id) && false {"),
     ("exchange: merge overwrites", X, "while work.get(&e.id).is_some() {", "while false {"),
     ("exchange: id hex without padding", X, 'format!("{b:02x}")', 'format!("{b:x}")'),
     ("exchange: id length not checked", X, "if s.len() != 32 || !s.is_ascii() {", "if false {"),

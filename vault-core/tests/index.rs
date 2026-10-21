@@ -251,3 +251,23 @@ fn duplicate_tags_and_unknown_versions_are_refused() {
     v2[4] = 2;
     assert_eq!(DomainIndex::from_bytes(&v2).err(), Some(VaultError::UnsupportedVersion(2)));
 }
+
+#[test]
+fn a_port_is_digits_only() {
+    // u32::parse accepts a leading plus sign; a port with one is not a port.
+    assert_eq!(registrable_domain("github.com:+80"), None);
+    assert_eq!(registrable_domain("github.com:-80"), None);
+    assert_eq!(registrable_domain("github.com: 80"), None);
+}
+
+#[test]
+fn longer_internationalised_labels_match_the_rfc_3492_samples() {
+    // RFC 3492 section 7.1, (I) Russian, and (N) a mix of ASCII and Japanese (here in lower case, as the host is lowered first).
+    let russian = "\u{43f}\u{43e}\u{447}\u{435}\u{43c}\u{443}\u{436}\u{435}\u{43e}\u{43d}\u{438}\u{43d}\u{435}\u{433}\u{43e}\u{432}\u{43e}\u{440}\u{44f}\u{442}\u{43f}\u{43e}\u{440}\u{443}\u{441}\u{441}\u{43a}\u{438}";
+    assert_eq!(registrable_domain(&format!("{russian}.com")), Some("xn--b1abfaaepdrnnbgefbadotcwatmq2g4l.com".into()));
+    let mixed = "hello-another-way-\u{305d}\u{308c}\u{305e}\u{308c}\u{306e}\u{5834}\u{6240}";
+    assert_eq!(registrable_domain(&format!("{mixed}.com")), Some("xn--hello-another-way--fc4qua05auwb3674vfr0b.com".into()));
+    // Japanese with the sample (L) digits first: "3年B組金八先生" lower-cased.
+    let digits = "3\u{5e74}b\u{7d44}\u{91d1}\u{516b}\u{5148}\u{751f}";
+    assert_eq!(registrable_domain(&format!("{digits}.com")), Some("xn--3b-ww4c5e180e575a65lsy2b.com".into()));
+}
