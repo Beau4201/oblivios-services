@@ -5,13 +5,15 @@
 //! default network by the normal routing.
 
 use crate::control::{DaemonState, Kind};
+use crate::guard::{Guard, Promotion};
 use crate::ladder::{host_of, Due, Ladder, SLOW};
 use crate::masklist::MaskList;
 use crate::policy::{Policy, SharedPolicy};
 use crate::ratelimit::RateLimiter;
 use crate::sockdiag::Proto;
 use futures::Stream;
-use onion_tunnel::scaffolding::{ConnectionDetails, DnsDecision, FailedConnectionDetails, TunnelCommand};
+use onion_tunnel::accounting::BandwidthCounter;
+use onion_tunnel::scaffolding::{ConnectionDetails, DnsDecision, FailedConnectionDetails, TorAddr, TunnelCommand};
 use onion_tunnel::{is_fake_address, CountryCode, TunnelScaffolding};
 use smoltcp::wire::{IpAddress, IpEndpoint};
 use std::collections::HashMap;
@@ -47,6 +49,8 @@ struct Inner {
     failures: Mutex<HashMap<u32, u32>>,
     /// The failure ladder: per app and company, what the exit app is told (counts and company ids only).
     ladder: Mutex<Ladder>,
+    /// The speed guard (ADR-188): what each masked company sends to each app, and which companies are passed on for now.
+    guard: Mutex<Guard>,
     /// When each relayed flow began, to tell a slow connection from a quick one. Bounded.
     started: Mutex<HashMap<(IpEndpoint, IpEndpoint), Instant>>,
     /// Questions asked per app, for the limit on DNS.
@@ -89,6 +93,7 @@ impl ExitScaffolding {
                 list,
                 failures: Mutex::new(HashMap::new()),
                 ladder: Mutex::new(Ladder::default()),
+                guard: Mutex::new(Guard::default()),
                 dns_limit: Mutex::new(RateLimiter::default()),
                 started: Mutex::new(HashMap::new()),
                 commands,
@@ -161,6 +166,21 @@ impl ExitScaffolding {
     /// The apps and companies that crossed a threshold and have not been reported in their window, at most `max`.
     pub fn due_failures(&self, max: usize) -> Vec<Due> {
         self.inner.ladder.lock().unwrap_or_else(PoisonError::into_inner).due(Instant::now(), max)
+    }
+
+    /// Reads the guard's counters; the entry point calls it every [`crate::guard::SAMPLE`].
+    pub fn tick_guard(&self, now: Instant) {
+        self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).tick(now);
+    }
+
+    /// The companies that are passed on to an app for now, at most `max`, each flagged as fresh once.
+    pub fn promotions(&self, max: usize) -> Vec<Promotion> {
+        self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).report(Instant::now(), max)
+    }
+
+    /// "Hide again": ends the promotion of a company for an app and keeps it hidden until the daemon restarts.
+    pub fn release_promotion(&self, uid: u32, company: u16) {
+        self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).release(uid, company);
     }
 
     /// New circuits for the connections of one app from now on.
@@ -263,6 +283,15 @@ impl TunnelScaffolding for ExitScaffolding {
         self.inner.started.lock().unwrap_or_else(PoisonError::into_inner).remove(&(src, dst));
     }
 
+    /// The counter of the guard for a flow of a masked app to a listed company: the bytes that reach the app on the flow
+    /// are added to it (patch 0006). A flow of any other app, and a flow to a name that is not listed, is not counted.
+    fn get_flow_counter(&self, isolation_key: u64, tor_dst: &TorAddr) -> Option<Arc<BandwidthCounter>> {
+        let uid = u32::try_from(isolation_key).ok()?;
+        let company = self.inner.list.classify(host_of(&tor_dst.to_string()))?;
+        let masked = self.inner.policy.read().unwrap_or_else(PoisonError::into_inner).kind_of(uid) == Some(Kind::Masked);
+        masked.then(|| self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).counter(uid, company, Instant::now()))
+    }
+
     /// One more DNS question of an app: within its limit or not (see [`RateLimiter`]). A key that is not a uid has no limit.
     fn dns_allow(&self, isolation_key: u64) -> bool {
         let Ok(uid) = u32::try_from(isolation_key) else { return true };
@@ -270,15 +299,21 @@ impl TunnelScaffolding for ExitScaffolding {
     }
 
     /// An app of class Tor reaches everything through Tor. An app of class Masked reaches the names on the list through
-    /// Tor, unless the user chose to show the real address of that company to that app. Every other app, and every
-    /// key that is not a uid, has its queries passed on to its resolver.
+    /// Tor, unless the user chose to show the real address of that company to that app, or the speed guard found that
+    /// the company sends that app large amounts of data (ADR-188). Every other app, and every key that is not a uid, has
+    /// its queries passed on to its resolver.
     fn dns_decision(&self, isolation_key: u64, name: &str) -> DnsDecision {
         let Ok(uid) = u32::try_from(isolation_key) else { return DnsDecision::Forward };
         let policy = self.inner.policy.read().unwrap_or_else(PoisonError::into_inner);
         match policy.kind_of(uid) {
             Some(Kind::Tor) => DnsDecision::Tor,
             Some(Kind::Masked) => match self.inner.list.classify(name) {
-                Some(company) if !policy.overridden(uid, company) => DnsDecision::Tor,
+                Some(company)
+                    if !policy.overridden(uid, company)
+                        && !self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).heavy(uid, company, Instant::now()) =>
+                {
+                    DnsDecision::Tor
+                }
                 _ => DnsDecision::Forward,
             },
             Some(Kind::Exempt) | None => DnsDecision::Forward,
@@ -366,6 +401,45 @@ mod tests {
         assert_eq!(s.dns_decision(10231, "www.example.org."), DnsDecision::Tor);
         policy.write().unwrap().set_classes(vec![]).unwrap();
         assert_eq!(s.dns_decision(10231, "www.example.org."), DnsDecision::Forward);
+    }
+
+    fn tor_addr(host: &str) -> TorAddr {
+        TorAddr::from((host, 443)).unwrap()
+    }
+
+    #[test]
+    fn only_a_flow_of_a_masked_app_to_a_listed_company_is_counted_and_one_counter_serves_every_flow_of_the_pair() {
+        let (s, _) = dns_scaffolding(vec![class(10000, 10999, Kind::Masked), class(11000, 11099, Kind::Tor), class(11100, 11199, Kind::Exempt)]);
+        let a = s.get_flow_counter(10100, &tor_addr("ads.example.com")).expect("masked app, listed company");
+        let b = s.get_flow_counter(10100, &tor_addr("x.ads.example.com")).expect("another host of the same company");
+        assert!(Arc::ptr_eq(&a, &b), "one counter per app and company");
+        let c = s.get_flow_counter(10100, &tor_addr("www.example.net")).expect("another company");
+        assert!(!Arc::ptr_eq(&a, &c));
+        let d = s.get_flow_counter(10101, &tor_addr("ads.example.com")).expect("another app");
+        assert!(!Arc::ptr_eq(&a, &d));
+        assert!(s.get_flow_counter(10100, &tor_addr("www.example.org")).is_none(), "an unlisted name");
+        assert!(s.get_flow_counter(10100, &tor_addr("cdn.example.net")).is_none(), "a protected row");
+        assert!(s.get_flow_counter(11050, &tor_addr("ads.example.com")).is_none(), "an app of class Tor");
+        assert!(s.get_flow_counter(11150, &tor_addr("ads.example.com")).is_none(), "an app of class Exempt");
+        assert!(s.get_flow_counter(5000, &tor_addr("ads.example.com")).is_none(), "an app without a class");
+        assert!(s.get_flow_counter(u64::from(u32::MAX) + 1, &tor_addr("ads.example.com")).is_none(), "a key that is no uid");
+    }
+
+    #[test]
+    fn a_company_that_sends_an_app_four_mebibytes_is_passed_on_to_that_app_only_and_hide_again_undoes_it() {
+        let (s, _) = dns_scaffolding(vec![class(10000, 19999, Kind::Masked)]);
+        let heavy = s.get_flow_counter(10100, &tor_addr("ads.example.com")).unwrap();
+        let _quiet = s.get_flow_counter(10101, &tor_addr("ads.example.com")).unwrap();
+        assert_eq!(s.dns_decision(10100, "ads.example.com."), DnsDecision::Tor, "hidden at first");
+        heavy.on_rx(crate::guard::HEAVY_BYTES);
+        s.tick_guard(Instant::now() + std::time::Duration::from_secs(5));
+        assert_eq!(s.dns_decision(10100, "ads.example.com."), DnsDecision::Forward, "passed on to the app it sent to");
+        assert_eq!(s.dns_decision(10100, "www.example.net."), DnsDecision::Tor, "another company of the same app stays hidden");
+        assert_eq!(s.dns_decision(10101, "ads.example.com."), DnsDecision::Tor, "the same company for another app stays hidden");
+        assert_eq!(s.promotions(16), vec![Promotion { uid: 10100, company: 7, fresh: true }]);
+        s.release_promotion(10100, 7);
+        assert_eq!(s.dns_decision(10100, "ads.example.com."), DnsDecision::Tor, "hide again");
+        assert!(s.promotions(16).is_empty());
     }
 
     fn v6(a: [u16; 8], port: u16) -> IpEndpoint {

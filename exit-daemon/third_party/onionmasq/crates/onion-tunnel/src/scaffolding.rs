@@ -343,6 +343,15 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
         None
     }
 
+    /// The counter for one TCP flow through Tor, chosen by its isolation key and the destination it was asked for
+    /// (FreeholdOS patch 0006). The bytes that reach the app on this flow are added to the returned counter, so a
+    /// scaffolding can count per destination, not only per app. The default is [`Self::get_bandwidth_counter`], so
+    /// the behaviour of a scaffolding that does not override it is unchanged.
+    fn get_flow_counter(&self, isolation_key: u64, tor_dst: &TorAddr) -> Option<Arc<BandwidthCounter>> {
+        let _ = tor_dst;
+        self.get_bandwidth_counter(isolation_key)
+    }
+
     /// Provide configuration for a new UDP tunnel
     ///
     /// Requires the "experimental-udp-tunnel" crate feature.
@@ -427,5 +436,22 @@ mod test {
         //dummy.udp_tunnel(...);
         #[cfg(feature = "experimental-udp-tunnel")]
         assert_eq!(dummy.udp_prebuild(0), HashMap::new());
+    }
+
+    // FreeholdOS patch 0006: the counter of a flow is the counter of its app unless the scaffolding chooses another.
+    #[test]
+    fn the_counter_of_a_flow_defaults_to_the_counter_of_its_app() {
+        struct PerApp(Arc<BandwidthCounter>);
+        impl TunnelScaffolding for PerApp {
+            fn get_bandwidth_counter(&self, _isolation_key: u64) -> Option<Arc<BandwidthCounter>> {
+                Some(self.0.clone())
+            }
+        }
+        let dst = TorAddr::from(("example.com", 443)).unwrap();
+        assert_eq!(DummyScaffolding.get_flow_counter(7, &dst), None, "no counter at all by default");
+        let counter = Arc::new(BandwidthCounter::new());
+        let s = PerApp(counter.clone());
+        let got = s.get_flow_counter(7, &dst).expect("the app's counter");
+        assert!(Arc::ptr_eq(&got, &counter), "the same counter, not a copy");
     }
 }

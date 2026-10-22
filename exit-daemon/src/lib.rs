@@ -7,6 +7,7 @@
 pub mod control;
 #[cfg(test)]
 mod fuzz;
+pub mod guard;
 pub mod ladder;
 pub mod masklist;
 pub mod ratelimit;

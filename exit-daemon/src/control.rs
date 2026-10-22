@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The typed control protocol between the exit app and the daemon (ADR-184, ADR-186), version 2. Safe Rust only. A frame is
+//! The typed control protocol between the exit app and the daemon (ADR-184, ADR-186, ADR-188), version 3. Safe Rust only. A frame is
 //! a `u32` big-endian length of tag plus payload, the tag byte, then the payload. A decoder checks the claimed length before
 //! it looks at anything else and never allocates from it: the only allocations are bounded by [`MAX_FRAME`] (the interface
 //! name, the class list, the company list) and the output of the encoders.
 //!
 //! Every request after `Hello` starts its payload with a sequence number that the reply echoes (`Ack` or `Error`), so the
-//! app can tell which request an answer belongs to. The daemon never pushes: `GetState` returns the state and the failure
-//! counts that are due, and the app asks every few seconds.
+//! app can tell which request an answer belongs to. The daemon never pushes: `GetState` returns the state, the failure
+//! counts that are due and the companies that the speed guard passes on to an app (`Promoted`, with `fresh` set once), and
+//! the app asks every few seconds. `Release` is the app's "Hide again" for one such company.
 
 /// The largest tag-plus-payload a peer may claim.
 pub const MAX_FRAME: usize = 4096;
 /// The longest interface name the kernel accepts (IFNAMSIZ - 1).
 pub const IFNAME_MAX: usize = 15;
 /// The wire version of this module. A `Hello` of another version is answered with `Error { Unsupported }`.
-pub const PROTOCOL_VERSION: u8 = 2;
+pub const PROTOCOL_VERSION: u8 = 3;
 /// The first uid of an ordinary app; ranges below it are never classified by the app.
 pub const FIRST_APP_UID: u32 = 10000;
 /// At most this many ranges in one class table.
@@ -34,11 +35,13 @@ const TAG_SHUTDOWN: u8 = 0x05;
 const TAG_GET_STATE: u8 = 0x06;
 const TAG_SET_POLICY: u8 = 0x07;
 const TAG_SET_OVERRIDES: u8 = 0x08;
+const TAG_RELEASE: u8 = 0x09;
 const TAG_READY: u8 = 0x81;
 const TAG_STATE: u8 = 0x82;
 const TAG_FAILURES: u8 = 0x83;
 const TAG_ACK: u8 = 0x84;
 const TAG_ERROR: u8 = 0x85;
+const TAG_PROMOTED: u8 = 0x86;
 
 /// Bytes of one class entry on the wire: start, end (`u32` each) and the kind.
 const CLASS_BYTES: usize = 9;
@@ -72,6 +75,9 @@ pub enum ToDaemon {
     GetState { seq: u8 },
     SetPolicy { seq: u8, classes: Vec<UidClass> },
     SetOverrides { seq: u8, uid: u32, companies: Vec<u16> },
+    /// "Hide again" (ADR-188): ends the speed guard's promotion of `company` for `uid` and keeps it hidden until the daemon
+    /// restarts.
+    Release { seq: u8, uid: u32, company: u16 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +105,9 @@ pub enum FromDaemon {
     State { state: DaemonState },
     /// A company id, never a host name (capability-boundaries.md).
     Failures { uid: u32, company: u16, count: u32 },
+    /// The speed guard passes the names of `company` on to the app `uid` for now (ADR-188); `fresh` is true the first time it
+    /// is reported, so the app notifies once. A company id, never a host name.
+    Promoted { uid: u32, company: u16, fresh: bool },
     Ack { seq: u8 },
     Error { seq: u8, code: ErrorCode },
 }
@@ -171,6 +180,12 @@ pub fn encode_to_daemon(m: &ToDaemon) -> Vec<u8> {
             }
             frame(TAG_SET_OVERRIDES, &p)
         }
+        ToDaemon::Release { seq, uid, company } => {
+            let mut p = vec![*seq];
+            p.extend_from_slice(&uid.to_be_bytes());
+            p.extend_from_slice(&company.to_be_bytes());
+            frame(TAG_RELEASE, &p)
+        }
     }
 }
 
@@ -189,6 +204,13 @@ pub fn encode_from_daemon(m: &FromDaemon) -> Vec<u8> {
             p[4..6].copy_from_slice(&company.to_be_bytes());
             p[6..].copy_from_slice(&count.to_be_bytes());
             frame(TAG_FAILURES, &p)
+        }
+        FromDaemon::Promoted { uid, company, fresh } => {
+            let mut p = [0u8; 7];
+            p[..4].copy_from_slice(&uid.to_be_bytes());
+            p[4..6].copy_from_slice(&company.to_be_bytes());
+            p[6] = u8::from(*fresh);
+            frame(TAG_PROMOTED, &p)
         }
         FromDaemon::Ack { seq } => frame(TAG_ACK, &[*seq]),
         FromDaemon::Error { seq, code } => frame(TAG_ERROR, &[*seq, *code as u8]),
@@ -280,6 +302,10 @@ pub fn decode_to_daemon(buf: &[u8]) -> Result<(ToDaemon, usize), DecodeError> {
             let companies = entries.chunks_exact(2).map(be16).collect::<Result<Vec<u16>, _>>()?;
             ToDaemon::SetOverrides { seq: payload[0], uid: be32(&payload[1..5])?, companies }
         }
+        TAG_RELEASE => {
+            let p = fixed::<7>(payload)?;
+            ToDaemon::Release { seq: p[0], uid: be32(&p[1..5])?, company: be16(&p[5..7])? }
+        }
         other => return Err(DecodeError::UnknownTag(other)),
     };
     Ok((msg, used))
@@ -318,6 +344,15 @@ pub fn decode_from_daemon(buf: &[u8]) -> Result<(FromDaemon, usize), DecodeError
         TAG_FAILURES => {
             let p = fixed::<10>(payload)?;
             FromDaemon::Failures { uid: be32(&p[0..4])?, company: be16(&p[4..6])?, count: be32(&p[6..10])? }
+        }
+        TAG_PROMOTED => {
+            let p = fixed::<7>(payload)?;
+            let fresh = match p[6] {
+                0 => false,
+                1 => true,
+                _ => return Err(DecodeError::BadValue),
+            };
+            FromDaemon::Promoted { uid: be32(&p[0..4])?, company: be16(&p[4..6])?, fresh }
         }
         TAG_ACK => FromDaemon::Ack { seq: fixed::<1>(payload)?[0] },
         TAG_ERROR => {
@@ -381,6 +416,7 @@ mod tests {
             ),
             (ToDaemon::SetOverrides { seq: 8, uid: 10231, companies: vec![] }, 6),
             (ToDaemon::SetOverrides { seq: 9, uid: 10231, companies: vec![3, 9, 0xffff] }, 6 + 6),
+            (ToDaemon::Release { seq: 10, uid: 10231, company: 12 }, 7),
         ]
     }
 
@@ -392,6 +428,8 @@ mod tests {
             (FromDaemon::State { state: DaemonState::Up }, 1),
             (FromDaemon::State { state: DaemonState::Failed }, 1),
             (FromDaemon::Failures { uid: 10231, company: 12, count: 7 }, 10),
+            (FromDaemon::Promoted { uid: 10231, company: 12, fresh: true }, 7),
+            (FromDaemon::Promoted { uid: 10231, company: 12, fresh: false }, 7),
             (FromDaemon::Ack { seq: 200 }, 1),
             (FromDaemon::Error { seq: 3, code: ErrorCode::BadValue }, 2),
             (FromDaemon::Error { seq: 3, code: ErrorCode::TooMany }, 2),
@@ -444,6 +482,18 @@ mod tests {
         assert_eq!(
             encode_from_daemon(&FromDaemon::Failures { uid: 1, company: 0x0203, count: 4 }),
             [0, 0, 0, 11, 0x83, 0, 0, 0, 1, 2, 3, 0, 0, 0, 4]
+        );
+        assert_eq!(
+            encode_to_daemon(&ToDaemon::Release { seq: 10, uid: 10231, company: 0x0102 }),
+            [0, 0, 0, 8, 0x09, 10, 0, 0, 0x27, 0xf7, 1, 2]
+        );
+        assert_eq!(
+            encode_from_daemon(&FromDaemon::Promoted { uid: 1, company: 0x0203, fresh: true }),
+            [0, 0, 0, 8, 0x86, 0, 0, 0, 1, 2, 3, 1]
+        );
+        assert_eq!(
+            encode_from_daemon(&FromDaemon::Promoted { uid: 1, company: 0x0203, fresh: false }),
+            [0, 0, 0, 8, 0x86, 0, 0, 0, 1, 2, 3, 0]
         );
         assert_eq!(encode_from_daemon(&FromDaemon::Ack { seq: 9 }), [0, 0, 0, 2, 0x84, 9]);
         assert_eq!(encode_from_daemon(&FromDaemon::Error { seq: 9, code: ErrorCode::Unsupported }), [0, 0, 0, 3, 0x85, 9, 4]);
@@ -506,9 +556,9 @@ mod tests {
         // A tag of the other direction is unknown here, and the next tag after each range is too.
         assert_eq!(decode_to_daemon(&frm(0x81, b"tun0")), Err(DecodeError::UnknownTag(0x81)));
         assert_eq!(decode_from_daemon(&frm(0x01, &[1])), Err(DecodeError::UnknownTag(0x01)));
-        assert_eq!(decode_to_daemon(&frm(0x09, &[1])), Err(DecodeError::UnknownTag(0x09)));
+        assert_eq!(decode_to_daemon(&frm(0x0a, &[1])), Err(DecodeError::UnknownTag(0x0a)));
         assert_eq!(decode_to_daemon(&frm(0x00, &[1])), Err(DecodeError::UnknownTag(0x00)));
-        assert_eq!(decode_from_daemon(&frm(0x86, &[1])), Err(DecodeError::UnknownTag(0x86)));
+        assert_eq!(decode_from_daemon(&frm(0x87, &[1])), Err(DecodeError::UnknownTag(0x87)));
     }
 
     #[test]
@@ -531,6 +581,26 @@ mod tests {
         assert_eq!(decode_from_daemon(&frm(0x84, &[1, 1])), Err(DecodeError::Trailing));
         assert_eq!(decode_from_daemon(&frm(0x85, &[1])), Err(DecodeError::BadLength));
         assert_eq!(decode_from_daemon(&frm(0x85, &[1, 1, 1])), Err(DecodeError::Trailing));
+        assert_eq!(decode_to_daemon(&frm(0x09, &[0; 6])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x09, &[0; 8])), Err(DecodeError::Trailing));
+        assert_eq!(decode_from_daemon(&frm(0x86, &[0; 6])), Err(DecodeError::BadLength));
+        assert_eq!(decode_from_daemon(&frm(0x86, &[0; 8])), Err(DecodeError::Trailing));
+    }
+
+    #[test]
+    fn the_fresh_flag_of_a_promotion_is_zero_or_one() {
+        let promoted = |fresh: u8| frm(0x86, &[0, 0, 0x27, 0xf7, 0, 12, fresh]);
+        assert_eq!(
+            decode_from_daemon(&promoted(0)).map(|(m, _)| m),
+            Ok(FromDaemon::Promoted { uid: 10231, company: 12, fresh: false })
+        );
+        assert_eq!(
+            decode_from_daemon(&promoted(1)).map(|(m, _)| m),
+            Ok(FromDaemon::Promoted { uid: 10231, company: 12, fresh: true })
+        );
+        for bad in [2u8, 255] {
+            assert_eq!(decode_from_daemon(&promoted(bad)), Err(DecodeError::BadValue), "fresh {bad}");
+        }
     }
 
     #[test]
@@ -615,7 +685,7 @@ mod tests {
         // Wire-level contract with the app: a changed limit is a protocol change, not a refactoring.
         assert_eq!(MAX_FRAME, 4096);
         assert_eq!(IFNAME_MAX, 15);
-        assert_eq!(PROTOCOL_VERSION, 2);
+        assert_eq!(PROTOCOL_VERSION, 3);
         assert_eq!(FIRST_APP_UID, 10000);
         assert_eq!(MAX_CLASSES, 256);
         assert_eq!(MAX_OVERRIDES, 32);

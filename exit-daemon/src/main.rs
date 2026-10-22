@@ -135,6 +135,15 @@ fn run(a: Args, list: MaskList) -> Result<(), &'static str> {
             }
         });
 
+        // The speed guard reads its counters every few seconds (ADR-188).
+        let ticker = scaffolding.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(exit_daemon::guard::SAMPLE).await;
+                ticker.tick_guard(std::time::Instant::now());
+            }
+        });
+
         let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .map_err(|_| "signal handler could not be installed")?;
         // The Tor client is created but not started (it has contacted nobody) until the exit app's table first has a Tor or

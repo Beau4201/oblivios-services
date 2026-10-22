@@ -9,7 +9,7 @@ its file is an error of this list, not a surviving mutant.
 
     EXIT_BUILD_SSH=user@host tools/run-mutations.py [--check-applies] [--shard=I/N] [NAME_FILTER ...]
 
---check-applies only checks that every mutation applies to the current sources. Left out on purpose: `dns: no questions are routed` (dropping `|| query.questions.is_empty()` from `route_query`): a query
+--check-applies only checks that every mutation applies to the current sources. Left out on purpose: `guard: the window keeps one sample more` (`while p.history.len() > 1` to `> 2` in `Guard::tick`): with two samples left the second is the one just pushed, whose age is 0, so the age test cannot be true there and the extra guard changes nothing; and `dns: no questions are routed` (dropping `|| query.questions.is_empty()` from `route_query`): a query
 without questions leaves both flags false, and the `(false, false)` arm refuses it too, so the clause is redundant.
 
 The result line is
@@ -25,7 +25,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 D = "third_party/onionmasq/crates/onion-tunnel/src/dns.rs"
-C, S, V, G, A, F, P, Y, R, N, K, O, H, W, L, LD, RL = (
+C, S, V, G, A, F, P, Y, R, N, K, O, H, W, L, LD, RL, GD = (
     "src/control.rs",
     "src/sockdiag.rs",
     "src/server.rs",
@@ -43,6 +43,7 @@ C, S, V, G, A, F, P, Y, R, N, K, O, H, W, L, LD, RL = (
     "src/masklist.rs",
     "src/ladder.rs",
     "src/ratelimit.rs",
+    "src/guard.rs",
 )
 
 # (name, file, old, new)
@@ -79,7 +80,7 @@ MUTATIONS = [
     ("control: tag set overrides", C, "const TAG_SET_OVERRIDES: u8 = 0x08;", "const TAG_SET_OVERRIDES: u8 = 0x18;"),
     ("control: tag ack", C, "const TAG_ACK: u8 = 0x84;", "const TAG_ACK: u8 = 0x94;"),
     ("control: tag error", C, "const TAG_ERROR: u8 = 0x85;", "const TAG_ERROR: u8 = 0x95;"),
-    ("control: protocol version", C, "pub const PROTOCOL_VERSION: u8 = 2;", "pub const PROTOCOL_VERSION: u8 = 3;"),
+    ("control: protocol version", C, "pub const PROTOCOL_VERSION: u8 = 3;", "pub const PROTOCOL_VERSION: u8 = 2;"),
     ("control: first app uid", C, "pub const FIRST_APP_UID: u32 = 10000;", "pub const FIRST_APP_UID: u32 = 1000;"),
     ("control: class limit", C, "pub const MAX_CLASSES: usize = 256;", "pub const MAX_CLASSES: usize = 257;"),
     ("control: override limit", C, "pub const MAX_OVERRIDES: usize = 32;", "pub const MAX_OVERRIDES: usize = 33;"),
@@ -89,7 +90,10 @@ MUTATIONS = [
     ("control: encoder emits more classes than accepted", C, "classes[..classes.len().min(MAX_CLASSES)]", "classes[..classes.len().min(MAX_CLASSES + 100)]"),
     ("control: ack carries no sequence number", C, "FromDaemon::Ack { seq } => frame(TAG_ACK, &[*seq]),", "FromDaemon::Ack { .. } => frame(TAG_ACK, &[0]),"),
     ("control: error code swapped", C, "FromDaemon::Error { seq, code } => frame(TAG_ERROR, &[*seq, *code as u8]),", "FromDaemon::Error { seq, code } => frame(TAG_ERROR, &[*code as u8, *seq]),"),
-    ("control: failures company dropped", C, "p[4..6].copy_from_slice(&company.to_be_bytes());", "p[4..6].copy_from_slice(&0u16.to_be_bytes());"),
+    ("control: failures company dropped", C, "let mut p = [0u8; 10];\n            p[..4].copy_from_slice(&uid.to_be_bytes());\n            p[4..6].copy_from_slice(&company.to_be_bytes());", "let mut p = [0u8; 10];\n            p[..4].copy_from_slice(&uid.to_be_bytes());\n            p[4..6].copy_from_slice(&0u16.to_be_bytes());"),
+    ("control: promoted company dropped", C, "let mut p = [0u8; 7];\n            p[..4].copy_from_slice(&uid.to_be_bytes());\n            p[4..6].copy_from_slice(&company.to_be_bytes());", "let mut p = [0u8; 7];\n            p[..4].copy_from_slice(&uid.to_be_bytes());\n            p[4..6].copy_from_slice(&0u16.to_be_bytes());"),
+    ("control: promoted fresh flag dropped", C, "p[6] = u8::from(*fresh);", "p[6] = 0;"),
+    ("control: release company dropped", C, "p.extend_from_slice(&uid.to_be_bytes());\n            p.extend_from_slice(&company.to_be_bytes());\n            frame(TAG_RELEASE, &p)", "p.extend_from_slice(&uid.to_be_bytes());\n            p.extend_from_slice(&0u16.to_be_bytes());\n            frame(TAG_RELEASE, &p)"),
     # policy.rs
     ("policy: overlap allowed", P, "if c.start > c.end || u64::from(c.start) < next_free {", "if c.start > c.end {"),
     ("policy: start after end allowed", P, "if c.start > c.end || u64::from(c.start) < next_free {", "if u64::from(c.start) < next_free {"),
@@ -275,6 +279,40 @@ MUTATIONS = [
     ("ladder: a v6 host keeps its brackets", LD, "return rest.split(']').next().unwrap_or(\"\");", "return addr;"),
     ("ladder: a port is not stripped", LD, "Some((host, port)) if !host.contains(':') && port.bytes().all(|b| b.is_ascii_digit()) => host,", "Some((_host, _port)) => addr,"),
     ("ladder: a v6 address loses its last group", LD, "Some((host, port)) if !host.contains(':') && port.bytes().all(|b| b.is_ascii_digit()) => host,", "Some((host, _port)) => host,"),
+    ("guard: the threshold is five mebibytes", GD, 'pub const HEAVY_BYTES: u64 = 4 * 1024 * 1024;', 'pub const HEAVY_BYTES: u64 = 5 * 1024 * 1024;'),
+    ("guard: the threshold is one byte more", GD, 'delta >= HEAVY_BYTES', 'delta > HEAVY_BYTES'),
+    ("guard: the window is two minutes", GD, 'pub const WINDOW: Duration = Duration::from_secs(60);', 'pub const WINDOW: Duration = Duration::from_secs(120);'),
+    ("guard: the hold is shorter", GD, 'pub const HOLD: Duration = Duration::from_secs(30 * 60);', 'pub const HOLD: Duration = Duration::from_secs(29 * 60);'),
+    ("guard: the hold lasts one tick more", GD, '.is_some_and(|until| now < until)', '.is_some_and(|until| now <= until)'),
+    ("guard: a pinned pair is promoted", GD, '&& !pinned.contains(key) &&', '&&'),
+    ("guard: a release does not pin", GD, 'self.pinned.insert((uid, company));', 'let _ = (uid, company);'),
+    ("guard: a release does not end the promotion", GD, 'if let Some(p) = self.pairs.get_mut(&(uid, company)) {\n            p.until = None;\n            p.fresh = false;\n            p.history.clear();\n        }', 'if let Some(p) = self.pairs.get_mut(&(uid, company)) {\n            p.fresh = false;\n        }'),
+    ("guard: the pin table is one too big", GD, 'if self.pinned.len() < MAX_PAIRS {', 'if self.pinned.len() <= MAX_PAIRS {'),
+    ("guard: the pair table is one too big", GD, 'if self.pairs.len() >= MAX_PAIRS {', 'if self.pairs.len() > MAX_PAIRS {'),
+    ("guard: the pair table is not bounded", GD, 'if self.pairs.len() >= MAX_PAIRS {', 'if false {'),
+    ("guard: the newest pair is evicted", GD, '.min_by_key(|(_, p)| p.created)\n                .or_else(|| self.pairs.iter().filter', '.max_by_key(|(_, p)| p.created)\n                .or_else(|| self.pairs.iter().filter'),
+    ("guard: a pair with a live flow is evicted first", GD, 'p.until.is_none() && Arc::strong_count(&p.counter) == 1)', 'p.until.is_none() && Arc::strong_count(&p.counter) >= 1)'),
+    ("guard: a promoted pair is evicted first", GD, '.filter(|(_, p)| p.until.is_none() && Arc::strong_count', '.filter(|(_, p)| p.until.is_some() && Arc::strong_count'),
+    ("guard: a pair with a live flow is forgotten", GD, '|| !full || Arc::strong_count(&p.counter) > 1', '|| !full'),
+    ("guard: a silent pair is kept for ever", GD, 'p.until.is_some() || delta > 0 || !full ||', 'true ||'),
+    ("guard: a fresh promotion is never fresh", GD, 'p.until = Some(now + HOLD);\n                p.fresh = true;', 'p.until = Some(now + HOLD);\n                p.fresh = false;'),
+    ("guard: a promotion stays fresh", GD, 'out.push(Promotion { uid, company, fresh: p.fresh });\n                p.fresh = false;', 'out.push(Promotion { uid, company, fresh: p.fresh });'),
+    ("guard: a report is not bounded", GD, '        keys.truncate(max);\n', ''),
+    ("guard: an ended promotion is still listed", GD, '.filter(|(_, p)| p.until.is_some_and(|u| now < u))', '.filter(|(_, p)| p.until.is_some())'),
+    ("control: the release tag moves", C, 'const TAG_RELEASE: u8 = 0x09;', 'const TAG_RELEASE: u8 = 0x0a;'),
+    ("control: the promoted tag moves", C, 'const TAG_PROMOTED: u8 = 0x86;', 'const TAG_PROMOTED: u8 = 0x87;'),
+    ("control: a fresh flag of two is fresh", C, '                1 => true,\n                _ => return Err(DecodeError::BadValue),', '                1 | 2 => true,\n                _ => return Err(DecodeError::BadValue),'),
+    ("control: a promotion loses its company", C, 'FromDaemon::Promoted { uid: be32(&p[0..4])?, company: be16(&p[4..6])?, fresh }', 'FromDaemon::Promoted { uid: be32(&p[0..4])?, company: 0, fresh }'),
+    ("control: a release loses its uid", C, 'ToDaemon::Release { seq: p[0], uid: be32(&p[1..5])?, company: be16(&p[5..7])? }', 'ToDaemon::Release { seq: p[0], uid: 0, company: be16(&p[5..7])? }'),
+    ("control: a release has trailing bytes", C, 'TAG_RELEASE => {\n            let p = fixed::<7>(payload)?;', 'TAG_RELEASE => {\n            let p = fixed::<8>(payload)?;'),
+    ("server: a release of a system uid is accepted", V, 'if uid < FIRST_APP_UID || company == 0 {', 'if company == 0 {'),
+    ("server: a release of company zero is accepted", V, 'if uid < FIRST_APP_UID || company == 0 {', 'if uid < FIRST_APP_UID {'),
+    ("server: the first app uid is refused", V, 'if uid < FIRST_APP_UID || company == 0 {', 'if uid <= FIRST_APP_UID || company == 0 {'),
+    ("server: a release does not reach the guard", V, 'self.scaffolding.release_promotion(uid, company);', 'let _ = (uid, company);'),
+    ("server: a release is not acknowledged", V, 'self.scaffolding.release_promotion(uid, company);\n                Reply::ack(seq)', 'self.scaffolding.release_promotion(uid, company);\n                Reply::error(seq, ErrorCode::Failed)'),
+    ("server: more promotions are listed", V, 'const MAX_PROMOTIONS_PER_STATE: usize = crate::guard::MAX_REPORT;', 'const MAX_PROMOTIONS_PER_STATE: usize = crate::guard::MAX_REPORT + 1;'),
+    ("server: promotions are not listed", V, '.promotions(MAX_PROMOTIONS_PER_STATE)', '.promotions(0)'),
+    ("server: a promotion is always fresh", V, 'FromDaemon::Promoted { uid: p.uid, company: p.company, fresh: p.fresh }', 'FromDaemon::Promoted { uid: p.uid, company: p.company, fresh: true }'),
     ("ratelimit: the second is one tick long", RL, "if now.saturating_duration_since(b.second_start) >= Duration::from_secs(1) {", "if now.saturating_duration_since(b.second_start) > Duration::from_secs(1) {"),
     ("ratelimit: the minute is one tick long", RL, "if now.saturating_duration_since(b.minute_start) >= Duration::from_secs(60) {", "if now.saturating_duration_since(b.minute_start) > Duration::from_secs(60) {"),
     ("ratelimit: only one of the limits counts", RL, "b.in_second <= PER_SECOND && b.in_minute <= PER_MINUTE", "b.in_second <= PER_SECOND || b.in_minute <= PER_MINUTE"),
@@ -295,8 +333,17 @@ MUTATIONS = [
     ("scaffolding: slow from six seconds", G, "now.saturating_duration_since(s) >= SLOW", "now.saturating_duration_since(s) > SLOW"),
     ("scaffolding: an unlisted host has a company", G, "self.inner.list.classify(host).unwrap_or(0)", "self.inner.list.classify(host).unwrap_or(1)"),
     ("scaffolding: an app of class tor is passed on", G, "Some(Kind::Tor) => DnsDecision::Tor,", "Some(Kind::Tor) => DnsDecision::Forward,"),
-    ("scaffolding: an override is ignored", G, "Some(company) if !policy.overridden(uid, company) => DnsDecision::Tor,", "Some(_) => DnsDecision::Tor,"),
-    ("scaffolding: an override applies to every app", G, "Some(company) if !policy.overridden(uid, company) => DnsDecision::Tor,", "Some(company) if !policy.overridden(10100, company) => DnsDecision::Tor,"),
+    ("scaffolding: an override is ignored", G, "if !policy.overridden(uid, company)\n", "if true\n"),
+    ("scaffolding: an override applies to every app", G, "if !policy.overridden(uid, company)\n", "if !policy.overridden(10100, company)\n"),
+    ("scaffolding: the guard is ignored", G, "&& !self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).heavy(uid, company, Instant::now()) =>", "&& true =>"),
+    ("scaffolding: the guard promotes every app", G, ".heavy(uid, company, Instant::now()) =>", ".heavy(10100, company, Instant::now()) =>"),
+    ("scaffolding: a promoted company is hidden again", G, "&& !self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).heavy(uid, company, Instant::now()) =>", "&& self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).heavy(uid, company, Instant::now()) =>"),
+    ("scaffolding: an app of class tor is counted", G, "== Some(Kind::Masked);\n        masked.then", "!= Some(Kind::Exempt);\n        masked.then"),
+    ("scaffolding: no app is counted", G, "== Some(Kind::Masked);\n        masked.then", "== Some(Kind::Exempt);\n        masked.then"),
+    ("scaffolding: every host is counted for company zero", G, "let company = self.inner.list.classify(host_of(&tor_dst.to_string()))?;", "let company = self.inner.list.classify(host_of(&tor_dst.to_string())).unwrap_or(0);"),
+    ("scaffolding: a release does nothing", G, "self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).release(uid, company);", "let _ = (uid, company);"),
+    ("scaffolding: the guard is not read", G, "self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).tick(now);", "let _ = now;"),
+    ("scaffolding: no promotion is reported", G, ".report(Instant::now(), max)", ".report(Instant::now(), 0)"),
     ("scaffolding: an exempt app is resolved through tor", G, "Some(Kind::Exempt) | None => DnsDecision::Forward,", "Some(Kind::Exempt) | None => DnsDecision::Tor,"),
     ("scaffolding: a key that is no uid is resolved through tor", G, "let Ok(uid) = u32::try_from(isolation_key) else { return DnsDecision::Forward };", "let Ok(uid) = u32::try_from(isolation_key) else { return DnsDecision::Tor };"),
     ("scaffolding: a masked app resolves unlisted names through tor", G, "                _ => DnsDecision::Forward,\n            },", "                _ => DnsDecision::Tor,\n            },"),

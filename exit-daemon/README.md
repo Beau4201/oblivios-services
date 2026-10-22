@@ -10,10 +10,11 @@ steer packets into the tun and nothing else. The design is
 
 | Part | Role |
 | --- | --- |
-| `src/control.rs` | the typed control protocol, version 2 (frames, sequence numbers, `Ack` and `Error`, uid classes, per-company overrides, `Failures`) |
+| `src/control.rs` | the typed control protocol, version 3 (frames, sequence numbers, `Ack` and `Error`, uid classes, per-company overrides, `Failures`, `Promoted`, `Release`) |
 | `src/policy.rs` | the class of each app uid (Tor, masked, exempt) and the overrides, as the exit app sent them |
 | `src/masklist.rs` | the mask list: names matched by the longest domain suffix, protected rows (company 0) shield what is below them |
 | `src/scaffolding.rs` | the `TunnelScaffolding` of the daemon: attributes every flow to a uid or refuses it, admits a TCP flow only for the class that may have it, decides per DNS question (Tor or pass on), limits DNS per app, bounds flows and commands, feeds the ladder |
+| `src/guard.rs` | the speed guard (ADR-188): what each masked company sends to each app over Tor; 4 MiB within a minute passes the company's names on to that app for 30 minutes, and "Hide again" pins it hidden until the daemon restarts (counts and company ids only, bounded) |
 | `src/ladder.rs`, `src/ratelimit.rs` | failure counts per app and company (10 minute window, 3 failures or one slow connection), and the DNS limit per app (100 a second, 2000 a minute) |
 | `src/sockdiag.rs`, `src/sockdiag/sys.rs` | owner uid of a flow through `sock_diag` (only an established-flow state counts), `SO_PEERCRED`, `SO_PEERSEC`, the socket handed down by `init`; `sys.rs` holds the only `unsafe` of the daemon |
 | `src/server.rs` | the control server: peer check by SELinux type or uid before the first byte, a new connection of the peer replaces the old one, a frame must be complete within ten seconds |
@@ -69,6 +70,7 @@ read-back matches the `Debug` text `max: ByteQty(<bytes>)`; a changed text fails
 - Where the resolver uses DNS-over-TLS (Private DNS that works on the network) the daemon never sees the queries; the exit
   app reports the tier as limited there (`MSK-008`).
 - The 4096-byte TCP buffers of the packet layer limit throughput on a slow circuit; not measured yet (`MSK-002c`).
+- The speed guard acts from the next DNS answer, not on a flow that is open, and a hold of 30 minutes ends: a video that runs longer goes through Tor for 4 MiB again before it is passed on again (`MSK-011`).
 - `cargo audit` has not been run (it needs a download of the advisory database); the licence texts of the 548 third-party dependencies are
   not bundled, only their SPDX expressions (`NOTICE`, `RISKS.md`).
 - A TCP/UDP/IPv6 lookup by `sock_diag` was shown on a phone for TCP over IPv4 only.

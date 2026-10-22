@@ -4,8 +4,8 @@
 //! is too long, unknown or malformed ends the connection; the buffer never grows past one frame plus one read.
 
 use crate::control::{
-    decode_to_daemon, encode_from_daemon, validate_memory_max, DecodeError, ErrorCode, FromDaemon, ToDaemon, MAX_FRAME,
-    PROTOCOL_VERSION,
+    decode_to_daemon, encode_from_daemon, validate_memory_max, DecodeError, ErrorCode, FromDaemon, ToDaemon, FIRST_APP_UID,
+    MAX_FRAME, PROTOCOL_VERSION,
 };
 use crate::masklist::MaskList;
 use crate::policy::{Policy, SharedPolicy};
@@ -29,6 +29,8 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 const READ_CHUNK: usize = 512;
 /// The most failure reports one `GetState` carries; the rest are sent with the next one.
 const MAX_FAILURES_PER_STATE: usize = 16;
+/// The most promotions one `GetState` lists (the active ones, each fresh once).
+const MAX_PROMOTIONS_PER_STATE: usize = crate::guard::MAX_REPORT;
 
 /// What the daemon answers to one message: the frames to write, in order, and whether the connection ends after them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,7 +143,22 @@ impl Control {
                         .into_iter()
                         .map(|d| FromDaemon::Failures { uid: d.uid, company: d.company, count: d.count }),
                 );
+                // Then the companies that the speed guard passes on to an app for now (ADR-188), each fresh once.
+                msgs.extend(
+                    self.scaffolding
+                        .promotions(MAX_PROMOTIONS_PER_STATE)
+                        .into_iter()
+                        .map(|p| FromDaemon::Promoted { uid: p.uid, company: p.company, fresh: p.fresh }),
+                );
                 Reply { msgs, close: false }
+            }
+            ToDaemon::Release { seq, uid, company } => {
+                // A company id starts at 1 (0 is "not listed") and an app uid at FIRST_APP_UID, as for the overrides.
+                if uid < FIRST_APP_UID || company == 0 {
+                    return Reply::error(seq, ErrorCode::BadValue);
+                }
+                self.scaffolding.release_promotion(uid, company);
+                Reply::ack(seq)
             }
             ToDaemon::SetPolicy { seq, classes } => {
                 let mut p = self.policy.write().unwrap_or_else(PoisonError::into_inner);
@@ -835,6 +852,60 @@ mod tests {
         assert_eq!(c.handle(ToDaemon::GetState { seq: 1 }).msgs.len(), 1 + 16);
         assert_eq!(c.handle(ToDaemon::GetState { seq: 2 }).msgs.len(), 1 + 4);
         assert_eq!(c.handle(ToDaemon::GetState { seq: 3 }).msgs.len(), 1);
+    }
+
+    /// A masked app 10100 and a listed company 7 behind one control handle.
+    fn guarded() -> (ExitScaffolding, Control) {
+        let policy: SharedPolicy = Arc::new(RwLock::new(Policy::default()));
+        policy
+            .write()
+            .unwrap()
+            .set_classes(vec![crate::control::UidClass { start: 10000, end: 19999, kind: crate::control::Kind::Masked }])
+            .unwrap();
+        let list = crate::masklist::MaskList::parse("exit-mask-list\t1\nads.example.com\t7\tExample Ads\n").unwrap();
+        let s = ExitScaffolding::with_policy(Box::new(|_, _, _| Ok(Some(1))), policy, Arc::new(list));
+        let c = Control::new(s.clone(), "exit0".into(), 64 * MIB);
+        (s, c)
+    }
+
+    fn promote(s: &ExitScaffolding, uid: u64) {
+        let dst = onion_tunnel::scaffolding::TorAddr::from(("ads.example.com", 443)).unwrap();
+        let counter = onion_tunnel::TunnelScaffolding::get_flow_counter(s, uid, &dst).expect("a counter for a masked app");
+        counter.on_rx(crate::guard::HEAVY_BYTES);
+        s.tick_guard(std::time::Instant::now() + Duration::from_secs(5));
+    }
+
+    #[test]
+    fn get_state_lists_the_promotions_and_flags_each_as_fresh_once() {
+        let (s, mut c) = guarded();
+        promote(&s, 10100);
+        let first = c.handle(ToDaemon::GetState { seq: 1 }).msgs;
+        assert_eq!(
+            first,
+            vec![FromDaemon::State { state: DaemonState::Bootstrapping }, FromDaemon::Promoted { uid: 10100, company: 7, fresh: true }]
+        );
+        let second = c.handle(ToDaemon::GetState { seq: 2 }).msgs;
+        assert_eq!(second[1], FromDaemon::Promoted { uid: 10100, company: 7, fresh: false }, "listed again, not fresh");
+    }
+
+    #[test]
+    fn release_ends_the_promotion_and_a_bad_release_changes_nothing() {
+        let (s, mut c) = guarded();
+        promote(&s, 10100);
+        assert_eq!(c.handle(ToDaemon::Release { seq: 1, uid: 5, company: 7 }).msgs, vec![FromDaemon::Error { seq: 1, code: ErrorCode::BadValue }]);
+        assert_eq!(c.handle(ToDaemon::Release { seq: 2, uid: 10100, company: 0 }).msgs, vec![FromDaemon::Error { seq: 2, code: ErrorCode::BadValue }]);
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 3 }).msgs.len(), 2, "still promoted after two refused releases");
+        assert_eq!(c.handle(ToDaemon::Release { seq: 4, uid: 10100, company: 7 }).msgs, vec![FromDaemon::Ack { seq: 4 }]);
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 5 }).msgs.len(), 1, "gone");
+    }
+
+    #[test]
+    fn get_state_lists_at_most_sixteen_promotions() {
+        let (s, mut c) = guarded();
+        for uid in 10100..10120u64 {
+            promote(&s, uid);
+        }
+        assert_eq!(c.handle(ToDaemon::GetState { seq: 1 }).msgs.len(), 1 + 16);
     }
 
     fn dummy_decode(buf: &[u8]) -> Result<(u8, usize), DecodeError> {

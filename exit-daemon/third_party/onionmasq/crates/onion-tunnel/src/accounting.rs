@@ -43,7 +43,9 @@ impl BandwidthCounter {
     }
 
     /// Increment the number of received bytes.
-    pub(crate) fn on_rx(&self, bytes: u64) {
+    /// Public since FreeholdOS patch 0006, so that a scaffolding that keeps one counter per destination can test its
+    /// bookkeeping by feeding the counter.
+    pub fn on_rx(&self, bytes: u64) {
         self.bytes_rx.fetch_add(bytes, Ordering::Relaxed);
     }
 

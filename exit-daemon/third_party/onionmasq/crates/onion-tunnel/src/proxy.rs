@@ -296,7 +296,7 @@ where
         let (arti_r, arti_w) = arti_stream.split();
         let counter = self
             .scaffolding
-            .get_bandwidth_counter(self.isolation_key.app_id);
+            .get_flow_counter(self.isolation_key.app_id, &tor_addr);
         let arti_to_tun =
             InteractiveCopier::new(arti_r, self.socket.clone(), false, counter.clone());
         let tun_to_arti = InteractiveCopier::new(self.socket.clone(), arti_w, true, counter);

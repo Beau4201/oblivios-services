@@ -4,7 +4,7 @@
 # or read each frame independently from it, so that the two codecs cannot drift. Changing a line is a change of the wire
 # format: bump the protocol version and both codecs. The `const.` lines are the addresses that the exit app registers for the
 # Tor network and that the route helper writes (address and prefix length, the DNS listener's address): they must be equal.
-to_daemon.hello	000000020102
+to_daemon.hello	000000020103
 to_daemon.set_memory_max	0000000a02070000000004000000
 to_daemon.refresh_app	0000000603030000278b
 to_daemon.refresh_all	000000020404
@@ -12,9 +12,11 @@ to_daemon.shutdown	000000020505
 to_daemon.get_state	000000020609
 to_daemon.set_policy	0000001e07010300002710000027100100002711000027f602000027f7000027f703
 to_daemon.set_overrides	0000000b08020000278b020007012c
-from_daemon.ready	0000000781026578697430
+to_daemon.release	00000008090b0000278b012c
+from_daemon.ready	0000000781036578697430
 from_daemon.state_up	000000028201
 from_daemon.failures	0000000b830000278b000700000003
+from_daemon.promoted	00000008860000278b000701
 from_daemon.ack	000000028409
 from_daemon.error	00000003850202
 route.hello	000000020101
