@@ -29,9 +29,19 @@ out is the SELinux policy (only `exit_app` may `connectto` either socket, `[meas
 check of the peer's SELinux context before they read a byte. That is one layer fewer than a mode that names the peer; it is
 accepted because the policy is the layer the rest of the platform relies on.
 
-## Not run
+## Advisories (`cargo audit`, advisory database of 2026-10-22, run after the owner's yes to the download)
 
-`cargo audit`: the advisory database is a download, which needs the owner's yes. See `README.md`, "Known gaps".
+The first run found `rustls` 0.23.44 (five advisories) and `rustls-webpki` 0.103.15 (RUSTSEC-2026-0382); both are updated to
+0.23.46 and 0.103.16 in `Cargo.lock`, and the second run lists them no more. Three remain:
+
+- `rsa` 0.9.10, RUSTSEC-2023-0071 (Marvin timing attack, no fixed version). `tor-llcrypto` uses RSA to verify the identity of
+  relays, which is public-key work; a client holds no RSA private key, so the attack has no target `[verified-in-source:
+  review of 2026-10-22, tor-llcrypto]`.
+- `bincode` 2.0.1 (RUSTSEC-2025-0141) and `paste` 1.0.15 (RUSTSEC-2024-0436): unmaintained, no vulnerability.
+
+Arti uses `rustls` for the TLS links to relays with its own certificate verifier, which does not walk a chain, so the path
+verification of `rustls-webpki` is not used `[verified-in-source: tor-rtcompat 0.46.0 src/impls/rustls.rs]`. The run is repeated
+at every update of `Cargo.lock`.
 
 ## Availability
 

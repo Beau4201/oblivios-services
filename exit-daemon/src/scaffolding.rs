@@ -52,7 +52,7 @@ struct Inner {
     /// The speed guard (ADR-188): what each masked company sends to each app, and which companies are passed on for now.
     guard: Mutex<Guard>,
     /// When each relayed flow began, to tell a slow connection from a quick one. Bounded.
-    started: Mutex<HashMap<(IpEndpoint, IpEndpoint), Instant>>,
+    started: Mutex<HashMap<(IpEndpoint, IpEndpoint), (Instant, u32)>>,
     /// Questions asked per app, for the limit on DNS.
     dns_limit: Mutex<RateLimiter>,
     commands: Sender<TunnelCommand>,
@@ -68,6 +68,9 @@ struct Commands(Receiver<TunnelCommand>);
 const COMMAND_QUEUE: usize = 256;
 /// Most TCP flows relayed at once; each holds two small buffers of the packet layer outside the Tor quota.
 const MAX_FLOWS: usize = 1024;
+/// Most TCP flows of one app at once, so that one app cannot take every place (an app that is refused gets a reset and
+/// the others go on). An eighth of the whole table.
+const MAX_FLOWS_PER_UID: usize = 128;
 
 impl Stream for Commands {
     type Item = TunnelCommand;
@@ -120,14 +123,14 @@ impl ExitScaffolding {
         }
     }
 
-    /// Remembers when a flow began, and says whether there is room for it: at most [`MAX_FLOWS`] flows are relayed at
-    /// once, and the table of start times is the count.
-    fn note_start(&self, src: IpEndpoint, dst: IpEndpoint, now: Instant) -> bool {
+    /// Remembers when a flow of `uid` began, and says whether there is room for it: at most [`MAX_FLOWS`] flows are
+    /// relayed at once and at most [`MAX_FLOWS_PER_UID`] of one app, and the table of start times is the count.
+    fn note_start(&self, uid: u32, src: IpEndpoint, dst: IpEndpoint, now: Instant) -> bool {
         let mut m = self.inner.started.lock().unwrap_or_else(PoisonError::into_inner);
-        if m.len() >= MAX_FLOWS && !m.contains_key(&(src, dst)) {
+        if !m.contains_key(&(src, dst)) && (m.len() >= MAX_FLOWS || m.values().filter(|(_, u)| *u == uid).count() >= MAX_FLOWS_PER_UID) {
             return false;
         }
-        m.insert((src, dst), now);
+        m.insert((src, dst), (now, uid));
         true
     }
 
@@ -239,7 +242,7 @@ impl TunnelScaffolding for ExitScaffolding {
         // anything else is a reset. The library asks for UDP only to attribute a DNS query, which every app may make.
         if proto == Proto::Tcp {
             self.admit_tcp(uid, &dst)?;
-            if !self.note_start(src, dst, Instant::now()) {
+            if !self.note_start(uid, src, dst, Instant::now()) {
                 return Err(io::Error::new(io::ErrorKind::ResourceBusy, "too many flows at once"));
             }
         }
@@ -273,7 +276,7 @@ impl TunnelScaffolding for ExitScaffolding {
     }
 
     fn on_established(&self, details: ConnectionDetails<'_>) {
-        let started = self.inner.started.lock().unwrap_or_else(PoisonError::into_inner).get(&(details.proxy_src, details.proxy_dst)).copied();
+        let started = self.inner.started.lock().unwrap_or_else(PoisonError::into_inner).get(&(details.proxy_src, details.proxy_dst)).map(|(t, _)| *t);
         if let Ok(uid) = u32::try_from(details.isolation_key) {
             self.flow_established(uid, host_of(&details.tor_dst.to_string()), started, Instant::now());
         }
@@ -495,34 +498,74 @@ mod tests {
     fn the_start_of_a_flow_is_remembered_until_it_closes_and_the_table_is_bounded() {
         let s = ladder_scaffolding();
         let (a, b) = (v4([10, 0, 0, 2], 1000), v4([198, 18, 0, 1], 443));
-        s.note_start(a, b, Instant::now());
+        s.note_start(10100, a, b, Instant::now());
         assert!(s.inner.started.lock().unwrap().contains_key(&(a, b)));
         s.on_socket_close(a, b, None);
         assert!(s.inner.started.lock().unwrap().is_empty());
-        for port in 0..MAX_FLOWS as u16 {
-            assert!(s.note_start(v4([10, 0, 0, 2], port), b, Instant::now()), "flow {port}");
+        // Eight apps with the most flows each fill the table.
+        let flow = |n: usize| v4([10, 0, 0, 2], n as u16);
+        let uid_of = |n: usize| 10100 + (n / MAX_FLOWS_PER_UID) as u32;
+        for n in 0..MAX_FLOWS {
+            assert!(s.note_start(uid_of(n), flow(n), b, Instant::now()), "flow {n}");
         }
-        assert!(!s.note_start(v4([10, 0, 1, 2], 1), b, Instant::now()), "the 1025th flow has no room");
-        assert!(s.note_start(v4([10, 0, 0, 2], 7), b, Instant::now()), "a flow that is already counted is not a new one");
+        assert!(!s.note_start(20000, v4([10, 0, 1, 2], 1), b, Instant::now()), "the 1025th flow has no room");
+        assert!(s.note_start(uid_of(7), flow(7), b, Instant::now()), "a flow that is already counted is not a new one");
         assert_eq!(s.inner.started.lock().unwrap().len(), MAX_FLOWS);
-        s.on_socket_close(v4([10, 0, 0, 2], 3), b, None);
-        assert!(s.note_start(v4([10, 0, 1, 2], 1), b, Instant::now()), "a closed flow made room");
+        s.on_socket_close(flow(3), b, None);
+        assert!(s.note_start(20000, v4([10, 0, 1, 2], 1), b, Instant::now()), "a closed flow made room");
+    }
+
+    #[test]
+    fn one_app_cannot_take_more_than_its_share_of_the_flows() {
+        let s = ladder_scaffolding();
+        let b = v4([198, 18, 0, 1], 443);
+        for port in 0..MAX_FLOWS_PER_UID as u16 {
+            assert!(s.note_start(10100, v4([10, 0, 0, 2], port), b, Instant::now()), "flow {port}");
+        }
+        assert!(!s.note_start(10100, v4([10, 0, 9, 2], 1), b, Instant::now()), "the app is at its share");
+        assert!(s.note_start(10100, v4([10, 0, 0, 2], 5), b, Instant::now()), "a flow that is already counted is not a new one");
+        assert!(s.note_start(10101, v4([10, 0, 9, 2], 2), b, Instant::now()), "another app is not held back");
+        s.on_socket_close(v4([10, 0, 0, 2], 5), b, None);
+        assert!(s.note_start(10100, v4([10, 0, 9, 2], 1), b, Instant::now()), "a closed flow gives its place back to the app");
     }
 
     #[test]
     fn past_the_flow_limit_a_tcp_flow_is_refused_as_busy_until_one_closes() {
         let (_, policy) = dns_scaffolding(vec![class(10000, 19999, Kind::Tor)]);
-        let s = ExitScaffolding::with_policy(Box::new(|_, _, _| Ok(Some(10100))), policy, Arc::new(MaskList::default()));
+        // The owner of a flow is read from the source port: 128 ports per app, so that the whole table is full of
+        // apps that are each within their share.
+        let s = ExitScaffolding::with_policy(
+            Box::new(|_, src, _| Ok(Some(10100 + u32::from(src.port()) / MAX_FLOWS_PER_UID as u32))),
+            policy,
+            Arc::new(MaskList::default()),
+        );
         let dst = v4([93, 184, 216, 34], 443);
         for port in 0..MAX_FLOWS as u16 {
             assert!(s.isolate(v4([169, 254, 42, 127], port), dst, 6).is_ok(), "flow {port}");
         }
-        let e = s.isolate(v4([169, 254, 43, 127], 1), dst, 6).unwrap_err();
+        let e = s.isolate(v4([169, 254, 43, 127], MAX_FLOWS as u16), dst, 6).unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::ResourceBusy);
         // A DNS query is not a flow and is not held back.
         assert!(s.isolate(v4([169, 254, 43, 127], 2), v4([192, 168, 1, 1], 53), 17).is_ok());
         s.on_socket_close(v4([169, 254, 42, 127], 5), dst, None);
-        assert!(s.isolate(v4([169, 254, 43, 127], 1), dst, 6).is_ok());
+        assert!(s.isolate(v4([169, 254, 43, 127], MAX_FLOWS as u16), dst, 6).is_ok());
+    }
+
+    #[test]
+    fn one_app_at_its_share_is_refused_as_busy_through_isolate_and_another_goes_on() {
+        let (_, policy) = dns_scaffolding(vec![class(10000, 19999, Kind::Tor)]);
+        let s = ExitScaffolding::with_policy(
+            Box::new(|_, src, _| Ok(Some(if src.port() < 1000 { 10100 } else { 10101 }))),
+            policy,
+            Arc::new(MaskList::default()),
+        );
+        let dst = v4([93, 184, 216, 34], 443);
+        for port in 0..MAX_FLOWS_PER_UID as u16 {
+            assert!(s.isolate(v4([169, 254, 42, 127], port), dst, 6).is_ok(), "flow {port}");
+        }
+        let e = s.isolate(v4([169, 254, 42, 127], MAX_FLOWS_PER_UID as u16), dst, 6).unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::ResourceBusy);
+        assert!(s.isolate(v4([169, 254, 42, 127], 2000), dst, 6).is_ok());
     }
 
     #[test]

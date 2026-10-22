@@ -71,6 +71,6 @@ read-back matches the `Debug` text `max: ByteQty(<bytes>)`; a changed text fails
   app reports the tier as limited there (`MSK-008`).
 - The 4096-byte TCP buffers of the packet layer limit throughput on a slow circuit; not measured yet (`MSK-002c`).
 - The speed guard acts from the next DNS answer, not on a flow that is open, and a hold of 30 minutes ends: a video that runs longer goes through Tor for 4 MiB again before it is passed on again (`MSK-011`).
-- `cargo audit` has not been run (it needs a download of the advisory database); the licence texts of the 548 third-party dependencies are
-  not bundled, only their SPDX expressions (`NOTICE`, `RISKS.md`).
+- `cargo audit` ran on 2026-10-22 (`RISKS.md`, "Advisories"): the fixable advisories are fixed, three remain and are assessed there. The licence
+  texts of the third-party dependencies are not bundled, only their SPDX expressions (`NOTICE`, `RISKS.md`).
 - A TCP/UDP/IPv6 lookup by `sock_diag` was shown on a phone for TCP over IPv4 only.

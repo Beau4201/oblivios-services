@@ -18,7 +18,8 @@ pub const PROTOCOL_VERSION: u8 = 3;
 /// The first uid of an ordinary app; ranges below it are never classified by the app.
 pub const FIRST_APP_UID: u32 = 10000;
 /// At most this many ranges in one class table.
-pub const MAX_CLASSES: usize = 256;
+/// The count is one byte on the wire: 256 would be written as 0 and the frame refused (found in the review of 2026-10-22).
+pub const MAX_CLASSES: usize = 255;
 /// At most this many companies in the override list of one uid.
 pub const MAX_OVERRIDES: usize = 32;
 
@@ -687,7 +688,8 @@ mod tests {
         assert_eq!(IFNAME_MAX, 15);
         assert_eq!(PROTOCOL_VERSION, 3);
         assert_eq!(FIRST_APP_UID, 10000);
-        assert_eq!(MAX_CLASSES, 256);
+        assert_eq!(MAX_CLASSES, 255, "the count is one byte");
+        assert!(MAX_CLASSES <= usize::from(u8::MAX));
         assert_eq!(MAX_OVERRIDES, 32);
         let ready = |n: usize| {
             let mut p = vec![2];
@@ -711,6 +713,20 @@ mod tests {
         let companies: Vec<u16> = (0..100).collect();
         let bytes = encode_to_daemon(&ToDaemon::SetOverrides { seq: 1, uid: 10000, companies });
         assert_eq!(bytes.len(), 4 + 1 + 6 + MAX_OVERRIDES * 2);
+    }
+
+    #[test]
+    fn a_full_class_table_survives_the_wire() {
+        // The count is one byte: a table at the limit must come back whole, not as 0 entries with bytes left over.
+        let full: Vec<UidClass> = (0..MAX_CLASSES as u32).map(|i| cls(10000 + 2 * i, 10000 + 2 * i, Kind::Tor)).collect();
+        let bytes = encode_to_daemon(&ToDaemon::SetPolicy { seq: 9, classes: full.clone() });
+        match decode_to_daemon(&bytes) {
+            Ok((ToDaemon::SetPolicy { seq: 9, classes }, used)) => {
+                assert_eq!(classes, full);
+                assert_eq!(used, bytes.len());
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]
