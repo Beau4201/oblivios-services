@@ -27,7 +27,7 @@ set -o errexit
 [[ $rc -eq 0 ]] || { echo "clippy failed (exit $rc)" >&2; exit "$rc"; }
 grep -q 'Finished' "$LOG" || { echo "clippy did not finish" >&2; exit 1; }
 # Prove that the deny lists are live: the guarded files must not have been skipped.
-for f in src/api.rs src/jni.rs src/container.rs; do
+for f in src/api.rs src/jni.rs src/container.rs src/csvimport.rs; do
   grep -q 'deny(clippy::unwrap_used' "$f" || { echo "$f lost its deny list" >&2; exit 1; }
 done
 echo "clippy passed; warnings: $(grep -c '^warning' "$LOG" || true)"

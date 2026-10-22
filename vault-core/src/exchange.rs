@@ -34,7 +34,7 @@ const FORMAT: &str = "freeholdos-passwords-export";
 const AAD: &[u8] = b"freeholdos-passwords/export/v1";
 const KEY_INFO: &[u8] = b"freeholdos-passwords/export-key/v1";
 
-fn random_16() -> [u8; 16] {
+pub(crate) fn random_16() -> [u8; 16] {
     let mut b = [0u8; 16];
     if OsRng.try_fill_bytes(&mut b).is_err() {
         fatal();

@@ -24,6 +24,8 @@ Left out on purpose, and why:
   * the size check before reading in store.rs read_bounded (the check after reading gives the same answer; the first one
     only keeps a hostile file from being read and from being allocated up front, which a test cannot show without
     allocating tens of gigabytes);
+  * the neighbours of two punycode constants (bias 71 for 72, damp 701 for 700): they change no digit of any label whose
+    first delta is small, because the thresholds clamp at the same values; the mutants use bias 70 and damp 600, which differ;
   * equivalent mutants (the same answer by another route): the single-character test of checkup's pattern rule (the
     repeated-block rule with a unit of one catches it), the length-below-class-count test of the generator (the attempt cap
     gives the same Corrupt, only slower), and the history, list and field limits of exchange's take_* helpers (the final
@@ -41,7 +43,7 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-E, K, Y, V, S, I, P, C, G, X, T, A, D, R = (
+E, K, Y, V, S, I, P, C, G, X, T, A, D, R, W = (
     "src/envelope.rs",
     "src/kdf.rs",
     "src/keys.rs",
@@ -56,6 +58,7 @@ E, K, Y, V, S, I, P, C, G, X, T, A, D, R = (
     "src/api.rs",
     "src/codec.rs",
     "src/secret.rs",
+    "src/csvimport.rs",
 )
 
 SCOPE = {
@@ -73,6 +76,7 @@ SCOPE = {
     X: ["--test", "exchange"],
     T: ["--test", "jni_handles"],
     A: ["--test", "jni_handles"],
+    W: ["--test", "csvimport"],
 }
 
 # (name, file, old, new)
@@ -187,8 +191,8 @@ MUTATIONS = [
     ("api: matches swaps the kinds", A, "        0 => Kind::Domain,\n        1 => Kind::Package,\n        _ => return Err(Code::BadArgument),", "        0 => Kind::Package,\n        1 => Kind::Domain,\n        _ => return Err(Code::BadArgument),"),
     ("api: matches accepts any kind", A, "        _ => return Err(Code::BadArgument),\n    };\n    with_session(handle, |s| Ok(summaries(s.vault.entries().iter().filter", "        _ => Kind::Domain,\n    };\n    with_session(handle, |s| Ok(summaries(s.vault.entries().iter().filter"),
     # punycode.rs
-    ("punycode: initial bias", P, "const INITIAL_BIAS: u32 = 72;", "const INITIAL_BIAS: u32 = 71;"),
-    ("punycode: damp", P, "const DAMP: u32 = 700;", "const DAMP: u32 = 701;"),
+    ("punycode: initial bias", P, "const INITIAL_BIAS: u32 = 72;", "const INITIAL_BIAS: u32 = 70;"),
+    ("punycode: damp", P, "const DAMP: u32 = 700;", "const DAMP: u32 = 600;"),
     ("punycode: skew", P, "const SKEW: u32 = 38;", "const SKEW: u32 = 39;"),
     ("punycode: tmax", P, "const T_MAX: u32 = 26;", "const T_MAX: u32 = 25;"),
     ("punycode: initial n", P, "const INITIAL_N: u32 = 128;", "const INITIAL_N: u32 = 129;"),
@@ -281,6 +285,89 @@ MUTATIONS = [
     ("api: import does not check the handle first", A, "    with_session(handle, |_| Ok(()))?;\n", ""),
     ("api: unlock with the key reads a wrong key length", A, "let vk = VaultKey::from_bytes(key32(vault_key)?);", "let vk = VaultKey::from_bytes([0u8; 32]);"),
     ("api: summary omits the username", A, "    w.str(&e.username);\n    for list", "    w.str(\"\");\n    for list"),
+    # csvimport.rs
+    ('csv: column title alias name removed', W, '"name" | "title" => Col::Title', '"title" => Col::Title'),
+    ('csv: column title alias title removed', W, '"name" | "title" => Col::Title', '"name" => Col::Title'),
+    ('csv: column url alias url removed', W, '"url" | "login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url', '"login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url'),
+    ('csv: column url alias login_uri removed', W, '"url" | "login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url', '"url" | "website" | "web site" | "login url" | "origin" => Col::Url'),
+    ('csv: column url alias website removed', W, '"url" | "login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url', '"url" | "login_uri" | "web site" | "login url" | "origin" => Col::Url'),
+    ('csv: column url alias web site removed', W, '"url" | "login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url', '"url" | "login_uri" | "website" | "login url" | "origin" => Col::Url'),
+    ('csv: column url alias login url removed', W, '"url" | "login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url', '"url" | "login_uri" | "website" | "web site" | "origin" => Col::Url'),
+    ('csv: column url alias origin removed', W, '"url" | "login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url', '"url" | "login_uri" | "website" | "web site" | "login url" => Col::Url'),
+    ('csv: column user alias username removed', W, '"username" | "login_username" | "user name" | "login" | "user" => Col::User', '"login_username" | "user name" | "login" | "user" => Col::User'),
+    ('csv: column user alias login_username removed', W, '"username" | "login_username" | "user name" | "login" | "user" => Col::User', '"username" | "user name" | "login" | "user" => Col::User'),
+    ('csv: column user alias user name removed', W, '"username" | "login_username" | "user name" | "login" | "user" => Col::User', '"username" | "login_username" | "login" | "user" => Col::User'),
+    ('csv: column user alias login removed', W, '"username" | "login_username" | "user name" | "login" | "user" => Col::User', '"username" | "login_username" | "user name" | "user" => Col::User'),
+    ('csv: column user alias user removed', W, '"username" | "login_username" | "user name" | "login" | "user" => Col::User', '"username" | "login_username" | "user name" | "login" => Col::User'),
+    ('csv: column email alias email removed', W, '"email" | "e-mail" | "login_email" => Col::Email', '"e-mail" | "login_email" => Col::Email'),
+    ('csv: column email alias e-mail removed', W, '"email" | "e-mail" | "login_email" => Col::Email', '"email" | "login_email" => Col::Email'),
+    ('csv: column email alias login_email removed', W, '"email" | "e-mail" | "login_email" => Col::Email', '"email" | "e-mail" => Col::Email'),
+    ('csv: column password alias password removed', W, '"password" | "login_password" => Col::Pass', '"login_password" => Col::Pass'),
+    ('csv: column password alias login_password removed', W, '"password" | "login_password" => Col::Pass', '"password" => Col::Pass'),
+    ('csv: column notes alias note removed', W, '"note" | "notes" | "extra" | "comments" => Col::Notes', '"notes" | "extra" | "comments" => Col::Notes'),
+    ('csv: column notes alias notes removed', W, '"note" | "notes" | "extra" | "comments" => Col::Notes', '"note" | "extra" | "comments" => Col::Notes'),
+    ('csv: column notes alias extra removed', W, '"note" | "notes" | "extra" | "comments" => Col::Notes', '"note" | "notes" | "comments" => Col::Notes'),
+    ('csv: column notes alias comments removed', W, '"note" | "notes" | "extra" | "comments" => Col::Notes', '"note" | "notes" | "extra" => Col::Notes'),
+    ('csv: the type column is not read', W, '"type" => Col::Kind', '"zz" => Col::Kind'),
+    ('csv: the creation time column is not read', W, '"timecreated" => Col::Created', '"zz" => Col::Created'),
+    ('csv: the change time column is not read', W, '"timepasswordchanged" => Col::Changed', '"zz" => Col::Changed'),
+    ('csv: item kind "" refused', W, 'matches!(kind.as_str(), "" | "login" | "logins" | "password" | "passwords")', 'matches!(kind.as_str(), "login" | "logins" | "password" | "passwords")'),
+    ('csv: item kind "login" refused', W, 'matches!(kind.as_str(), "" | "login" | "logins" | "password" | "passwords")', 'matches!(kind.as_str(), "" | "logins" | "password" | "passwords")'),
+    ('csv: item kind "logins" refused', W, 'matches!(kind.as_str(), "" | "login" | "logins" | "password" | "passwords")', 'matches!(kind.as_str(), "" | "login" | "password" | "passwords")'),
+    ('csv: item kind "password" refused', W, 'matches!(kind.as_str(), "" | "login" | "logins" | "password" | "passwords")', 'matches!(kind.as_str(), "" | "login" | "logins" | "passwords")'),
+    ('csv: item kind "passwords" refused', W, 'matches!(kind.as_str(), "" | "login" | "logins" | "password" | "passwords")', 'matches!(kind.as_str(), "" | "login" | "logins" | "password")'),
+    ('csv: an empty password is imported', W, '|| password.is_empty() {\n            out.skipped += 1;', '|| false {\n            out.skipped += 1;'),
+    ('csv: size limit (>=)', W, 'if input.len() > MAX_CSV {', 'if input.len() >= MAX_CSV {'),
+    ('csv: size limit removed', W, 'if input.len() > MAX_CSV {', 'if false {'),
+    ('csv: row limit (>=)', W, 'if rows.0.len() > MAX_ENTRIES {', 'if rows.0.len() >= MAX_ENTRIES {'),
+    ('csv: row limit removed', W, 'if rows.0.len() > MAX_ENTRIES {', 'if false {'),
+    ('csv: a quote opens a field anywhere', W, '\'"\' if field.is_empty() && !was_quoted => {', '\'"\' if !was_quoted => {'),
+    ('csv: a quote never opens a field', W, '\'"\' if field.is_empty() && !was_quoted => {', '\'"\' if false => {'),
+    ('csv: a doubled quote closes the field', W, 'if chars.peek() == Some(&\'"\') {', 'if false {'),
+    ('csv: a quote never closes', W, '                    in_quotes = false;\n', '                    in_quotes = true;\n'),
+    ('csv: an unterminated quote is accepted', W, '    if in_quotes {\n        return Err(VaultError::Corrupt);\n    }\n    if !field.is_empty()', '    if false {\n        return Err(VaultError::Corrupt);\n    }\n    if !field.is_empty()'),
+    ('csv: the last row without a line break is lost', W, 'if !field.is_empty() || !row.is_empty() || was_quoted {', 'if false {'),
+    ('csv: a final quoted empty field is lost', W, 'if !field.is_empty() || !row.is_empty() || was_quoted {', 'if !field.is_empty() || !row.is_empty() {'),
+    ('csv: a quoted empty line is a blank line', W, ' && !*was_quoted;', ';'),
+    ('csv: a row with an empty first field is a blank line', W, 'let blank = row.len() == 1 &&', 'let blank = row.len() >= 1 &&'),
+    ('csv: a later column of the same name wins', W, 'at.entry(col as usize).or_insert(i);', 'at.insert(col as usize, i);'),
+    ('csv: a site is listed twice', W, 'Some(Place::Domain(d)) if !domains.contains(&d) => domains.push(d),', 'Some(Place::Domain(d)) => domains.push(d),'),
+    ('csv: an app is listed twice', W, 'Some(Place::Package(p)) if !packages.contains(&p) => packages.push(p),', 'Some(Place::Package(p)) => packages.push(p),'),
+    ('csv: sites are not limited', W, '        domains.truncate(MAX_LIST);\n', ''),
+    ('csv: apps are not limited', W, '        packages.truncate(MAX_LIST);\n', ''),
+    ('csv: no e-mail fallback for the username', W, '"" => cell(row, find(Col::Email)),', '"" => "",'),
+    ('csv: no title from the address', W, '"" => domains.first().or(packages.first()).map_or("Imported", String::as_str),', '"" => "Imported",'),
+    ('csv: no title from the app', W, 'domains.first().or(packages.first())', 'domains.first()'),
+    ('csv: fallback title changed', W, 'map_or("Imported", String::as_str)', 'map_or("", String::as_str)'),
+    ('csv: a zero time is accepted', W, '.filter(|t| *t > 0)', '.filter(|t| *t >= 0)'),
+    ('csv: a negative time is accepted', W, '.filter(|t| *t > 0)', '.filter(|_| true)'),
+    ('csv: the change time defaults to the import time', W, 'time(Col::Changed).unwrap_or(created_ms)', 'time(Col::Changed).unwrap_or(now_ms)'),
+    ('csv: the creation time defaults to zero', W, 'time(Col::Created).unwrap_or(now_ms)', 'time(Col::Created).unwrap_or(0)'),
+    ('csv: an over-long field is imported', W, 'if validate(&entry).is_err() {', 'if false {'),
+    ('csv: user info is part of the host', W, '.rsplit(\'@\').next().unwrap_or("")', '.split(\'@\').next().unwrap_or("")'),
+    ('csv: a query is part of the host', W, "rest.split(['/', '?', '#'])", "rest.split(['/', '#'])"),
+    ('csv: a fragment is part of the host', W, "rest.split(['/', '?', '#'])", "rest.split(['/', '?'])"),
+    ('csv: a path is part of the host', W, "rest.split(['/', '?', '#'])", "rest.split(['?', '#'])"),
+    ('csv: the scheme is kept', W, 'token.split_once("://").map_or(token, |(_, after)| after)', 'token'),
+    ('csv: the Chrome app marker is not read', W, 'if let Some(p) = token.strip_prefix("android://") {', 'if let Some(p) = token.strip_prefix("zz://") {'),
+    ('csv: the Bitwarden app marker is not read', W, 'if let Some(p) = token.strip_prefix("androidapp://") {', 'if let Some(p) = token.strip_prefix("zz://") {'),
+    ('csv: a package with no dot', W, "        && name.contains('.')\n", '        && true\n'),
+    ('csv: a package starting with a dot', W, "        && !name.starts_with('.')\n", '        && true\n'),
+    ('csv: a package ending with a dot', W, "        && !name.ends_with('.')\n", '        && true\n'),
+    ('csv: a package of any length', W, 'name.len() <= 255', 'name.len() <= 100_000'),
+    ('csv: a package with a hyphen', W, " || b == b'_')", " || b == b'_' || b == b'-')"),
+    ('csv: a package with a slash is not trimmed', W, "    let name = name.trim_end_matches('/');\n", '    let name = name;\n'),
+    ('csv merge: the same account is added twice', W, '        if twin {', '        if false {'),
+    ('csv merge: the password is not compared', W, 'o.password == e.password', 'true'),
+    ('csv merge: the username is not part of the account', W, '(e.username.clone(), sorted(&e.domains), sorted(&e.packages))', '(String::new(), sorted(&e.domains), sorted(&e.packages))'),
+    ('csv merge: the sites are not sorted', W, '        v.sort();\n', '        '),
+    ('csv merge: the apps are not part of the account', W, 'sorted(&e.domains), sorted(&e.packages))', 'sorted(&e.domains), Vec::new())'),
+    ('csv merge: entries of the file are not remembered', W, '        known.entry(key).or_default().push(work.len());\n', ''),
+    ('csv merge: the vault is changed on an error', W, '    *vault = work;\n    Ok((added, duplicates))', '    Ok((added, duplicates))'),
+    ('csv merge: duplicates are not counted', W, '            duplicates += 1;', '            duplicates += 0;'),
+    ('csv merge: additions are not counted', W, '        added += 1;', '        added += 0;'),
+    # api.rs import_csv
+    ('api: the csv counts are in another order', A, 'for n in [added, duplicates, parsed.skipped] {', 'for n in [duplicates, added, parsed.skipped] {'),
 ]
 
 

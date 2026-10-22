@@ -243,6 +243,19 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_importEntrie
     reply(&env, api::import_entries(handle as u64, &blob, &passphrase))
 }
 
+/// Reply payload: `u32 added | u32 duplicates | u32 skipped rows | new file`.
+#[no_mangle]
+pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_importCsv<'l>(
+    env: JNIEnv<'l>,
+    _this: JObject<'l>,
+    handle: jlong,
+    data: JByteArray<'l>,
+    now_ms: jlong,
+) -> jbyteArray {
+    let data = bytes!(env, data);
+    reply(&env, api::import_csv(handle as u64, &data, now_ms))
+}
+
 #[no_mangle]
 pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_indexBuild<'l>(
     env: JNIEnv<'l>,

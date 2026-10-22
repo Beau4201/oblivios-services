@@ -6,6 +6,7 @@ pub mod api;
 pub mod checkup;
 mod codec;
 pub mod container;
+pub mod csvimport;
 pub mod envelope;
 pub mod error;
 pub mod exchange;

@@ -17,6 +17,7 @@ use zeroize::Zeroizing;
 use crate::checkup::{checkup as run_checkup, strength as run_strength, Strength, WeakReason};
 use crate::codec::Writer;
 use crate::container::{build_file, parse_file, FileHeader};
+use crate::csvimport;
 use crate::error::{fatal, VaultError};
 use crate::exchange;
 use crate::generator::{generate as run_generate, GenOpts};
@@ -292,6 +293,22 @@ pub fn import_entries(handle: u64, blob: &[u8], passphrase: &[u8]) -> Result<Vec
     with_session(handle, |s| {
         let count = exchange::merge_into(&mut s.vault, entries)?;
         let mut out = (count as u32).to_le_bytes().to_vec();
+        out.extend_from_slice(&file_of(s));
+        Ok(out)
+    })
+}
+
+/// Merges the entries of a plain CSV file of another password manager into the open vault (see [`csvimport`]); an entry
+/// the vault already has is left out. Returns `u32 added | u32 duplicates | u32 skipped rows | new file`.
+pub fn import_csv(handle: u64, data: &[u8], now_ms: i64) -> Result<Vec<u8>, Code> {
+    // The file is read before the session is looked at: parsing is bounded and cheap, unlike the hashing of an export file.
+    let parsed = csvimport::parse(data, now_ms)?;
+    with_session(handle, |s| {
+        let (added, duplicates) = csvimport::merge(&mut s.vault, parsed.entries)?;
+        let mut out = Vec::new();
+        for n in [added, duplicates, parsed.skipped] {
+            out.extend_from_slice(&u32::try_from(n).unwrap_or(u32::MAX).to_le_bytes());
+        }
         out.extend_from_slice(&file_of(s));
         Ok(out)
     })
