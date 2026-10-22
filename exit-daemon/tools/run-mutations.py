@@ -507,6 +507,9 @@ def killed(output: str, rc: int) -> str:
         return "does-not-compile"
     # A test binary that crashed (an abort on a descriptor closed twice, say) was stopped by the mutation as much as one
     # that failed an assertion.
+    # A mutation that makes a loop endless stops the test run too: CI would end it by its time-out, and so does the script.
+    if "test run killed by the time-out" in output:
+        return "killed"
     if "test result: FAILED" in output or "panicked at" in output or "fatal runtime error" in output or "(signal:" in output:
         return "killed"
     return "inconclusive"
@@ -548,7 +551,7 @@ def main() -> int:
         open(path, "w").write(orig.replace(old, new))
         try:
             # A mutation of the daemon's own sources cannot change a vendored test: only the daemon's crate is tested.
-            menv = dict(env, EXIT_ONLY_DAEMON="0" if f == D else "1")
+            menv = dict(env, EXIT_ONLY_DAEMON="0" if f == D else "1", EXIT_TEST_TIMEOUT="600")
             # Only the library's tests link the daemon's modules; the binary's own tests matter for main.rs only.
             targs = ["--lib"] if f.startswith("src/") and f != "src/main.rs" else []
             r = subprocess.run(["bash", check, *targs], env=menv, capture_output=True, text=True, timeout=1800)

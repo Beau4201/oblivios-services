@@ -30,7 +30,7 @@ if [[ "${EXIT_REMOTE:-}" != 1 ]]; then
   # keep using the stale build (found after the first mutation run).
   rsync -rlpgoD --checksum --delete --exclude target --exclude .git -e "ssh -o BatchMode=yes" "$SRC"/ "$EXIT_BUILD_SSH:$WORK/src/"
   printf -v ARGS ' %q' "$@"
-  exec ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "EXIT_REMOTE=1 EXIT_WORK=$WORK EXIT_ONLY_DAEMON=${EXIT_ONLY_DAEMON:-0} EXIT_CARGO_HOME=${EXIT_CARGO_HOME:-} EXIT_TARGET=${EXIT_TARGET:-} bash $WORK/src/tools/check-on-server.sh$ARGS"
+  exec ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "EXIT_REMOTE=1 EXIT_WORK=$WORK EXIT_ONLY_DAEMON=${EXIT_ONLY_DAEMON:-0} EXIT_CARGO_HOME=${EXIT_CARGO_HOME:-} EXIT_TARGET=${EXIT_TARGET:-} EXIT_TEST_TIMEOUT=${EXIT_TEST_TIMEOUT:-} bash $WORK/src/tools/check-on-server.sh$ARGS"
 fi
 
 exec 9> "$WORK/check.lock"
@@ -48,8 +48,16 @@ if [[ "${EXIT_ONLY_DAEMON:-0}" == 1 ]]; then scope=(-p exit-daemon); else scope=
 # No debug information in the test builds: it only makes the two big test binaries slower to link (panic locations do not
 # need it).
 export CARGO_PROFILE_DEV_DEBUG=0
-cargo test --locked --offline "${scope[@]}" --target-dir "${EXIT_TARGET:-$WORK/target-test}" "$@" 2>&1 | tee "$LOG"
+# EXIT_TEST_TIMEOUT (seconds, the mutation runner sets it): a test run that does not end is killed with its whole process
+# group. A mutation that makes a loop endless would otherwise keep every core busy for ever (found 2026-10-23: one spinning
+# test binary held the lock for hours and the run behind it timed out mutation after mutation).
+limit=()
+[[ -n "${EXIT_TEST_TIMEOUT:-}" ]] && limit=(timeout -s KILL "$EXIT_TEST_TIMEOUT")
+"${limit[@]}" cargo test --locked --offline "${scope[@]}" --target-dir "${EXIT_TARGET:-$WORK/target-test}" "$@" 2>&1 | tee "$LOG"
 rc=${PIPESTATUS[0]}
+if [[ $rc -eq 137 && -n "${EXIT_TEST_TIMEOUT:-}" ]]; then
+  echo "test run killed by the time-out of $EXIT_TEST_TIMEOUT s (a test that does not end)" >&2
+fi
 set -o errexit
 if [[ $rc -ne 0 ]]; then
   echo "cargo test failed (exit $rc)" >&2
