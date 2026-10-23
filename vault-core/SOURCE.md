@@ -24,9 +24,20 @@ The checksums are the `checksum` fields of `Cargo.lock`. The lock holds no netwo
 or links a network library.
 
 `psl` compiles in the Public Suffix List (`data/rules.txt`, 158 kB in this version). The list is Mozilla's, published at
-publicsuffix.org [assumption: MPL-2.0, not read from a licence file in the crate; the crate ships its own MIT licence
-only]. It is a snapshot at the crate's release, so a suffix added later is unknown to the app until the crate is updated;
-a licence review of the list and a refresh rule belong before shipping (Task 17).
+publicsuffix.org. Licence of the list: MPL-2.0 `[verified-in-source]` (the `LICENSE` file of github.com/publicsuffix/list,
+read 2026-10-23); the `psl` crate ships its own MIT licence file only and strips the list's header from `data/rules.txt`
+(read in the crate on the build server), so the list's licence is not in the crate. MPL-2.0 is file-level copyleft: the
+file `rules.txt` stays under MPL-2.0, the rest of the app keeps its own licence (a larger work, MPL-2.0 section 3.3).
+`[assumption: reading of MPL-2.0 section 3.2, no legal review]` Shipping the compiled list in `libvault_core.so` needs the
+notice "contains the Public Suffix List, MPL-2.0, source publicsuffix.org and `data/rules.txt` of `psl` 2.1.244" in the
+app's licence notices and the pointer to that source, which the source-only publication of the repositories satisfies; the
+list is not modified by this project. The notice screen does not exist yet (open, with the notices of the crates and the
+SecLists word list).
+Refresh rule (proposed, owner to confirm): the list is a snapshot of the crate's release. Before every release image,
+`vault-core/tools/update-lock.sh` checks for a newer `psl` (a download, so it needs the owner's yes), the new crate gets the
+same host checks and a new reproducible build, and this file records the version and checksum. A suffix added between
+two releases is unknown to the app until then; the effect is a wrong registrable domain for that suffix only, so a login
+may be offered on a sibling site of the same new suffix until the next update.
 
 ## Why the plan's `android-crates-io` line differs
 
