@@ -894,6 +894,8 @@ mod tests {
         promote(&s, 10100);
         assert_eq!(c.handle(ToDaemon::Release { seq: 1, uid: 5, company: 7 }).msgs, vec![FromDaemon::Error { seq: 1, code: ErrorCode::BadValue }]);
         assert_eq!(c.handle(ToDaemon::Release { seq: 2, uid: 10100, company: 0 }).msgs, vec![FromDaemon::Error { seq: 2, code: ErrorCode::BadValue }]);
+        assert_eq!(c.handle(ToDaemon::Release { seq: 6, uid: FIRST_APP_UID - 1, company: 7 }).msgs, vec![FromDaemon::Error { seq: 6, code: ErrorCode::BadValue }]);
+        assert_eq!(c.handle(ToDaemon::Release { seq: 7, uid: FIRST_APP_UID, company: 7 }).msgs, vec![FromDaemon::Ack { seq: 7 }], "the first app uid is an app");
         assert_eq!(c.handle(ToDaemon::GetState { seq: 3 }).msgs.len(), 2, "still promoted after two refused releases");
         assert_eq!(c.handle(ToDaemon::Release { seq: 4, uid: 10100, company: 7 }).msgs, vec![FromDaemon::Ack { seq: 4 }]);
         assert_eq!(c.handle(ToDaemon::GetState { seq: 5 }).msgs.len(), 1, "gone");

@@ -158,6 +158,11 @@ impl ExitScaffolding {
         self.inner.ladder.lock().unwrap_or_else(PoisonError::into_inner).record_failure(uid, company, now);
     }
 
+    /// When the flow between these endpoints began, if it is still counted.
+    fn start_of(&self, src: IpEndpoint, dst: IpEndpoint) -> Option<Instant> {
+        self.inner.started.lock().unwrap_or_else(PoisonError::into_inner).get(&(src, dst)).map(|(t, _)| *t)
+    }
+
     /// A flow of `uid` to `host`, which began at `started`, was established at `now`: a slow one counts for the ladder.
     pub(crate) fn flow_established(&self, uid: u32, host: &str, started: Option<Instant>, now: Instant) {
         if started.is_some_and(|s| now.saturating_duration_since(s) >= SLOW) {
@@ -276,7 +281,7 @@ impl TunnelScaffolding for ExitScaffolding {
     }
 
     fn on_established(&self, details: ConnectionDetails<'_>) {
-        let started = self.inner.started.lock().unwrap_or_else(PoisonError::into_inner).get(&(details.proxy_src, details.proxy_dst)).map(|(t, _)| *t);
+        let started = self.start_of(details.proxy_src, details.proxy_dst);
         if let Ok(uid) = u32::try_from(details.isolation_key) {
             self.flow_established(uid, host_of(&details.tor_dst.to_string()), started, Instant::now());
         }
@@ -500,8 +505,13 @@ mod tests {
         let (a, b) = (v4([10, 0, 0, 2], 1000), v4([198, 18, 0, 1], 443));
         s.note_start(10100, a, b, Instant::now());
         assert!(s.inner.started.lock().unwrap().contains_key(&(a, b)));
+        let began = Instant::now();
+        s.note_start(10100, a, b, began);
+        assert_eq!(s.start_of(a, b), Some(began), "the start that on_established times against");
+        assert_eq!(s.start_of(b, a), None, "another pair has no start");
         s.on_socket_close(a, b, None);
         assert!(s.inner.started.lock().unwrap().is_empty());
+        assert_eq!(s.start_of(a, b), None);
         // Eight apps with the most flows each fill the table.
         let flow = |n: usize| v4([10, 0, 0, 2], n as u16);
         let uid_of = |n: usize| 10100 + (n / MAX_FLOWS_PER_UID) as u32;

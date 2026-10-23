@@ -333,7 +333,7 @@ MUTATIONS = [
     ("scaffolding: one app has no share", G, "|| m.values().filter(|(_, u)| *u == uid).count() >= MAX_FLOWS_PER_UID)", ")"),
     ("scaffolding: the share counts the other apps", G, "filter(|(_, u)| *u == uid)", "filter(|(_, u)| *u != uid)"),
     ("scaffolding: the owner of a flow is not kept", G, "m.insert((src, dst), (now, uid));", "m.insert((src, dst), (now, 0));"),
-    ("scaffolding: the start of a flow is read from the wrong field", G, ".map(|(t, _)| *t);", ".map(|(t, _)| *t + std::time::Duration::from_secs(3600));"),
+    ("scaffolding: the start of a flow is read from the wrong field", G, ".map(|(t, _)| *t)", ".map(|(t, _)| *t + std::time::Duration::from_secs(3600))"),
     ("scaffolding: a close leaves the start", G, ".remove(&(src, dst));\n    }", ".len();\n    }"),
     ("scaffolding: slow from six seconds", G, "now.saturating_duration_since(s) >= SLOW", "now.saturating_duration_since(s) > SLOW"),
     ("scaffolding: an unlisted host has a company", G, "self.inner.list.classify(host).unwrap_or(0)", "self.inner.list.classify(host).unwrap_or(1)"),
