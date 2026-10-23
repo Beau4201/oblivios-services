@@ -113,7 +113,13 @@ pub fn export(vault: &Vault, passphrase: &[u8], params: &KdfParams) -> Result<Ve
         .collect();
     let payload = json!({"format": FORMAT, "version": 1, "entries": entries});
     let bytes = Zeroizing::new(serde_json::to_vec(&payload).map_err(|_| VaultError::Corrupt)?);
-    seal_payload(&bytes, passphrase, params)
+    let blob = seal_payload(&bytes, passphrase, params)?;
+    // The JSON of a vault is larger than its own encoding (a control character becomes six bytes): a file that `import` would
+    // refuse as too large is not made (review of 2026-10-23, P-19), so the backup can always be restored.
+    if blob.len() > MAX_BLOB + HEADER {
+        return Err(VaultError::TooLarge);
+    }
+    Ok(blob)
 }
 
 fn take_str(o: &mut Map<String, Value>, key: &str) -> Result<String, VaultError> {

@@ -24,6 +24,10 @@ use crate::vault::{validate, Entry, Vault, MAX_ENTRIES, MAX_LIST};
 /// The largest file read.
 pub const MAX_CSV: usize = 16 * 1024 * 1024;
 
+/// The most fields a record may have. A file of commas costs a `String` per comma before any column is looked at, so
+/// 16 MiB of them took about 400 MB (review of 2026-10-23, P-14); the widest real export has about 30 columns.
+pub const MAX_COLUMNS: usize = 256;
+
 /// What a file gave: the entries and the number of rows left out.
 #[derive(Debug)]
 pub struct Parsed {
@@ -112,6 +116,9 @@ fn records(text: &str) -> Result<Rows, VaultError> {
                 was_quoted = true;
             }
             ',' => {
+                if row.len() + 2 > MAX_COLUMNS {
+                    return Err(VaultError::TooLarge);
+                }
                 row.push(std::mem::take(&mut field));
                 was_quoted = false;
             }

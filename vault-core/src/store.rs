@@ -5,6 +5,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
+use std::sync::Mutex;
 
 use crate::envelope::MAX_BLOB;
 use crate::error::VaultError;
@@ -19,10 +20,15 @@ pub enum WriteStep {
     DirSynced,
 }
 
+/// One writer at a time in this process: the temp file has one name per path, so two writers of the same path would remove
+/// each other's file or rename the other's half-written one over the vault (review of 2026-10-23, P-21).
+static WRITE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Replaces `path` with `bytes` so that a crash at any point leaves the old file or the new one, never a mix: write a
 /// temp file in the same directory (mode 0600), fsync it, rename it over `path`, fsync the directory. A temp file left
 /// by an earlier crash is removed first.
 pub fn write_atomic(path: &Path, bytes: &[u8], hook: &mut dyn FnMut(WriteStep) -> io::Result<()>) -> io::Result<()> {
+    let _one_at_a_time = WRITE_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = match path.parent() {
         Some(p) if !p.as_os_str().is_empty() => p,
         _ => Path::new("."),

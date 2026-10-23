@@ -141,3 +141,26 @@ fn a_file_of_exactly_the_limit_is_read() {
     f.set_len(MAX_BLOB as u64).unwrap();
     assert_eq!(read_bounded(&path).unwrap().len(), MAX_BLOB);
 }
+
+/// P-21: two writers of one path used to remove each other's temp file or rename a half-written one over the vault.
+#[test]
+fn concurrent_writers_of_one_path_never_fail_and_never_mix() {
+    let d = Dir::new("concurrent");
+    let path = d.0.join("vault.fhpv");
+    let a = vec![b'a'; 256 * 1024];
+    let b = vec![b'b'; 256 * 1024];
+    let mut handles = Vec::new();
+    for payload in [a.clone(), b.clone(), a.clone(), b.clone()] {
+        let path = path.clone();
+        handles.push(std::thread::spawn(move || {
+            for _ in 0..150 {
+                write_atomic(&path, &payload, &mut |_| Ok(())).unwrap();
+            }
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let now = fs::read(&path).unwrap();
+    assert!(now == a || now == b, "the file is one of the writes, not a mix");
+}

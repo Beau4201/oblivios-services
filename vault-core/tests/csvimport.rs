@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The CSV import of other managers' plain files: the reader, the row rules and the merge into a vault.
 use vault_core::api::{self, Code};
-use vault_core::csvimport::{merge, parse, MAX_CSV};
+use vault_core::csvimport::{merge, parse, MAX_COLUMNS, MAX_CSV};
 use vault_core::error::VaultError;
 use vault_core::kdf::KdfParams;
 use vault_core::secret::SecretString;
@@ -374,4 +374,19 @@ fn entry_id_of_first(h: u64) -> [u8; 16] {
     let list = api::list(h).unwrap();
     // count (u32), then the first summary starts with its 16-byte id (the wire form is the spec of this slice).
     list[4..20].try_into().unwrap()
+}
+
+/// P-14: a file of commas made a `String` per comma before any column was looked at (about 400 MB for 16 MiB).
+#[test]
+fn a_record_with_too_many_fields_is_refused_before_it_costs_memory() {
+    let widest = ",".repeat(MAX_COLUMNS - 1); // MAX_COLUMNS empty fields
+    assert!(!matches!(parse(widest.as_bytes(), NOW), Err(VaultError::TooLarge)), "the widest allowed record");
+    let one_more = ",".repeat(MAX_COLUMNS);
+    assert!(matches!(parse(one_more.as_bytes(), NOW), Err(VaultError::TooLarge)), "one field more");
+    let wide = ",".repeat(MAX_CSV);
+    assert!(matches!(parse(wide.as_bytes(), NOW), Err(VaultError::TooLarge)), "a whole file of commas");
+    let later = format!("name,url,username,password\nx,y,z,w\n{}\n", ",".repeat(MAX_COLUMNS));
+    assert!(matches!(parse(later.as_bytes(), NOW), Err(VaultError::TooLarge)), "a wide record after good ones");
+    let quoted = format!("name,url,username,password\n\"{}\",y,z,w\n", ",".repeat(MAX_CSV / 2));
+    assert!(parse(quoted.as_bytes(), NOW).is_ok(), "commas inside quotes are text, not fields");
 }

@@ -152,6 +152,7 @@ MUTATIONS = [
     ("secret: equality always false", R, "self.0.as_bytes().ct_eq(other.0.as_bytes()).into()", "false"),
     ("secret: debug prints the secret", R, 'f.write_str("SecretString(<redacted>)")', "f.write_str(&self.0)"),
     # store.rs
+    ("store: no lock around the temp file", S, "    let _one_at_a_time = WRITE_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);\n", ""),
     ("store: file mode", S, ".mode(0o600)", ".mode(0o644)"),
     ("store: rename after the hook", S, "    fs::rename(&tmp, path)?;\n    hook(WriteStep::Renamed)?;", "    hook(WriteStep::Renamed)?;\n    fs::rename(&tmp, path)?;"),
     ("store: stale temp file kept", S, "    match fs::remove_file(&tmp) {\n        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),\n        _ => {}\n    }\n", ""),
@@ -237,9 +238,11 @@ MUTATIONS = [
     ("generator: lower case ignored", G, "(opts.lower, LOWER)", "(false, LOWER)"),
     ("generator: symbols ignored", G, "(opts.symbols, SYMBOLS)", "(false, SYMBOLS)"),
     # exchange.rs
+    ("exchange: an export over the limit of import is made", X, "    if blob.len() > MAX_BLOB + HEADER {\n        return Err(VaultError::TooLarge);\n    }\n    Ok(blob)", "    Ok(blob)"),
+    ("exchange: the export limit is one too high", X, "    if blob.len() > MAX_BLOB + HEADER {\n        return Err(VaultError::TooLarge);\n    }\n    Ok(blob)", "    if blob.len() > MAX_BLOB + HEADER + 100_000_000 {\n        return Err(VaultError::TooLarge);\n    }\n    Ok(blob)"),
     ("exchange: file version not checked", X, "if blob[4] != VERSION {", "if false {"),
     ("exchange: magic not checked", X, "|| &blob[..4] != MAGIC {", "|| false {"),
-    ("exchange: input limit removed", X, "if blob.len() > MAX_BLOB + HEADER {", "if false {"),
+    ("exchange: input limit removed", X, "if blob.len() > MAX_BLOB + HEADER {\n        return Err(VaultError::TooLarge);\n    }\n    if blob.len() < HEADER", "if false {\n        return Err(VaultError::TooLarge);\n    }\n    if blob.len() < HEADER"),
     ("exchange: format name not checked", X, "!= Some(FORMAT)", "== Some(FORMAT)"),
     ("exchange: payload version not checked", X, "Some(1) => {}", "Some(_) => {}"),
     ("exchange: entry limit (>=)", X, "if items.len() > MAX_ENTRIES {", "if items.len() >= MAX_ENTRIES {"),
@@ -286,6 +289,9 @@ MUTATIONS = [
     ("api: unlock with the key reads a wrong key length", A, "let vk = VaultKey::from_bytes(key32(vault_key)?);", "let vk = VaultKey::from_bytes([0u8; 32]);"),
     ("api: summary omits the username", A, "    w.str(&e.username);\n    for list", "    w.str(\"\");\n    for list"),
     # csvimport.rs
+    ("csv: no limit on the fields of a record", W, "if row.len() + 2 > MAX_COLUMNS {", "if false {"),
+    ("csv: one field too many is allowed", W, "if row.len() + 2 > MAX_COLUMNS {", "if row.len() + 1 > MAX_COLUMNS {"),
+    ("csv: the widest record is refused", W, "if row.len() + 2 > MAX_COLUMNS {", "if row.len() + 3 > MAX_COLUMNS {"),
     ('csv: column title alias name removed', W, '"name" | "title" => Col::Title', '"title" => Col::Title'),
     ('csv: column title alias title removed', W, '"name" | "title" => Col::Title', '"name" => Col::Title'),
     ('csv: column url alias url removed', W, '"url" | "login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url', '"login_uri" | "website" | "web site" | "login url" | "origin" => Col::Url'),

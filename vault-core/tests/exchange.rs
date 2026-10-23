@@ -228,3 +228,25 @@ fn a_wrong_magic_is_corrupt_and_a_short_file_too() {
     blob[0] ^= 1;
     assert_eq!(import(&blob, PASS).err(), Some(VaultError::Corrupt));
 }
+
+/// P-19: the JSON of a vault is larger than its encoding (a control character is six bytes), so an export could pass the
+/// limit that `import` then refuses: a backup that cannot be restored. It is not made.
+#[test]
+fn an_export_that_import_would_refuse_is_not_made() {
+    let mut v = Vault::new();
+    for n in 1..=200u8 {
+        let mut e = entry(n, "t");
+        e.notes = "\u{1}".repeat(MAX_FIELD);
+        v.add(e).unwrap();
+    }
+    assert!(matches!(export(&v, PASS, &FAST), Err(VaultError::TooLarge)));
+    // The same kind of content in a size that fits still makes a file that comes back.
+    let mut small = Vault::new();
+    for n in 1..=20u8 {
+        let mut e = entry(n, "t");
+        e.notes = "\u{1}".repeat(MAX_FIELD);
+        small.add(e).unwrap();
+    }
+    let blob = export(&small, PASS, &FAST).unwrap();
+    assert_eq!(import(&blob, PASS).unwrap().len(), 20);
+}
