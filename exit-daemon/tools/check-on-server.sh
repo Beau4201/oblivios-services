@@ -53,8 +53,14 @@ export CARGO_PROFILE_DEV_DEBUG=0
 # test binary held the lock for hours and the run behind it timed out mutation after mutation).
 limit=()
 [[ -n "${EXIT_TEST_TIMEOUT:-}" ]] && limit=(timeout -s KILL "$EXIT_TEST_TIMEOUT")
-"${limit[@]}" cargo test --locked --offline "${scope[@]}" --target-dir "${EXIT_TARGET:-$WORK/target-test}" "$@" 2>&1 | tee "$LOG"
+# The build is its own step, without the time-out: a cold or loaded server may need longer than the limit to compile, and a run that
+# is killed while it compiles said "a test that does not end" and was counted as a killed mutation (review of 2026-10-23, C2-10).
+cargo test --locked --offline "${scope[@]}" --target-dir "${EXIT_TARGET:-$WORK/target-test}" --no-run "$@" 2>&1 | tee "$LOG"
 rc=${PIPESTATUS[0]}
+if [[ $rc -eq 0 ]]; then
+  "${limit[@]}" cargo test --locked --offline "${scope[@]}" --target-dir "${EXIT_TARGET:-$WORK/target-test}" "$@" 2>&1 | tee "$LOG"
+  rc=${PIPESTATUS[0]}
+fi
 if [[ $rc -eq 137 && -n "${EXIT_TEST_TIMEOUT:-}" ]]; then
   echo "test run killed by the time-out of $EXIT_TEST_TIMEOUT s (a test that does not end)" >&2
 fi
