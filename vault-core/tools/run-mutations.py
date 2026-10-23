@@ -289,6 +289,10 @@ MUTATIONS = [
     ("api: unlock with the key reads a wrong key length", A, "let vk = VaultKey::from_bytes(key32(vault_key)?);", "let vk = VaultKey::from_bytes([0u8; 32]);"),
     ("api: summary omits the username", A, "    w.str(&e.username);\n    for list", "    w.str(\"\");\n    for list"),
     # csvimport.rs
+    ("csv: no limit on the fields of the file", W, "    if rows.1 > MAX_TOTAL_FIELDS {", "    if false {"),
+    ("csv: the limit of the file is twice as high", W, "    if rows.1 > MAX_TOTAL_FIELDS {", "    if rows.1 > 2 * MAX_TOTAL_FIELDS {"),
+    ("csv: the commas are not counted", W, "                count_field(&mut rows)?;\n                row.push", "                row.push"),
+    ("csv: the last field of a row is not counted", W, "    count_field(rows)?;\n    row.push(std::mem::take(field));", "    row.push(std::mem::take(field));"),
     ("csv: no limit on the fields of a record", W, "if row.len() + 2 > MAX_COLUMNS {", "if false {"),
     ("csv: one field too many is allowed", W, "if row.len() + 2 > MAX_COLUMNS {", "if row.len() + 1 > MAX_COLUMNS {"),
     ("csv: the widest record is refused", W, "if row.len() + 2 > MAX_COLUMNS {", "if row.len() + 3 > MAX_COLUMNS {"),

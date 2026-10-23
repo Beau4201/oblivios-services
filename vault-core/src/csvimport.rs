@@ -28,6 +28,11 @@ pub const MAX_CSV: usize = 16 * 1024 * 1024;
 /// 16 MiB of them took about 400 MB (review of 2026-10-23, P-14); the widest real export has about 30 columns.
 pub const MAX_COLUMNS: usize = 256;
 
+/// The most fields in the whole file. The width of one record is not a bound on the memory of the file: 16 MiB of rows of 255
+/// commas are 16 million empty `String`s (about 400 MB) in rows that each pass [`MAX_COLUMNS`] (security review of the fix,
+/// 2026-10-23). 4 million fields are 100 000 rows of 40 columns, which no export of another manager comes near.
+pub const MAX_TOTAL_FIELDS: usize = 4_000_000;
+
 /// What a file gave: the entries and the number of rows left out.
 #[derive(Debug)]
 pub struct Parsed {
@@ -64,7 +69,7 @@ fn column(name: &str) -> Option<Col> {
 }
 
 /// The rows of the file, wiped when dropped: they hold the passwords as plain strings.
-struct Rows(Vec<Vec<String>>);
+struct Rows(Vec<Vec<String>>, usize);
 
 impl Drop for Rows {
     fn drop(&mut self) {
@@ -74,6 +79,7 @@ impl Drop for Rows {
 
 /// Ends the record: a line with a single empty field that was not quoted is a blank line and is dropped.
 fn end_row(rows: &mut Rows, row: &mut Vec<String>, field: &mut String, was_quoted: &mut bool) -> Result<(), VaultError> {
+    count_field(rows)?;
     row.push(std::mem::take(field));
     let blank = row.len() == 1 && row.first().is_some_and(String::is_empty) && !*was_quoted;
     *was_quoted = false;
@@ -88,10 +94,19 @@ fn end_row(rows: &mut Rows, row: &mut Vec<String>, field: &mut String, was_quote
     Ok(())
 }
 
+/// Counts one more field of the file; refused above [`MAX_TOTAL_FIELDS`].
+fn count_field(rows: &mut Rows) -> Result<(), VaultError> {
+    rows.1 += 1;
+    if rows.1 > MAX_TOTAL_FIELDS {
+        return Err(VaultError::TooLarge);
+    }
+    Ok(())
+}
+
 /// RFC 4180: fields separated by commas, a field in double quotes may hold commas, line breaks and `""` for a quote.
 /// A quote opens a field only at its start; anywhere else it is an ordinary character.
 fn records(text: &str) -> Result<Rows, VaultError> {
-    let mut rows = Rows(Vec::new());
+    let mut rows = Rows(Vec::new(), 0);
     let mut row: Vec<String> = Vec::new();
     let mut field = String::new();
     let (mut in_quotes, mut was_quoted) = (false, false);
@@ -119,6 +134,7 @@ fn records(text: &str) -> Result<Rows, VaultError> {
                 if row.len() + 2 > MAX_COLUMNS {
                     return Err(VaultError::TooLarge);
                 }
+                count_field(&mut rows)?;
                 row.push(std::mem::take(&mut field));
                 was_quoted = false;
             }

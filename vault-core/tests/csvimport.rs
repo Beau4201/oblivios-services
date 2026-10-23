@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The CSV import of other managers' plain files: the reader, the row rules and the merge into a vault.
 use vault_core::api::{self, Code};
-use vault_core::csvimport::{merge, parse, MAX_COLUMNS, MAX_CSV};
+use vault_core::csvimport::{merge, parse, MAX_COLUMNS, MAX_CSV, MAX_TOTAL_FIELDS};
 use vault_core::error::VaultError;
 use vault_core::kdf::KdfParams;
 use vault_core::secret::SecretString;
@@ -389,4 +389,18 @@ fn a_record_with_too_many_fields_is_refused_before_it_costs_memory() {
     assert!(matches!(parse(later.as_bytes(), NOW), Err(VaultError::TooLarge)), "a wide record after good ones");
     let quoted = format!("name,url,username,password\n\"{}\",y,z,w\n", ",".repeat(MAX_CSV / 2));
     assert!(parse(quoted.as_bytes(), NOW).is_ok(), "commas inside quotes are text, not fields");
+}
+
+/// The cap on the width of one record does not bound the file: rows that each pass it still add up (security review of the fix).
+#[test]
+fn the_fields_of_the_whole_file_are_bounded_too() {
+    let row = ",".repeat(MAX_COLUMNS - 1); // MAX_COLUMNS empty fields, the widest record
+    let rows = MAX_TOTAL_FIELDS / MAX_COLUMNS + 2;
+    let heavy = format!("name,url,username,password\n{}", format!("{row}\n").repeat(rows));
+    assert!(heavy.len() < MAX_CSV, "the file itself is within the size limit");
+    assert!(matches!(parse(heavy.as_bytes(), NOW), Err(VaultError::TooLarge)), "rows that each pass the width cap add up");
+    // A big file of real width is fine: 99 000 rows of 40 columns are 3.96 million fields.
+    let narrow = ",".repeat(39);
+    let big = format!("name,url,username,password\n{}", format!("{narrow}\n").repeat(99_000));
+    assert!(!matches!(parse(big.as_bytes(), NOW), Err(VaultError::TooLarge)), "a large export of ordinary width");
 }
