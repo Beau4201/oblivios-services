@@ -340,6 +340,21 @@ fn the_site_order_does_not_make_an_account_new() {
 }
 
 #[test]
+fn the_linked_apps_are_part_of_the_account() {
+    let mut a = entry("u", "a.example", "p");
+    a.packages.push("com.example.one".into());
+    let mut v = Vault::new();
+    v.add(a).unwrap();
+    let mut same_apps = entry("u", "a.example", "p");
+    same_apps.packages.push("com.example.one".into());
+    same_apps.id = [8; 16];
+    let mut other_app = entry("u", "a.example", "p");
+    other_app.packages.push("com.example.two".into());
+    other_app.id = [9; 16];
+    assert_eq!(merge(&mut v, vec![same_apps, other_app]).unwrap(), (1, 1));
+}
+
+#[test]
 fn the_api_merges_a_file_and_reports_the_counts() {
     let fast = KdfParams { m_kib: 64, t: 1, p: 1 };
     let c = api::create_with_params(b"tundra-wicker-48", &[0x77; 32], &fast).unwrap();
