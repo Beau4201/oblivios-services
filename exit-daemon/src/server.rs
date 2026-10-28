@@ -235,11 +235,40 @@ fn check_context(got: io::Result<String>, want: &str) -> io::Result<()> {
     }
 }
 
+/// Android gives every user a block of this many uids (`AID_USER_OFFSET`): the apps of user 0 have uids below it.
+const USER_UID_RANGE: u32 = 100_000;
+
+/// The user decision: accepted only when the uid was read and belongs to user 0.
+fn check_user_zero(got: io::Result<u32>) -> io::Result<()> {
+    match got {
+        Ok(uid) if uid / USER_UID_RANGE == 0 => Ok(()),
+        Ok(_) => Err(denied("control peer is not in user 0")),
+        Err(_) => Err(denied("control peer user unknown")),
+    }
+}
+
+/// The production decision: the context has the wanted type AND the peer runs in user 0. After patch `system-sepolicy/0004`
+/// (ADR-196) the MLS levels no longer separate the users on these sockets, so a copy of the exit app in another user (the
+/// decoy, a work profile) would have the right type; the user check keeps it out (review of 2026-10-28, B1; ADR-198).
+fn check_context_and_user(ctx: io::Result<String>, uid: io::Result<u32>, want: &str) -> io::Result<()> {
+    check_context(ctx, want)?;
+    check_user_zero(uid)
+}
+
 /// The check `serve` makes before it reads a byte. Every failure to learn who the peer is counts as a refusal.
 pub(crate) fn check_peer(stream: &UnixStream, auth: &Auth) -> io::Result<()> {
+    check_peer_with(auth, || socket_peer_context(stream.as_fd()), || socket_peer_uid(stream.as_fd()))
+}
+
+/// [`check_peer`] with the two readings passed in, so that a test can stand in for a peer whose SELinux context it cannot set.
+fn check_peer_with(
+    auth: &Auth,
+    context: impl FnOnce() -> io::Result<String>,
+    uid: impl FnOnce() -> io::Result<u32>,
+) -> io::Result<()> {
     match auth {
-        Auth::Uid(want) => check_uid(socket_peer_uid(stream.as_fd()), *want),
-        Auth::Context(want) => check_context(socket_peer_context(stream.as_fd()), want),
+        Auth::Uid(want) => check_uid(uid(), *want),
+        Auth::Context(want) => check_context_and_user(context(), uid(), want),
     }
 }
 
@@ -504,6 +533,50 @@ mod tests {
         assert_eq!(check_uid(Ok(1001), 1000).unwrap_err().kind(), ErrorKind::PermissionDenied);
         assert_eq!(check_uid(Ok(0), 1000).unwrap_err().kind(), ErrorKind::PermissionDenied);
         assert_eq!(check_uid(Err(ErrorKind::Other.into()), 1000).unwrap_err().kind(), ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn the_user_decision_accepts_only_a_uid_of_user_zero() {
+        // root, a system uid, an app of user 0 (the exit app is one), the last uid of user 0
+        for ok in [0, 1000, 2961, 10_247, 99_999] {
+            assert!(check_user_zero(Ok(ok)).is_ok(), "{ok}");
+        }
+        // the first uid of user 1, an app of user 10 (a decoy or a work profile), the largest uid
+        for bad in [100_000, 100_001, 1_010_247, u32::MAX] {
+            assert_eq!(check_user_zero(Ok(bad)).unwrap_err().kind(), ErrorKind::PermissionDenied, "{bad}");
+        }
+        assert_eq!(check_user_zero(Err(ErrorKind::Other.into())).unwrap_err().kind(), ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn a_context_peer_needs_the_type_and_user_zero() {
+        let ctx = || -> io::Result<String> { Ok("u:r:exit_app:s0:c512,c768".into()) };
+        assert!(check_context_and_user(ctx(), Ok(10_247), "exit_app").is_ok());
+        // the right type in another user: refused (the point of ADR-198)
+        assert_eq!(check_context_and_user(ctx(), Ok(1_010_247), "exit_app").unwrap_err().kind(), ErrorKind::PermissionDenied);
+        // the wrong type in user 0: refused
+        assert_eq!(
+            check_context_and_user(Ok("u:r:platform_app:s0".into()), Ok(10_247), "exit_app").unwrap_err().kind(),
+            ErrorKind::PermissionDenied
+        );
+        // either answer unknown: refused
+        assert_eq!(check_context_and_user(Err(ErrorKind::Other.into()), Ok(10_247), "exit_app").unwrap_err().kind(), ErrorKind::PermissionDenied);
+        assert_eq!(check_context_and_user(ctx(), Err(ErrorKind::Other.into()), "exit_app").unwrap_err().kind(), ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn the_peer_check_reads_the_context_for_a_type_and_the_uid_for_both() {
+        let ctx = || -> io::Result<String> { Ok("u:r:exit_app:s0:c512,c768".into()) };
+        let by_type = Auth::Context("exit_app".into());
+        assert!(check_peer_with(&by_type, ctx, || Ok(10_247)).is_ok());
+        assert_eq!(check_peer_with(&by_type, ctx, || Ok(1_010_247)).unwrap_err().kind(), ErrorKind::PermissionDenied, "another user");
+        assert_eq!(check_peer_with(&by_type, || Ok("u:r:untrusted_app:s0".into()), || Ok(10_247)).unwrap_err().kind(), ErrorKind::PermissionDenied);
+        // a uid run (root on a phone, the tests) compares the uid only, and never reads the context
+        let by_uid = Auth::Uid(1010);
+        assert!(check_peer_with(&by_uid, || panic!("the context is not read"), || Ok(1010)).is_ok());
+        assert_eq!(check_peer_with(&by_uid, || panic!("the context is not read"), || Ok(1011)).unwrap_err().kind(), ErrorKind::PermissionDenied);
+        // the same uid in another user is another uid: a uid run is exact, not a user check
+        assert_eq!(check_peer_with(&by_uid, || panic!("the context is not read"), || Ok(1_001_010)).unwrap_err().kind(), ErrorKind::PermissionDenied);
     }
 
     #[test]
