@@ -5,7 +5,6 @@
 
 use super::netlink::{self, NLMSG_DONE, NLMSG_ERROR, NLM_F_DUMP};
 use super::reconcile::Netlink;
-use std::ffi::CString;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
@@ -24,7 +23,15 @@ fn cvt(ret: libc::c_int) -> io::Result<libc::c_int> {
 
 pub struct KernelNetlink {
     fd: OwnedFd,
+    /// The sequence number of the next interface lookup. The lookups are the only requests that this module numbers itself
+    /// (the others come numbered from the reconciler), in a range of their own so that a late reply to a rule request is never
+    /// taken for the answer of a lookup.
+    lookup_seq: u32,
 }
+
+/// The first sequence number of a lookup: far above every number that the reconciler hands out (it starts at 0x1000, 0x2000
+/// or 0x3000 and counts up by one per message, and a spec holds a few hundred messages at most).
+const LOOKUP_SEQ_FIRST: u32 = 0x7000_0000;
 
 impl KernelNetlink {
     pub fn open() -> io::Result<Self> {
@@ -45,7 +52,7 @@ impl KernelNetlink {
                 )
             })?;
         }
-        Ok(Self { fd })
+        Ok(Self { fd, lookup_seq: LOOKUP_SEQ_FIRST })
     }
 
     fn send(&self, msg: &[u8]) -> io::Result<()> {
@@ -121,14 +128,21 @@ impl Netlink for KernelNetlink {
         }
     }
 
+    /// By an `RTM_GETLINK` on the socket that is already open. `if_nametoindex` would open an `AF_INET` socket for the lookup,
+    /// which the helper's SELinux domain must not have (`exitd_route.te`: no inet socket of any kind); the service then failed
+    /// at its first apply, found by `strace` of the real binary on the device (NET-009, lynx image 2026102303).
     fn ifindex(&mut self, name: &str) -> io::Result<u32> {
-        let c = CString::new(name).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "interface name has a NUL"))?;
-        // SAFETY: `c` is a valid NUL-terminated string that outlives the call.
-        let idx = unsafe { libc::if_nametoindex(c.as_ptr()) };
-        if idx == 0 {
-            return Err(io::Error::from_raw_os_error(libc::ENODEV));
+        if name.as_bytes().contains(&0) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "interface name has a NUL"));
         }
-        Ok(idx)
+        let seq = self.lookup_seq;
+        self.lookup_seq = self.lookup_seq.wrapping_add(1).max(LOOKUP_SEQ_FIRST);
+        let reply = self.request(&netlink::link_get_msg(name, seq))?;
+        match netlink::parse_link_index(&reply, seq) {
+            Ok(Ok(index)) => Ok(index),
+            Ok(Err(errno)) => Err(io::Error::from_raw_os_error(errno)),
+            Err(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "malformed netlink reply")),
+        }
     }
 }
 
@@ -274,6 +288,22 @@ mod tests {
         assert!(ip(&["-6", "route", "show", "table", "4747"]).trim().is_empty());
         assert!(ip(&["addr", "show", "dev", "lo"]).contains("169.254.42.127/24"));
         assert_eq!(clear(&mut k).unwrap(), Applied::default());
+    }
+
+    #[test]
+    fn the_index_of_an_interface_is_read_by_netlink_and_a_missing_one_is_enodev() {
+        if !in_private_netns("routes::sys::tests::the_index_of_an_interface_is_read_by_netlink_and_a_missing_one_is_enodev") {
+            return;
+        }
+        let mut k = KernelNetlink::open().unwrap();
+        // The loopback is the one interface of a new namespace; iproute2 names its index too.
+        assert_eq!(k.ifindex("lo").unwrap(), 1);
+        assert!(ip(&["-o", "link", "show", "lo"]).starts_with("1: lo"));
+        // Again: the second lookup has its own sequence number and finds the same index.
+        assert_eq!(k.ifindex("lo").unwrap(), 1);
+        assert_eq!(k.ifindex("nosuchif0").unwrap_err().raw_os_error(), Some(libc::ENODEV));
+        // The lookups that failed leave the socket usable.
+        assert_eq!(k.ifindex("lo").unwrap(), 1);
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub const NLM_F_DUMP: u16 = 0x300;
 pub const NLMSG_ERROR: u16 = 2;
 pub const NLMSG_DONE: u16 = 3;
 pub const RTM_NEWLINK: u16 = 16;
+pub const RTM_GETLINK: u16 = 18;
 pub const RTM_SETLINK: u16 = 19;
 pub const RTM_NEWADDR: u16 = 20;
 pub const RTM_NEWROUTE: u16 = 24;
@@ -264,6 +265,47 @@ pub fn link_up_msg(name: &str, seq: u32) -> Vec<u8> {
     m.finish()
 }
 
+/// Asks for one interface by name. The reply is an `RTM_NEWLINK` message that holds the index, then the acknowledgement that
+/// `NLM_F_ACK` asks for (a request without it would leave the caller waiting for an end that never comes), or an error
+/// message (`ENODEV` when there is no such interface). The helper reads an index this way and not with `if_nametoindex`,
+/// which opens an `AF_INET` socket: the helper's domain has no inet socket and the service dies at its first apply.
+pub fn link_get_msg(name: &str, seq: u32) -> Vec<u8> {
+    let mut m = Builder::new(RTM_GETLINK, NLM_F_REQUEST | NLM_F_ACK, seq);
+    // struct ifinfomsg: family, pad, type, index, flags, change
+    m.raw(&[0, 0, 0, 0]);
+    m.raw(&0i32.to_ne_bytes());
+    m.raw(&0u32.to_ne_bytes());
+    m.raw(&0u32.to_ne_bytes());
+    let mut n = name.as_bytes().to_vec();
+    n.push(0);
+    m.attr(IFLA_IFNAME, &n);
+    m.finish()
+}
+
+/// The index in the reply to [`link_get_msg`] of sequence number `seq`: `Ok(Ok(index))`, or `Ok(Err(errno))` when the kernel
+/// answered with an error (a positive errno, `ENODEV` for an interface that does not exist). A reply that holds neither
+/// an interface nor an error, an index of 0 or a payload that is too short is an error of the decoder.
+pub fn parse_link_index(reply: &[u8], seq: u32) -> Result<Result<u32, i32>, NlError> {
+    for m in messages(reply)? {
+        if m.seq != seq {
+            continue;
+        }
+        if m.kind == NLMSG_ERROR {
+            // An acknowledgement (0) after the interface is not reached: the interface message comes first.
+            return match error_code(&m)? {
+                0 => Err(NlError::BadAttribute),
+                errno => Ok(Err(errno)),
+            };
+        }
+        if m.kind == RTM_NEWLINK {
+            // struct ifinfomsg: family (1), pad (1), type (2), index (4)
+            let index = ne_u32(m.payload.get(4..8).ok_or(NlError::Truncated)?)?;
+            return if index == 0 { Err(NlError::BadAttribute) } else { Ok(Ok(index)) };
+        }
+    }
+    Err(NlError::Truncated)
+}
+
 /// One message of a reply buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Msg<'a> {
@@ -434,6 +476,7 @@ mod tests {
         assert_eq!((NLMSG_ERROR, NLMSG_DONE), (2, 3));
         assert_eq!((RTM_NEWLINK, RTM_SETLINK, RTM_NEWADDR, RTM_NEWROUTE, RTM_DELROUTE), (16, 19, 20, 24, 25));
         assert_eq!((RTM_NEWRULE, RTM_DELRULE, RTM_GETRULE), (32, 33, 34));
+        assert_eq!(RTM_GETLINK, 18);
         assert_eq!((AF_INET, AF_INET6), (2, 10));
         assert_eq!(
             (FRA_DST, FRA_GOTO, FRA_PRIORITY, FRA_FWMARK, FRA_SUPPRESS_IFGROUP, FRA_SUPPRESS_PREFIXLEN, FRA_TABLE, FRA_FWMASK),
@@ -603,6 +646,52 @@ mod tests {
         assert_eq!(u32::from_ne_bytes([p[8], p[9], p[10], p[11]]), 1, "flags: IFF_UP");
         assert_eq!(u32::from_ne_bytes([p[12], p[13], p[14], p[15]]), 1, "change mask: IFF_UP");
         assert_eq!(attrs(&p[16..]).unwrap(), vec![(IFLA_IFNAME, &b"exit0\0"[..])]);
+    }
+
+    /// The request has the type 18, asks for an acknowledgement (without one the caller waits for an end that never comes) and
+    /// names the interface; the index is read where `struct ifinfomsg` has it, from the message of the right sequence number.
+    #[test]
+    fn a_link_request_names_the_interface_and_the_reply_gives_the_index() {
+        let m = link_get_msg("exit0", 9);
+        assert_eq!(u16::from_ne_bytes([m[4], m[5]]), 18, "RTM_GETLINK");
+        assert_eq!(u16::from_ne_bytes([m[6], m[7]]), NLM_F_REQUEST | NLM_F_ACK);
+        assert_eq!(u32::from_ne_bytes([m[8], m[9], m[10], m[11]]), 9, "the sequence number");
+        let p = &m[NLMSG_HDR..];
+        assert_eq!(&p[..16], &[0u8; 16], "no index and no flags: the kernel looks the name up");
+        assert_eq!(attrs(&p[16..]).unwrap(), vec![(IFLA_IFNAME, &b"exit0\0"[..])]);
+
+        let link = |seq: u32, index: u32| {
+            let mut b = Builder::new(RTM_NEWLINK, 0, seq);
+            b.raw(&[0, 0, 0, 0]);
+            b.raw(&index.to_ne_bytes());
+            b.raw(&[0u8; 8]);
+            b.finish()
+        };
+        let err = |seq: u32, e: i32| {
+            let mut b = Builder::new(NLMSG_ERROR, 0, seq);
+            b.raw(&e.to_ne_bytes());
+            b.finish()
+        };
+        // the interface, then the acknowledgement
+        let mut ok = link(9, 61);
+        ok.extend(err(9, 0));
+        assert_eq!(parse_link_index(&ok, 9), Ok(Ok(61)));
+        // no such interface
+        assert_eq!(parse_link_index(&err(9, -19), 9), Ok(Err(19)));
+        // the message of another request is not ours, whatever index it carries
+        let mut other = link(8, 7);
+        other.extend(err(9, -19));
+        assert_eq!(parse_link_index(&other, 9), Ok(Err(19)));
+        // an acknowledgement alone, an index of 0, a payload that is too short, and no answer at all
+        assert_eq!(parse_link_index(&err(9, 0), 9), Err(NlError::BadAttribute));
+        assert_eq!(parse_link_index(&link(9, 0), 9), Err(NlError::BadAttribute));
+        let short = {
+            let mut b = Builder::new(RTM_NEWLINK, 0, 9);
+            b.raw(&[0, 0, 0, 0]);
+            b.finish()
+        };
+        assert_eq!(parse_link_index(&short, 9), Err(NlError::Truncated));
+        assert_eq!(parse_link_index(&[], 9), Err(NlError::Truncated));
     }
 
     #[test]
