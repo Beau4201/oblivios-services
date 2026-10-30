@@ -43,7 +43,7 @@ library of the AOSP tree has no unwind strategy, so any panic ends the process a
 
 ## Panics
 
-A panic is an outage of every exit app. `PANIC-SITES.tsv` lists the 36 places of the production code where one can start, each
+A panic is an outage of every exit app. `PANIC-SITES.tsv` lists the 37 places of the production code where one can start, each
 with the reason that bytes of an app cannot reach it (poisoned locks need an earlier panic, start-up constants, invariants);
 the audit script fails on a new or a removed site. Indexing is covered by the length check before each index and by the fuzz
 tests: `src/fuzz.rs` (control frames, route frames, netlink messages, the mask list), and the tests of the vendored library for

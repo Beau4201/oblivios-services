@@ -1,6 +1,7 @@
 # Places in production code where a panic can start (tools/audit-panics.py, README 'Panics').
 # file<TAB>count<TAB>text of the line<TAB>why app-controlled bytes cannot reach it (or what is accepted).
 # A panic is an outage (panic = abort). A new site must be added here with its reason in the same change.
+src/control.rs	1	debug_assert!(country.is_none_or(valid_country), "the caller validates the country");	compiled out of the release build; encode_to_daemon is called by the tests and the fuzz seeds only, the daemon decodes this message and never encodes it
 src/control.rs	1	debug_assert!(valid_iface(iface.as_bytes()), "the caller validates the interface name");	compiled out of the release build; the callers build the name from a validated option (args.rs) or a test constant
 third_party/onionmasq/crates/onion-tunnel/src/config.rs	1	PtTransportName::from_str(transport_type.as_str()).unwrap()	pluggable transports are not configured by the daemon (no bridge line is ever given), so this branch is not run
 third_party/onionmasq/crates/onion-tunnel/src/config.rs	1	let arti_cfg_path = self.arti_cfg_path.clone().unwrap();	the daemon always sets arti_cfg_path in tunnel_config (config.rs) and loads the file before the tunnel is built; runs once while the tunnel is built, with constants or values the daemon set; no app byte has reached the daemon yet
