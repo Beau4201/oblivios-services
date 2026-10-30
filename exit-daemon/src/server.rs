@@ -168,6 +168,10 @@ impl Control {
                 let mut p = self.policy.write().unwrap_or_else(PoisonError::into_inner);
                 Reply::result(seq, p.set_overrides(uid, companies))
             }
+            ToDaemon::SetCountry { seq, uid, country } => {
+                let mut p = self.policy.write().unwrap_or_else(PoisonError::into_inner);
+                Reply::result(seq, p.set_country(uid, country))
+            }
         }
     }
 }
@@ -1184,6 +1188,20 @@ mod tests {
             vec![FromDaemon::Error { seq: 4, code: ErrorCode::TooMany }]
         );
         assert!(c.policy().read().unwrap().overridden(10231, 5), "the refused list left the old one");
+    }
+
+    #[test]
+    fn set_country_is_stored_removed_and_a_refused_one_is_answered_with_the_code() {
+        let mut c = control();
+        assert_eq!(c.handle(ToDaemon::SetCountry { seq: 2, uid: 10231, country: Some(*b"ES") }).msgs, vec![FromDaemon::Ack { seq: 2 }]);
+        assert_eq!(c.policy().read().unwrap().country_of(10231), Some(*b"ES"));
+        assert_eq!(
+            c.handle(ToDaemon::SetCountry { seq: 3, uid: 5, country: Some(*b"ES") }).msgs,
+            vec![FromDaemon::Error { seq: 3, code: ErrorCode::BadValue }]
+        );
+        assert_eq!(c.policy().read().unwrap().country_of(10231), Some(*b"ES"), "a refused request changes nothing");
+        assert_eq!(c.handle(ToDaemon::SetCountry { seq: 4, uid: 10231, country: None }).msgs, vec![FromDaemon::Ack { seq: 4 }]);
+        assert_eq!(c.policy().read().unwrap().country_of(10231), None);
     }
 
     #[test]

@@ -10,7 +10,7 @@ steer packets into the tun and nothing else. The design is
 
 | Part | Role |
 | --- | --- |
-| `src/control.rs` | the typed control protocol, version 3 (frames, sequence numbers, `Ack` and `Error`, uid classes, per-company overrides, `Failures`, `Promoted`, `Release`) |
+| `src/control.rs` | the typed control protocol, version 4 (frames, sequence numbers, `Ack` and `Error`, uid classes, per-company overrides, `Failures`, `Promoted`, `Release`, `SetCountry`: the exit country of an app uid, ADR-208) |
 | `src/policy.rs` | the class of each app uid (Tor, masked, exempt) and the overrides, as the exit app sent them |
 | `src/masklist.rs` | the mask list: names matched by the longest domain suffix, protected rows (company 0) shield what is below them |
 | `src/scaffolding.rs` | the `TunnelScaffolding` of the daemon: attributes every flow to a uid or refuses it, admits a TCP flow only for the class that may have it, decides per DNS question (Tor or pass on), limits DNS per app, bounds flows and commands, feeds the ladder |

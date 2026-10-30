@@ -3,12 +3,14 @@
 //! companies the user chose to show the real address to. Safe Rust only, no I/O. Everything is bounded: the class table
 //! by [`crate::control::MAX_CLASSES`], the override table by [`MAX_OVERRIDE_UIDS`] and [`crate::control::MAX_OVERRIDES`].
 
-use crate::control::{ErrorCode, Kind, UidClass, FIRST_APP_UID, MAX_CLASSES, MAX_OVERRIDES};
+use crate::control::{valid_country, ErrorCode, Kind, UidClass, FIRST_APP_UID, MAX_CLASSES, MAX_OVERRIDES};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// The most uids that may carry an override at one time.
 pub const MAX_OVERRIDE_UIDS: usize = 1024;
+/// The most uids that may carry a country (the place of an Isolated app) at one time.
+pub const MAX_COUNTRY_UIDS: usize = 1024;
 
 /// Checks a class table the way the control server does before it stores it: at most [`MAX_CLASSES`] entries, every
 /// range inside the app uids (`start >= FIRST_APP_UID`, `start <= end`), and the entries sorted and without overlap, so a
@@ -40,6 +42,7 @@ pub fn validate_overrides(companies: &[u16]) -> Result<(), ErrorCode> {
 pub struct Policy {
     classes: Vec<UidClass>,
     overrides: HashMap<u32, Vec<u16>>,
+    countries: HashMap<u32, [u8; 2]>,
 }
 
 impl Policy {
@@ -66,6 +69,29 @@ impl Policy {
         }
         self.overrides.insert(uid, companies);
         Ok(())
+    }
+
+    /// Sets the country whose exit relays the connections of `uid` must use; `None` removes it. A uid below
+    /// [`FIRST_APP_UID`] and a country that is not two capital letters are refused, and so is a new uid once
+    /// [`MAX_COUNTRY_UIDS`] uids carry a country.
+    pub fn set_country(&mut self, uid: u32, country: Option<[u8; 2]>) -> Result<(), ErrorCode> {
+        if uid < FIRST_APP_UID || country.is_some_and(|c| !valid_country(c)) {
+            return Err(ErrorCode::BadValue);
+        }
+        let Some(country) = country else {
+            self.countries.remove(&uid);
+            return Ok(());
+        };
+        if !self.countries.contains_key(&uid) && self.countries.len() >= MAX_COUNTRY_UIDS {
+            return Err(ErrorCode::TooMany);
+        }
+        self.countries.insert(uid, country);
+        Ok(())
+    }
+
+    /// The country chosen for the connections of `uid`, if any.
+    pub fn country_of(&self, uid: u32) -> Option<[u8; 2]> {
+        self.countries.get(&uid).copied()
     }
 
     /// The class of an app uid, or `None` when no range covers it (then the daemon treats the uid as exempt).
@@ -244,6 +270,41 @@ mod tests {
         p.set_overrides(10231, vec![]).unwrap();
         assert!(!p.overridden(10231, 4));
         assert_eq!(p.override_uid_count(), 0, "an empty list removes the uid");
+    }
+
+    #[test]
+    fn a_country_is_per_uid_and_can_be_removed() {
+        let mut p = Policy::default();
+        assert_eq!(p.country_of(10231), None);
+        p.set_country(10231, Some(*b"ES")).unwrap();
+        assert_eq!(p.country_of(10231), Some(*b"ES"));
+        assert_eq!(p.country_of(10232), None, "another uid has none");
+        p.set_country(10231, Some(*b"DE")).unwrap();
+        assert_eq!(p.country_of(10231), Some(*b"DE"), "a new country replaces the old one");
+        p.set_country(10231, None).unwrap();
+        assert_eq!(p.country_of(10231), None);
+        assert_eq!(p.set_country(10231, None), Ok(()), "removing what is not there is fine");
+    }
+
+    #[test]
+    fn a_country_is_validated_and_bounded() {
+        let mut p = Policy::default();
+        assert_eq!(p.set_country(FIRST_APP_UID - 1, Some(*b"ES")), Err(ErrorCode::BadValue));
+        assert_eq!(p.set_country(FIRST_APP_UID - 1, None), Err(ErrorCode::BadValue));
+        assert_eq!(p.set_country(FIRST_APP_UID, Some(*b"es")), Err(ErrorCode::BadValue));
+        assert_eq!(p.set_country(FIRST_APP_UID, Some(*b"E1")), Err(ErrorCode::BadValue));
+        assert_eq!(p.country_of(FIRST_APP_UID), None, "a refused country leaves nothing behind");
+        assert_eq!(p.set_country(FIRST_APP_UID, Some(*b"ES")), Ok(()), "the first app uid is an app");
+        assert_eq!(MAX_COUNTRY_UIDS, 1024, "the documented limit");
+        let mut q = Policy::default();
+        for uid in 0..MAX_COUNTRY_UIDS as u32 {
+            q.set_country(10000 + uid, Some(*b"ES")).unwrap();
+        }
+        assert_eq!(q.set_country(10000 + MAX_COUNTRY_UIDS as u32, Some(*b"ES")), Err(ErrorCode::TooMany));
+        // An existing uid can still be changed or removed when the table is full.
+        assert_eq!(q.set_country(10000, Some(*b"NL")), Ok(()));
+        assert_eq!(q.set_country(10001, None), Ok(()));
+        assert_eq!(q.set_country(10000 + MAX_COUNTRY_UIDS as u32, Some(*b"ES")), Ok(()));
     }
 
     #[test]

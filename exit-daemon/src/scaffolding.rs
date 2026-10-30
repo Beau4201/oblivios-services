@@ -254,8 +254,11 @@ impl TunnelScaffolding for ExitScaffolding {
         Ok(u64::from(uid))
     }
 
-    fn locate(&self, _src: IpEndpoint, _dst: IpEndpoint, _isolation_key: u64) -> Option<CountryCode> {
-        None
+    /// The exit country of an Isolated app whose place is abroad (ADR-208), as the exit app set it; no other flow has one.
+    fn locate(&self, _src: IpEndpoint, _dst: IpEndpoint, isolation_key: u64) -> Option<CountryCode> {
+        let uid = u32::try_from(isolation_key).ok()?;
+        let code = self.inner.policy.read().unwrap_or_else(PoisonError::into_inner).country_of(uid)?;
+        std::str::from_utf8(&code).ok()?.parse().ok()
     }
 
     fn on_bootstrapped(&self) {
@@ -766,9 +769,18 @@ mod tests {
     }
 
     #[test]
-    fn a_country_is_never_chosen() {
-        let s = fixed(Some(1));
-        assert_eq!(s.locate(v4([10, 0, 0, 2], 1), v4([1, 1, 1, 1], 1), 1), None);
+    fn a_country_is_chosen_only_for_an_app_that_has_one() {
+        let (s, policy) = dns_scaffolding(vec![class(10000, 19999, Kind::Tor)]);
+        let at = |s: &ExitScaffolding, key: u64| s.locate(v4([10, 0, 0, 2], 1), v4([1, 1, 1, 1], 1), key).map(|c| c.to_string());
+        assert_eq!(at(&s, 10231), None, "no country is chosen unless the exit app sets one");
+        policy.write().unwrap().set_country(10231, Some(*b"ES")).unwrap();
+        assert_eq!(at(&s, 10231).as_deref(), Some("ES"));
+        assert_eq!(at(&s, 10232), None, "another app is not moved");
+        assert_eq!(at(&s, u64::from(u32::MAX) + 1), None, "a key that is not a uid has none");
+        policy.write().unwrap().set_country(10231, Some(*b"NL")).unwrap();
+        assert_eq!(at(&s, 10231).as_deref(), Some("NL"));
+        policy.write().unwrap().set_country(10231, None).unwrap();
+        assert_eq!(at(&s, 10231), None, "a removed choice is gone");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The typed control protocol between the exit app and the daemon (ADR-184, ADR-186, ADR-188), version 3. Safe Rust only. A frame is
+//! The typed control protocol between the exit app and the daemon (ADR-184, ADR-186, ADR-188), version 4. Safe Rust only. A frame is
 //! a `u32` big-endian length of tag plus payload, the tag byte, then the payload. A decoder checks the claimed length before
 //! it looks at anything else and never allocates from it: the only allocations are bounded by [`MAX_FRAME`] (the interface
 //! name, the class list, the company list) and the output of the encoders.
@@ -14,7 +14,7 @@ pub const MAX_FRAME: usize = 4096;
 /// The longest interface name the kernel accepts (IFNAMSIZ - 1).
 pub const IFNAME_MAX: usize = 15;
 /// The wire version of this module. A `Hello` of another version is answered with `Error { Unsupported }`.
-pub const PROTOCOL_VERSION: u8 = 3;
+pub const PROTOCOL_VERSION: u8 = 4;
 /// The first uid of an ordinary app; ranges below it are never classified by the app.
 pub const FIRST_APP_UID: u32 = 10000;
 /// At most this many ranges in one class table.
@@ -37,6 +37,7 @@ const TAG_GET_STATE: u8 = 0x06;
 const TAG_SET_POLICY: u8 = 0x07;
 const TAG_SET_OVERRIDES: u8 = 0x08;
 const TAG_RELEASE: u8 = 0x09;
+const TAG_SET_COUNTRY: u8 = 0x0a;
 const TAG_READY: u8 = 0x81;
 const TAG_STATE: u8 = 0x82;
 const TAG_FAILURES: u8 = 0x83;
@@ -79,6 +80,14 @@ pub enum ToDaemon {
     /// "Hide again" (ADR-188): ends the speed guard's promotion of `company` for `uid` and keeps it hidden until the daemon
     /// restarts.
     Release { seq: u8, uid: u32, company: u16 },
+    /// The country whose exit relays the connections of `uid` must use (ADR-208: the place of an Isolated app); `None`
+    /// removes the choice. Two capital ASCII letters, checked by [`valid_country`] on both sides.
+    SetCountry { seq: u8, uid: u32, country: Option<[u8; 2]> },
+}
+
+/// A country code the daemon accepts: two capital ASCII letters (the exit app writes the persona's country this way).
+pub fn valid_country(c: [u8; 2]) -> bool {
+    c.iter().all(u8::is_ascii_uppercase)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,6 +195,19 @@ pub fn encode_to_daemon(m: &ToDaemon) -> Vec<u8> {
             p.extend_from_slice(&uid.to_be_bytes());
             p.extend_from_slice(&company.to_be_bytes());
             frame(TAG_RELEASE, &p)
+        }
+        ToDaemon::SetCountry { seq, uid, country } => {
+            debug_assert!(country.is_none_or(valid_country), "the caller validates the country");
+            let mut p = vec![*seq];
+            p.extend_from_slice(&uid.to_be_bytes());
+            match country {
+                Some(c) => {
+                    p.push(2);
+                    p.extend_from_slice(c);
+                }
+                None => p.push(0),
+            }
+            frame(TAG_SET_COUNTRY, &p)
         }
     }
 }
@@ -307,6 +329,16 @@ pub fn decode_to_daemon(buf: &[u8]) -> Result<(ToDaemon, usize), DecodeError> {
             let p = fixed::<7>(payload)?;
             ToDaemon::Release { seq: p[0], uid: be32(&p[1..5])?, company: be16(&p[5..7])? }
         }
+        TAG_SET_COUNTRY => {
+            // The count byte is the sixth byte; a country is nothing (no choice) or exactly two capital letters.
+            let (_, letters) = counted(payload, 5, 6, 1)?;
+            let country = match letters {
+                [] => None,
+                [a, b] if valid_country([*a, *b]) => Some([*a, *b]),
+                _ => return Err(DecodeError::BadValue),
+            };
+            ToDaemon::SetCountry { seq: payload[0], uid: be32(&payload[1..5])?, country }
+        }
         other => return Err(DecodeError::UnknownTag(other)),
     };
     Ok((msg, used))
@@ -418,6 +450,8 @@ mod tests {
             (ToDaemon::SetOverrides { seq: 8, uid: 10231, companies: vec![] }, 6),
             (ToDaemon::SetOverrides { seq: 9, uid: 10231, companies: vec![3, 9, 0xffff] }, 6 + 6),
             (ToDaemon::Release { seq: 10, uid: 10231, company: 12 }, 7),
+            (ToDaemon::SetCountry { seq: 11, uid: 10231, country: Some(*b"ES") }, 8),
+            (ToDaemon::SetCountry { seq: 12, uid: 10231, country: None }, 6),
         ]
     }
 
@@ -489,6 +523,14 @@ mod tests {
             [0, 0, 0, 8, 0x09, 10, 0, 0, 0x27, 0xf7, 1, 2]
         );
         assert_eq!(
+            encode_to_daemon(&ToDaemon::SetCountry { seq: 12, uid: 10231, country: Some(*b"ES") }),
+            [0, 0, 0, 9, 0x0a, 12, 0, 0, 0x27, 0xf7, 2, b'E', b'S']
+        );
+        assert_eq!(
+            encode_to_daemon(&ToDaemon::SetCountry { seq: 12, uid: 10231, country: None }),
+            [0, 0, 0, 7, 0x0a, 12, 0, 0, 0x27, 0xf7, 0]
+        );
+        assert_eq!(
             encode_from_daemon(&FromDaemon::Promoted { uid: 1, company: 0x0203, fresh: true }),
             [0, 0, 0, 8, 0x86, 0, 0, 0, 1, 2, 3, 1]
         );
@@ -557,7 +599,7 @@ mod tests {
         // A tag of the other direction is unknown here, and the next tag after each range is too.
         assert_eq!(decode_to_daemon(&frm(0x81, b"tun0")), Err(DecodeError::UnknownTag(0x81)));
         assert_eq!(decode_from_daemon(&frm(0x01, &[1])), Err(DecodeError::UnknownTag(0x01)));
-        assert_eq!(decode_to_daemon(&frm(0x0a, &[1])), Err(DecodeError::UnknownTag(0x0a)));
+        assert_eq!(decode_to_daemon(&frm(0x0b, &[1])), Err(DecodeError::UnknownTag(0x0b)));
         assert_eq!(decode_to_daemon(&frm(0x00, &[1])), Err(DecodeError::UnknownTag(0x00)));
         assert_eq!(decode_from_daemon(&frm(0x87, &[1])), Err(DecodeError::UnknownTag(0x87)));
     }
@@ -632,6 +674,28 @@ mod tests {
     }
 
     #[test]
+    fn a_country_is_two_capital_letters_or_nothing() {
+        let country = |letters: &[u8]| {
+            let mut p = vec![1, 0, 0, 0x27, 0xf7, letters.len() as u8];
+            p.extend_from_slice(letters);
+            frm(0x0a, &p)
+        };
+        for bad in [&b"E"[..], b"ESP", b"es", b"eS", b"E1", b"1E", b"E ", b"\xc3\xa9", b"\0\0"] {
+            assert_eq!(decode_to_daemon(&country(bad)), Err(DecodeError::BadValue), "{bad:?}");
+        }
+        assert_eq!(
+            decode_to_daemon(&country(b"NL")).map(|(m, _)| m),
+            Ok(ToDaemon::SetCountry { seq: 1, uid: 10231, country: Some(*b"NL") })
+        );
+        assert_eq!(decode_to_daemon(&country(b"")).map(|(m, _)| m), Ok(ToDaemon::SetCountry { seq: 1, uid: 10231, country: None }));
+        // The letters must match the count byte exactly.
+        assert_eq!(decode_to_daemon(&frm(0x0a, &[1, 0, 0, 0x27, 0xf7, 2, b'E'])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x0a, &[1, 0, 0, 0x27, 0xf7, 0, b'E'])), Err(DecodeError::Trailing));
+        assert_eq!(decode_to_daemon(&frm(0x0a, &[1, 0, 0, 0x27, 0xf7])), Err(DecodeError::BadLength));
+        assert!(valid_country(*b"AZ") && !valid_country(*b"A@") && !valid_country(*b"A[") && !valid_country(*b"a\x41"));
+    }
+
+    #[test]
     fn a_class_kind_outside_the_three_is_refused() {
         let entry = |k: u8| frm(0x07, &[1, 1, 0, 0, 0x27, 0x10, 0, 0, 0x27, 0x10, k]);
         for bad in [0u8, 4, 255] {
@@ -686,7 +750,7 @@ mod tests {
         // Wire-level contract with the app: a changed limit is a protocol change, not a refactoring.
         assert_eq!(MAX_FRAME, 4096);
         assert_eq!(IFNAME_MAX, 15);
-        assert_eq!(PROTOCOL_VERSION, 3);
+        assert_eq!(PROTOCOL_VERSION, 4);
         assert_eq!(FIRST_APP_UID, 10000);
         assert_eq!(MAX_CLASSES, 255, "the count is one byte");
         assert!(MAX_CLASSES <= usize::from(u8::MAX));
