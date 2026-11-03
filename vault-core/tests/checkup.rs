@@ -223,11 +223,16 @@ fn keyboard_rows_are_patterns_either_way_round() {
 
 #[test]
 fn groups_and_ids_come_back_sorted() {
+    // The groups leave a HashMap in a random order: with two groups an unsorted result matches half the runs, with
+    // eight one run in 8!. The ids go in descending within a group and the groups in descending order.
     let mut v = Vault::new();
-    for (n, p) in [(5u8, "shared-One-pass-77!"), (4, "shared-Two-pass-88!"), (3, "shared-One-pass-77!"), (2, "shared-Two-pass-88!")] {
-        v.add(entry(n, p)).unwrap();
+    for k in (0..8u8).rev() {
+        let password = format!("shared-pass-{k}-Xq!7");
+        v.add(entry(2 * k + 5, &password)).unwrap();
+        v.add(entry(2 * k + 2, &password)).unwrap();
     }
-    assert_eq!(checkup(&v).reused, vec![vec![[2; 16], [4; 16]], vec![[3; 16], [5; 16]]]);
+    let want: Vec<Vec<[u8; 16]>> = (0..8u8).map(|k| vec![[2 * k + 2; 16], [2 * k + 5; 16]]).collect();
+    assert_eq!(checkup(&v).reused, want);
 }
 
 #[test]
