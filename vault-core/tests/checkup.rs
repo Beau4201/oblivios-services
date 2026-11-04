@@ -224,7 +224,7 @@ fn keyboard_rows_are_patterns_either_way_round() {
 #[test]
 fn groups_and_ids_come_back_sorted() {
     // The groups leave a HashMap in a random order: with two groups an unsorted result matches half the runs, with
-    // eight one run in 8!. The ids go in descending within a group and the groups in descending order.
+    // eight one run in 8!. The ids go in ascending order within a group and the groups in ascending order of their first id.
     let mut v = Vault::new();
     for k in (0..8u8).rev() {
         let password = format!("shared-pass-{k}-Xq!7");
