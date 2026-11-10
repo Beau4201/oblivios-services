@@ -36,7 +36,7 @@ pub const MAX_REPORT: usize = 16;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Promotion {
     pub uid: u32,
-    pub company: u16,
+    pub company: u32,
     pub fresh: bool,
 }
 
@@ -51,14 +51,14 @@ struct Pair {
 
 #[derive(Default)]
 pub struct Guard {
-    pairs: HashMap<(u32, u16), Pair>,
+    pairs: HashMap<(u32, u32), Pair>,
     /// Pairs the user set back to hidden: they are never promoted again until the daemon restarts.
-    pinned: HashSet<(u32, u16)>,
+    pinned: HashSet<(u32, u32)>,
 }
 
 impl Guard {
     /// The counter that the tunnel adds the bytes of a flow of `uid` to `company` to. One per pair.
-    pub fn counter(&mut self, uid: u32, company: u16, now: Instant) -> Arc<BandwidthCounter> {
+    pub fn counter(&mut self, uid: u32, company: u32, now: Instant) -> Arc<BandwidthCounter> {
         let key = (uid, company);
         if let Some(p) = self.pairs.get(&key) {
             return p.counter.clone();
@@ -86,7 +86,7 @@ impl Guard {
     }
 
     /// True while the names of `company` are passed on to `uid`.
-    pub fn heavy(&self, uid: u32, company: u16, now: Instant) -> bool {
+    pub fn heavy(&self, uid: u32, company: u32, now: Instant) -> bool {
         self.pairs.get(&(uid, company)).and_then(|p| p.until).is_some_and(|until| now < until)
     }
 
@@ -120,7 +120,7 @@ impl Guard {
 
     /// The active promotions, at most `max`, each reported as `fresh` once.
     pub fn report(&mut self, now: Instant, max: usize) -> Vec<Promotion> {
-        let mut keys: Vec<(u32, u16)> =
+        let mut keys: Vec<(u32, u32)> =
             self.pairs.iter().filter(|(_, p)| p.until.is_some_and(|u| now < u)).map(|(k, _)| *k).collect();
         keys.sort_unstable();
         keys.truncate(max);
@@ -136,7 +136,7 @@ impl Guard {
 
     /// "Hide again": ends the promotion of the pair and keeps the company hidden for that app until the daemon restarts.
     /// A pair that is not promoted is pinned as well, so the user's choice also holds against a later promotion.
-    pub fn release(&mut self, uid: u32, company: u16) {
+    pub fn release(&mut self, uid: u32, company: u32) {
         if let Some(p) = self.pairs.get_mut(&(uid, company)) {
             p.until = None;
             p.fresh = false;

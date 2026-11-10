@@ -34,7 +34,7 @@ fn every_vector_is_built_by_the_rust_codec_and_read_back() {
             checked += 1;
         }};
     }
-    both!("to_daemon.hello", ToDaemon::Hello { version: 4 }, encode_to_daemon, decode_to_daemon);
+    both!("to_daemon.hello", ToDaemon::Hello { version: 5 }, encode_to_daemon, decode_to_daemon);
     both!("to_daemon.set_memory_max", ToDaemon::SetMemoryMax { seq: 7, bytes: 64 * 1024 * 1024 }, encode_to_daemon, decode_to_daemon);
     both!("to_daemon.refresh_app", ToDaemon::RefreshApp { seq: 3, uid: 10123 }, encode_to_daemon, decode_to_daemon);
     both!("to_daemon.refresh_all", ToDaemon::RefreshAll { seq: 4 }, encode_to_daemon, decode_to_daemon);
@@ -53,13 +53,13 @@ fn every_vector_is_built_by_the_rust_codec_and_read_back() {
         encode_to_daemon,
         decode_to_daemon
     );
-    both!("to_daemon.set_overrides", ToDaemon::SetOverrides { seq: 2, uid: 10123, companies: vec![7, 300] }, encode_to_daemon, decode_to_daemon);
-    both!("to_daemon.release", ToDaemon::Release { seq: 11, uid: 10123, company: 300 }, encode_to_daemon, decode_to_daemon);
+    both!("to_daemon.set_overrides", ToDaemon::SetOverrides { seq: 2, uid: 10123, companies: vec![7, 70_000] }, encode_to_daemon, decode_to_daemon);
+    both!("to_daemon.release", ToDaemon::Release { seq: 11, uid: 10123, company: 70_000 }, encode_to_daemon, decode_to_daemon);
     both!("to_daemon.set_country", ToDaemon::SetCountry { seq: 12, uid: 10123, country: Some(*b"ES") }, encode_to_daemon, decode_to_daemon);
     both!("to_daemon.clear_country", ToDaemon::SetCountry { seq: 13, uid: 10123, country: None }, encode_to_daemon, decode_to_daemon);
-    both!("from_daemon.ready", FromDaemon::Ready { version: 4, iface: "exit0".into() }, encode_from_daemon, decode_from_daemon);
+    both!("from_daemon.ready", FromDaemon::Ready { version: 5, iface: "exit0".into() }, encode_from_daemon, decode_from_daemon);
     both!("from_daemon.state_up", FromDaemon::State { state: DaemonState::Up }, encode_from_daemon, decode_from_daemon);
-    both!("from_daemon.failures", FromDaemon::Failures { uid: 10123, company: 7, count: 3 }, encode_from_daemon, decode_from_daemon);
+    both!("from_daemon.failures", FromDaemon::Failures { uid: 10123, company: 70_000, count: 3 }, encode_from_daemon, decode_from_daemon);
     both!("from_daemon.promoted", FromDaemon::Promoted { uid: 10123, company: 7, fresh: true }, encode_from_daemon, decode_from_daemon);
     both!("from_daemon.ack", FromDaemon::Ack { seq: 9 }, encode_from_daemon, decode_from_daemon);
     both!("from_daemon.error", FromDaemon::Error { seq: 2, code: ErrorCode::TooMany }, encode_from_daemon, decode_from_daemon);

@@ -71,7 +71,7 @@ fn to_daemon_samples() -> Vec<Vec<u8>> {
         ToDaemon::Shutdown { seq: 4 },
         ToDaemon::GetState { seq: 5 },
         ToDaemon::SetPolicy { seq: 6, classes },
-        ToDaemon::SetOverrides { seq: 7, uid: 10231, companies: vec![1, 2, 3, 65535] },
+        ToDaemon::SetOverrides { seq: 7, uid: 10231, companies: vec![1, 2, 3, 65535, 0x1_0000, u32::MAX] },
         ToDaemon::SetCountry { seq: 8, uid: 10231, country: Some(*b"ES") },
         ToDaemon::SetCountry { seq: 9, uid: 10231, country: None },
     ]

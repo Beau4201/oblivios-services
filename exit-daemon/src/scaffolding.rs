@@ -148,7 +148,7 @@ impl ExitScaffolding {
     }
 
     /// The company of a host name on the list, or 0 for a name that is not listed (an app set to Tor).
-    fn company_of(&self, host: &str) -> u16 {
+    fn company_of(&self, host: &str) -> u32 {
         self.inner.list.classify(host).unwrap_or(0)
     }
 
@@ -187,7 +187,7 @@ impl ExitScaffolding {
     }
 
     /// "Hide again": ends the promotion of a company for an app and keeps it hidden until the daemon restarts.
-    pub fn release_promotion(&self, uid: u32, company: u16) {
+    pub fn release_promotion(&self, uid: u32, company: u32) {
         self.inner.guard.lock().unwrap_or_else(PoisonError::into_inner).release(uid, company);
     }
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The typed control protocol between the exit app and the daemon (ADR-184, ADR-186, ADR-188), version 4. Safe Rust only. A frame is
+//! The typed control protocol between the exit app and the daemon (ADR-184, ADR-186, ADR-188, ADR-223), version 5: a company id is 32 bits. Safe Rust only. A frame is
 //! a `u32` big-endian length of tag plus payload, the tag byte, then the payload. A decoder checks the claimed length before
 //! it looks at anything else and never allocates from it: the only allocations are bounded by [`MAX_FRAME`] (the interface
 //! name, the class list, the company list) and the output of the encoders.
@@ -14,7 +14,7 @@ pub const MAX_FRAME: usize = 4096;
 /// The longest interface name the kernel accepts (IFNAMSIZ - 1).
 pub const IFNAME_MAX: usize = 15;
 /// The wire version of this module. A `Hello` of another version is answered with `Error { Unsupported }`.
-pub const PROTOCOL_VERSION: u8 = 4;
+pub const PROTOCOL_VERSION: u8 = 5;
 /// The first uid of an ordinary app; ranges below it are never classified by the app.
 pub const FIRST_APP_UID: u32 = 10000;
 /// At most this many ranges in one class table.
@@ -76,10 +76,10 @@ pub enum ToDaemon {
     Shutdown { seq: u8 },
     GetState { seq: u8 },
     SetPolicy { seq: u8, classes: Vec<UidClass> },
-    SetOverrides { seq: u8, uid: u32, companies: Vec<u16> },
+    SetOverrides { seq: u8, uid: u32, companies: Vec<u32> },
     /// "Hide again" (ADR-188): ends the speed guard's promotion of `company` for `uid` and keeps it hidden until the daemon
     /// restarts.
-    Release { seq: u8, uid: u32, company: u16 },
+    Release { seq: u8, uid: u32, company: u32 },
     /// The country whose exit relays the connections of `uid` must use (ADR-208: the place of an Isolated app); `None`
     /// removes the choice. Two capital ASCII letters, checked by [`valid_country`] on both sides.
     SetCountry { seq: u8, uid: u32, country: Option<[u8; 2]> },
@@ -114,10 +114,10 @@ pub enum FromDaemon {
     Ready { version: u8, iface: String },
     State { state: DaemonState },
     /// A company id, never a host name (capability-boundaries.md).
-    Failures { uid: u32, company: u16, count: u32 },
+    Failures { uid: u32, company: u32, count: u32 },
     /// The speed guard passes the names of `company` on to the app `uid` for now (ADR-188); `fresh` is true the first time it
     /// is reported, so the app notifies once. A company id, never a host name.
-    Promoted { uid: u32, company: u16, fresh: bool },
+    Promoted { uid: u32, company: u32, fresh: bool },
     Ack { seq: u8 },
     Error { seq: u8, code: ErrorCode },
 }
@@ -222,17 +222,17 @@ pub fn encode_from_daemon(m: &FromDaemon) -> Vec<u8> {
         }
         FromDaemon::State { state } => frame(TAG_STATE, &[*state as u8]),
         FromDaemon::Failures { uid, company, count } => {
-            let mut p = [0u8; 10];
+            let mut p = [0u8; 12];
             p[..4].copy_from_slice(&uid.to_be_bytes());
-            p[4..6].copy_from_slice(&company.to_be_bytes());
-            p[6..].copy_from_slice(&count.to_be_bytes());
+            p[4..8].copy_from_slice(&company.to_be_bytes());
+            p[8..].copy_from_slice(&count.to_be_bytes());
             frame(TAG_FAILURES, &p)
         }
         FromDaemon::Promoted { uid, company, fresh } => {
-            let mut p = [0u8; 7];
+            let mut p = [0u8; 9];
             p[..4].copy_from_slice(&uid.to_be_bytes());
-            p[4..6].copy_from_slice(&company.to_be_bytes());
-            p[6] = u8::from(*fresh);
+            p[4..8].copy_from_slice(&company.to_be_bytes());
+            p[8] = u8::from(*fresh);
             frame(TAG_PROMOTED, &p)
         }
         FromDaemon::Ack { seq } => frame(TAG_ACK, &[*seq]),
@@ -267,10 +267,6 @@ pub(crate) fn fixed<const N: usize>(payload: &[u8]) -> Result<[u8; N], DecodeErr
 
 fn be32(b: &[u8]) -> Result<u32, DecodeError> {
     <[u8; 4]>::try_from(b).map(u32::from_be_bytes).map_err(|_| DecodeError::BadLength)
-}
-
-fn be16(b: &[u8]) -> Result<u16, DecodeError> {
-    <[u8; 2]>::try_from(b).map(u16::from_be_bytes).map_err(|_| DecodeError::BadLength)
 }
 
 fn kind_from(b: u8) -> Result<Kind, DecodeError> {
@@ -321,13 +317,13 @@ pub fn decode_to_daemon(buf: &[u8]) -> Result<(ToDaemon, usize), DecodeError> {
             ToDaemon::SetPolicy { seq: payload[0], classes }
         }
         TAG_SET_OVERRIDES => {
-            let (_, entries) = counted(payload, 5, 6, 2)?;
-            let companies = entries.chunks_exact(2).map(be16).collect::<Result<Vec<u16>, _>>()?;
+            let (_, entries) = counted(payload, 5, 6, 4)?;
+            let companies = entries.chunks_exact(4).map(be32).collect::<Result<Vec<u32>, _>>()?;
             ToDaemon::SetOverrides { seq: payload[0], uid: be32(&payload[1..5])?, companies }
         }
         TAG_RELEASE => {
-            let p = fixed::<7>(payload)?;
-            ToDaemon::Release { seq: p[0], uid: be32(&p[1..5])?, company: be16(&p[5..7])? }
+            let p = fixed::<9>(payload)?;
+            ToDaemon::Release { seq: p[0], uid: be32(&p[1..5])?, company: be32(&p[5..9])? }
         }
         TAG_SET_COUNTRY => {
             // The count byte is the sixth byte; a country is nothing (no choice) or exactly two capital letters.
@@ -375,17 +371,17 @@ pub fn decode_from_daemon(buf: &[u8]) -> Result<(FromDaemon, usize), DecodeError
             FromDaemon::State { state }
         }
         TAG_FAILURES => {
-            let p = fixed::<10>(payload)?;
-            FromDaemon::Failures { uid: be32(&p[0..4])?, company: be16(&p[4..6])?, count: be32(&p[6..10])? }
+            let p = fixed::<12>(payload)?;
+            FromDaemon::Failures { uid: be32(&p[0..4])?, company: be32(&p[4..8])?, count: be32(&p[8..12])? }
         }
         TAG_PROMOTED => {
-            let p = fixed::<7>(payload)?;
-            let fresh = match p[6] {
+            let p = fixed::<9>(payload)?;
+            let fresh = match p[8] {
                 0 => false,
                 1 => true,
                 _ => return Err(DecodeError::BadValue),
             };
-            FromDaemon::Promoted { uid: be32(&p[0..4])?, company: be16(&p[4..6])?, fresh }
+            FromDaemon::Promoted { uid: be32(&p[0..4])?, company: be32(&p[4..8])?, fresh }
         }
         TAG_ACK => FromDaemon::Ack { seq: fixed::<1>(payload)?[0] },
         TAG_ERROR => {
@@ -448,8 +444,9 @@ mod tests {
                 2 + 3 * CLASS_BYTES,
             ),
             (ToDaemon::SetOverrides { seq: 8, uid: 10231, companies: vec![] }, 6),
-            (ToDaemon::SetOverrides { seq: 9, uid: 10231, companies: vec![3, 9, 0xffff] }, 6 + 6),
-            (ToDaemon::Release { seq: 10, uid: 10231, company: 12 }, 7),
+            (ToDaemon::SetOverrides { seq: 9, uid: 10231, companies: vec![3, 9, 0xffff, 0x1_0000, u32::MAX] }, 6 + 5 * 4),
+            (ToDaemon::Release { seq: 10, uid: 10231, company: 12 }, 9),
+            (ToDaemon::Release { seq: 10, uid: 10231, company: 70_000 }, 9),
             (ToDaemon::SetCountry { seq: 11, uid: 10231, country: Some(*b"ES") }, 8),
             (ToDaemon::SetCountry { seq: 12, uid: 10231, country: None }, 6),
         ]
@@ -462,9 +459,10 @@ mod tests {
             (FromDaemon::State { state: DaemonState::Bootstrapping }, 1),
             (FromDaemon::State { state: DaemonState::Up }, 1),
             (FromDaemon::State { state: DaemonState::Failed }, 1),
-            (FromDaemon::Failures { uid: 10231, company: 12, count: 7 }, 10),
-            (FromDaemon::Promoted { uid: 10231, company: 12, fresh: true }, 7),
-            (FromDaemon::Promoted { uid: 10231, company: 12, fresh: false }, 7),
+            (FromDaemon::Failures { uid: 10231, company: 12, count: 7 }, 12),
+            (FromDaemon::Failures { uid: 10231, company: 70_000, count: 7 }, 12),
+            (FromDaemon::Promoted { uid: 10231, company: 12, fresh: true }, 9),
+            (FromDaemon::Promoted { uid: 10231, company: 70_000, fresh: false }, 9),
             (FromDaemon::Ack { seq: 200 }, 1),
             (FromDaemon::Error { seq: 3, code: ErrorCode::BadValue }, 2),
             (FromDaemon::Error { seq: 3, code: ErrorCode::TooMany }, 2),
@@ -509,18 +507,18 @@ mod tests {
             [0, 0, 0, 12, 0x07, 7, 1, 0, 0, 0x27, 0x10, 0, 0, 0x27, 0xf6, 2]
         );
         assert_eq!(
-            encode_to_daemon(&ToDaemon::SetOverrides { seq: 8, uid: 10231, companies: vec![0x0102, 3] }),
-            [0, 0, 0, 11, 0x08, 8, 0, 0, 0x27, 0xf7, 2, 1, 2, 0, 3]
+            encode_to_daemon(&ToDaemon::SetOverrides { seq: 8, uid: 10231, companies: vec![0x0102, 0x0001_0003] }),
+            [0, 0, 0, 15, 0x08, 8, 0, 0, 0x27, 0xf7, 2, 0, 0, 1, 2, 0, 1, 0, 3]
         );
         assert_eq!(encode_from_daemon(&FromDaemon::Ready { version: 2, iface: "t".into() }), [0, 0, 0, 3, 0x81, 2, b't']);
         assert_eq!(encode_from_daemon(&FromDaemon::State { state: DaemonState::Failed }), [0, 0, 0, 2, 0x82, 2]);
         assert_eq!(
-            encode_from_daemon(&FromDaemon::Failures { uid: 1, company: 0x0203, count: 4 }),
-            [0, 0, 0, 11, 0x83, 0, 0, 0, 1, 2, 3, 0, 0, 0, 4]
+            encode_from_daemon(&FromDaemon::Failures { uid: 1, company: 0x0102_0304, count: 4 }),
+            [0, 0, 0, 13, 0x83, 0, 0, 0, 1, 1, 2, 3, 4, 0, 0, 0, 4]
         );
         assert_eq!(
-            encode_to_daemon(&ToDaemon::Release { seq: 10, uid: 10231, company: 0x0102 }),
-            [0, 0, 0, 8, 0x09, 10, 0, 0, 0x27, 0xf7, 1, 2]
+            encode_to_daemon(&ToDaemon::Release { seq: 10, uid: 10231, company: 0x0102_0304 }),
+            [0, 0, 0, 10, 0x09, 10, 0, 0, 0x27, 0xf7, 1, 2, 3, 4]
         );
         assert_eq!(
             encode_to_daemon(&ToDaemon::SetCountry { seq: 12, uid: 10231, country: Some(*b"ES") }),
@@ -531,12 +529,12 @@ mod tests {
             [0, 0, 0, 7, 0x0a, 12, 0, 0, 0x27, 0xf7, 0]
         );
         assert_eq!(
-            encode_from_daemon(&FromDaemon::Promoted { uid: 1, company: 0x0203, fresh: true }),
-            [0, 0, 0, 8, 0x86, 0, 0, 0, 1, 2, 3, 1]
+            encode_from_daemon(&FromDaemon::Promoted { uid: 1, company: 0x0102_0304, fresh: true }),
+            [0, 0, 0, 10, 0x86, 0, 0, 0, 1, 1, 2, 3, 4, 1]
         );
         assert_eq!(
-            encode_from_daemon(&FromDaemon::Promoted { uid: 1, company: 0x0203, fresh: false }),
-            [0, 0, 0, 8, 0x86, 0, 0, 0, 1, 2, 3, 0]
+            encode_from_daemon(&FromDaemon::Promoted { uid: 1, company: 0x0102_0304, fresh: false }),
+            [0, 0, 0, 10, 0x86, 0, 0, 0, 1, 1, 2, 3, 4, 0]
         );
         assert_eq!(encode_from_daemon(&FromDaemon::Ack { seq: 9 }), [0, 0, 0, 2, 0x84, 9]);
         assert_eq!(encode_from_daemon(&FromDaemon::Error { seq: 9, code: ErrorCode::Unsupported }), [0, 0, 0, 3, 0x85, 9, 4]);
@@ -618,21 +616,21 @@ mod tests {
         }
         assert_eq!(decode_from_daemon(&frm(0x82, &[])), Err(DecodeError::BadLength));
         assert_eq!(decode_from_daemon(&frm(0x82, &[1, 1])), Err(DecodeError::Trailing));
-        assert_eq!(decode_from_daemon(&frm(0x83, &[0; 9])), Err(DecodeError::BadLength));
-        assert_eq!(decode_from_daemon(&frm(0x83, &[0; 11])), Err(DecodeError::Trailing));
+        assert_eq!(decode_from_daemon(&frm(0x83, &[0; 11])), Err(DecodeError::BadLength));
+        assert_eq!(decode_from_daemon(&frm(0x83, &[0; 13])), Err(DecodeError::Trailing));
         assert_eq!(decode_from_daemon(&frm(0x84, &[])), Err(DecodeError::BadLength));
         assert_eq!(decode_from_daemon(&frm(0x84, &[1, 1])), Err(DecodeError::Trailing));
         assert_eq!(decode_from_daemon(&frm(0x85, &[1])), Err(DecodeError::BadLength));
         assert_eq!(decode_from_daemon(&frm(0x85, &[1, 1, 1])), Err(DecodeError::Trailing));
-        assert_eq!(decode_to_daemon(&frm(0x09, &[0; 6])), Err(DecodeError::BadLength));
-        assert_eq!(decode_to_daemon(&frm(0x09, &[0; 8])), Err(DecodeError::Trailing));
-        assert_eq!(decode_from_daemon(&frm(0x86, &[0; 6])), Err(DecodeError::BadLength));
-        assert_eq!(decode_from_daemon(&frm(0x86, &[0; 8])), Err(DecodeError::Trailing));
+        assert_eq!(decode_to_daemon(&frm(0x09, &[0; 8])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x09, &[0; 10])), Err(DecodeError::Trailing));
+        assert_eq!(decode_from_daemon(&frm(0x86, &[0; 8])), Err(DecodeError::BadLength));
+        assert_eq!(decode_from_daemon(&frm(0x86, &[0; 10])), Err(DecodeError::Trailing));
     }
 
     #[test]
     fn the_fresh_flag_of_a_promotion_is_zero_or_one() {
-        let promoted = |fresh: u8| frm(0x86, &[0, 0, 0x27, 0xf7, 0, 12, fresh]);
+        let promoted = |fresh: u8| frm(0x86, &[0, 0, 0x27, 0xf7, 0, 0, 0, 12, fresh]);
         assert_eq!(
             decode_from_daemon(&promoted(0)).map(|(m, _)| m),
             Ok(FromDaemon::Promoted { uid: 10231, company: 12, fresh: false })
@@ -666,10 +664,11 @@ mod tests {
         // Overrides: the count byte is the sixth byte.
         assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5])), Err(DecodeError::BadLength));
         assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0])), Err(DecodeError::BadLength));
-        assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0, 1, 9])), Err(DecodeError::Trailing));
+        assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0, 0, 9])), Err(DecodeError::BadLength));
+        assert_eq!(decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0, 0, 0, 1, 9])), Err(DecodeError::Trailing));
         assert_eq!(
-            decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0, 9])),
-            Ok((ToDaemon::SetOverrides { seq: 1, uid: 5, companies: vec![9] }, 4 + 1 + 8))
+            decode_to_daemon(&frm(0x08, &[1, 0, 0, 0, 5, 1, 0, 1, 0, 9])),
+            Ok((ToDaemon::SetOverrides { seq: 1, uid: 5, companies: vec![0x0001_0009] }, 4 + 1 + 10))
         );
     }
 
@@ -750,7 +749,7 @@ mod tests {
         // Wire-level contract with the app: a changed limit is a protocol change, not a refactoring.
         assert_eq!(MAX_FRAME, 4096);
         assert_eq!(IFNAME_MAX, 15);
-        assert_eq!(PROTOCOL_VERSION, 4);
+        assert_eq!(PROTOCOL_VERSION, 5);
         assert_eq!(FIRST_APP_UID, 10000);
         assert_eq!(MAX_CLASSES, 255, "the count is one byte");
         assert!(MAX_CLASSES <= usize::from(u8::MAX));
@@ -774,9 +773,9 @@ mod tests {
         let bytes = encode_to_daemon(&ToDaemon::SetPolicy { seq: 1, classes: many });
         assert_eq!(bytes.len(), 4 + 1 + 2 + MAX_CLASSES * CLASS_BYTES);
         assert!(bytes.len() - 4 <= MAX_FRAME);
-        let companies: Vec<u16> = (0..100).collect();
+        let companies: Vec<u32> = (0..100).collect();
         let bytes = encode_to_daemon(&ToDaemon::SetOverrides { seq: 1, uid: 10000, companies });
-        assert_eq!(bytes.len(), 4 + 1 + 6 + MAX_OVERRIDES * 2);
+        assert_eq!(bytes.len(), 4 + 1 + 6 + MAX_OVERRIDES * 4);
     }
 
     #[test]

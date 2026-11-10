@@ -12,9 +12,10 @@ use std::io::Read;
 use std::path::Path;
 
 /// Most rows a list may have, longest domain and name.
-pub const MAX_ENTRIES: usize = 8192;
-/// The largest list file: every row at its longest (253 + 5 + 64 bytes and separators) with room to spare.
-pub const MAX_FILE: u64 = 4 * 1024 * 1024;
+pub const MAX_ENTRIES: usize = 262_144;
+/// The largest list file: the list of ADR-223 is 4.2 MB for 91,573 rows (about 45 bytes a row), so 16 MiB holds the row limit at
+/// that average with room to spare; a file of rows at their longest would be far larger and is refused as unreadable.
+pub const MAX_FILE: u64 = 16 * 1024 * 1024;
 pub const MAX_DOMAIN: usize = 253;
 pub const MAX_NAME: usize = 64;
 pub const HEADER: &str = "exit-mask-list\t1";
@@ -23,7 +24,7 @@ pub const HEADER: &str = "exit-mask-list\t1";
 pub enum ListError {
     /// The first line is not the header.
     Header,
-    /// A row that does not have three tab-separated fields, or a company id that is not a number up to 65535.
+    /// A row that does not have three tab-separated fields, or a company id that is not a number up to 4294967295 (32 bits, ADR-223).
     Row(usize),
     /// A domain that is not lower-case letters, digits, hyphens and dots in labels of 1 to 63 bytes.
     Domain(usize),
@@ -37,7 +38,7 @@ pub enum ListError {
 
 #[derive(Debug, Clone, Default)]
 pub struct MaskList {
-    rows: HashMap<String, u16>,
+    rows: HashMap<String, u32>,
 }
 
 fn valid_domain(d: &str) -> bool {
@@ -69,7 +70,7 @@ impl MaskList {
         if lines.next() != Some(HEADER) {
             return Err(ListError::Header);
         }
-        let mut rows: HashMap<String, u16> = HashMap::new();
+        let mut rows: HashMap<String, u32> = HashMap::new();
         for (i, line) in lines.enumerate() {
             let n = i + 2;
             if line.is_empty() {
@@ -85,7 +86,7 @@ impl MaskList {
             if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
                 return Err(ListError::Row(n));
             }
-            let id: u16 = id.parse().map_err(|_| ListError::Row(n))?;
+            let id: u32 = id.parse().map_err(|_| ListError::Row(n))?;
             if name.is_empty() || name.len() > MAX_NAME || name.chars().any(|c| c.is_control()) {
                 return Err(ListError::Name(n));
             }
@@ -121,7 +122,7 @@ impl MaskList {
 
     /// The company a name is masked for: the row of the longest domain that the name is, or is a subdomain of, decides;
     /// a protected row (company 0) or no row at all gives `None`.
-    pub fn classify(&self, name: &str) -> Option<u16> {
+    pub fn classify(&self, name: &str) -> Option<u32> {
         let host = normalise(name)?;
         let mut rest = host.as_str();
         loop {
@@ -203,7 +204,7 @@ mod tests {
         assert_eq!(h("a.com\t1\tN\textra\n"), ListError::Row(2));
         assert_eq!(h("a.com\tx\tN\n"), ListError::Row(2));
         assert_eq!(h("a.com\t-1\tN\n"), ListError::Row(2));
-        assert_eq!(h("a.com\t65536\tN\n"), ListError::Row(2));
+        assert_eq!(h("a.com\t4294967296\tN\n"), ListError::Row(2));
         assert_eq!(h("a.com\t\tN\n"), ListError::Row(2));
         assert_eq!(h("a.com\t1\t\n"), ListError::Name(2));
         assert_eq!(h(&format!("a.com\t1\t{}\n", "n".repeat(65))), ListError::Name(2));
@@ -213,7 +214,7 @@ mod tests {
         assert_eq!(h("é.com\t1\tN\n"), ListError::Domain(2));
         assert_eq!(h("ok.com\t1\tN\nbad domain\t1\tN\n"), ListError::Domain(3));
         assert_eq!(h("a.com\t1\tN\na.com\t2\tM\n"), ListError::Duplicate(3));
-        assert!(MaskList::parse(&format!("{HEADER}\na.com\t65535\t{}\n", "n".repeat(64))).is_ok());
+        assert!(MaskList::parse(&format!("{HEADER}\na.com\t4294967295\t{}\n", "n".repeat(64))).is_ok());
     }
 
     #[test]
@@ -246,15 +247,18 @@ mod tests {
         let rows = |n: usize| (0..n).map(|i| format!("d{i}.example\t{}\tN\n", 1 + i % 60000)).collect::<String>();
         assert_eq!(MaskList::parse(&format!("{HEADER}\n{}", rows(MAX_ENTRIES))).unwrap().len(), MAX_ENTRIES);
         assert_eq!(MaskList::parse(&format!("{HEADER}\n{}", rows(MAX_ENTRIES + 1))).unwrap_err(), ListError::TooMany);
-        assert_eq!((MAX_ENTRIES, MAX_DOMAIN, MAX_NAME), (8192, 253, 64));
+        assert_eq!((MAX_ENTRIES, MAX_DOMAIN, MAX_NAME), (262_144, 253, 64));
     }
 
     #[test]
     fn a_company_id_is_plain_digits() {
-        for id in ["+5", "-5", " 5", "5 ", "0x5", "65536", "", "5.0"] {
+        for id in ["+5", "-5", " 5", "5 ", "0x5", "4294967296", "", "5.0"] {
             assert!(MaskList::parse(&format!("{HEADER}\nx.example\t{id}\tN\n")).is_err(), "{id:?}");
         }
-        assert!(MaskList::parse(&format!("{HEADER}\nx.example\t65535\tN\n")).is_ok());
+        // 32 bits (ADR-223): the ids above 65535 that the 16-bit list refused are rows now.
+        for id in ["65535", "65536", "4294967295"] {
+            assert!(MaskList::parse(&format!("{HEADER}\nx.example\t{id}\tN\n")).is_ok(), "{id:?}");
+        }
     }
 
     fn temp_list(tag: &str, bytes: &[u8]) -> std::path::PathBuf {

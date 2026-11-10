@@ -31,7 +31,7 @@ pub fn validate_classes(classes: &[UidClass]) -> Result<(), ErrorCode> {
 }
 
 /// Checks the company list of one override: at most [`MAX_OVERRIDES`] entries.
-pub fn validate_overrides(companies: &[u16]) -> Result<(), ErrorCode> {
+pub fn validate_overrides(companies: &[u32]) -> Result<(), ErrorCode> {
     if companies.len() > MAX_OVERRIDES {
         return Err(ErrorCode::TooMany);
     }
@@ -41,7 +41,7 @@ pub fn validate_overrides(companies: &[u16]) -> Result<(), ErrorCode> {
 #[derive(Debug, Default, Clone)]
 pub struct Policy {
     classes: Vec<UidClass>,
-    overrides: HashMap<u32, Vec<u16>>,
+    overrides: HashMap<u32, Vec<u32>>,
     countries: HashMap<u32, [u8; 2]>,
 }
 
@@ -55,7 +55,7 @@ impl Policy {
 
     /// Replaces the overrides of one uid; an empty list removes them. A uid below [`FIRST_APP_UID`] is refused, and so
     /// is a new uid once [`MAX_OVERRIDE_UIDS`] uids carry overrides.
-    pub fn set_overrides(&mut self, uid: u32, companies: Vec<u16>) -> Result<(), ErrorCode> {
+    pub fn set_overrides(&mut self, uid: u32, companies: Vec<u32>) -> Result<(), ErrorCode> {
         validate_overrides(&companies)?;
         if uid < FIRST_APP_UID {
             return Err(ErrorCode::BadValue);
@@ -103,7 +103,7 @@ impl Policy {
     }
 
     /// True when the user chose to show the real address of `company` to the app `uid`.
-    pub fn overridden(&self, uid: u32, company: u16) -> bool {
+    pub fn overridden(&self, uid: u32, company: u32) -> bool {
         self.overrides.get(&uid).is_some_and(|v| v.contains(&company))
     }
 
@@ -310,9 +310,9 @@ mod tests {
     #[test]
     fn overrides_are_bounded() {
         let mut p = Policy::default();
-        let max: Vec<u16> = (0..MAX_OVERRIDES as u16).collect();
+        let max: Vec<u32> = (0..MAX_OVERRIDES as u32).collect();
         assert_eq!(p.set_overrides(10000, max), Ok(()));
-        let over: Vec<u16> = (0..MAX_OVERRIDES as u16 + 1).collect();
+        let over: Vec<u32> = (0..MAX_OVERRIDES as u32 + 1).collect();
         assert_eq!(p.set_overrides(10000, over), Err(ErrorCode::TooMany));
         assert_eq!(p.set_overrides(9999, vec![1]), Err(ErrorCode::BadValue));
         let mut q = Policy::default();

@@ -19,7 +19,7 @@ pub const MAX_KEYS: usize = 4096;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Due {
     pub uid: u32,
-    pub company: u16,
+    pub company: u32,
     pub count: u32,
 }
 
@@ -33,12 +33,12 @@ struct Entry {
 
 #[derive(Debug, Default)]
 pub struct Ladder {
-    map: HashMap<(u32, u16), Entry>,
+    map: HashMap<(u32, u32), Entry>,
 }
 
 impl Ladder {
     /// The entry of a key for an event at `now`: a new one when there is none or the window of the old one is over.
-    fn entry(&mut self, uid: u32, company: u16, now: Instant) -> &mut Entry {
+    fn entry(&mut self, uid: u32, company: u32, now: Instant) -> &mut Entry {
         let key = (uid, company);
         let stale = self.map.get(&key).is_some_and(|e| now.saturating_duration_since(e.first) > WINDOW);
         if stale {
@@ -54,13 +54,13 @@ impl Ladder {
     }
 
     /// One failed connection through Tor.
-    pub fn record_failure(&mut self, uid: u32, company: u16, now: Instant) {
+    pub fn record_failure(&mut self, uid: u32, company: u32, now: Instant) {
         let e = self.entry(uid, company, now);
         e.failures = e.failures.saturating_add(1);
     }
 
     /// One connection that was established but took [`SLOW`] or longer.
-    pub fn record_slow(&mut self, uid: u32, company: u16, now: Instant) {
+    pub fn record_slow(&mut self, uid: u32, company: u32, now: Instant) {
         self.entry(uid, company, now).slow = true;
     }
 
@@ -68,7 +68,7 @@ impl Ladder {
     /// stay due for the next call). Each key returned is marked reported. Keys whose window is over are forgotten.
     pub fn due(&mut self, now: Instant, max: usize) -> Vec<Due> {
         self.map.retain(|_, e| now.saturating_duration_since(e.first) <= WINDOW);
-        let mut keys: Vec<(u32, u16)> = self
+        let mut keys: Vec<(u32, u32)> = self
             .map
             .iter()
             .filter(|(_, e)| !e.reported && (e.failures >= FAILURE_THRESHOLD || e.slow))
