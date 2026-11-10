@@ -15,8 +15,8 @@ use crate::envelope::{open, seal};
 use crate::error::{fatal, VaultError};
 use crate::kdf::{argon2id, KdfParams};
 
-const KEK_INFO: &[u8] = b"freeholdos-passwords/passphrase-kek/v1";
-const WRAP_AAD: &[u8] = b"freeholdos-passwords/wrapped-vault-key/v1";
+const KEK_INFO: &[u8] = b"oblivios-passwords/passphrase-kek/v1";
+const WRAP_AAD: &[u8] = b"oblivios-passwords/wrapped-vault-key/v1";
 
 /// The 256-bit key of the sealed vault. Wiped on drop; deliberately no `Debug` and no `Clone`.
 pub struct VaultKey([u8; 32]);

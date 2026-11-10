@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The JNI surface of `org.freeholdos.passwords.core.VaultCore` (a Kotlin `object` with `external fun`s). The only file
+//! The JNI surface of `org.oblivios.passwords.core.VaultCore` (a Kotlin `object` with `external fun`s). The only file
 //! of the crate that allows `unsafe` (the `#[no_mangle]` exports); it holds no logic: every function turns Java arrays
 //! into slices, calls [`crate::api`] and turns the answer back.
 //!
@@ -78,13 +78,13 @@ macro_rules! string {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_selfTest<'l>(_env: JNIEnv<'l>, _this: JObject<'l>) -> jboolean {
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_selfTest<'l>(_env: JNIEnv<'l>, _this: JObject<'l>) -> jboolean {
     flag(api::self_test())
 }
 
 /// Reply payload: `u32 file length | file | vault key (32)`.
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_create<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_create<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     passphrase: JByteArray<'l>,
@@ -102,7 +102,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_create<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_unlockWithPassphrase<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_unlockWithPassphrase<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     file: JByteArray<'l>,
@@ -116,7 +116,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_unlockWithPa
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_unlockWithVaultKey<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_unlockWithVaultKey<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     file: JByteArray<'l>,
@@ -129,23 +129,23 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_unlockWithVa
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_lock<'l>(_env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jint {
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_lock<'l>(_env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jint {
     jint::from(api::lock(handle as u64).code())
 }
 
 /// Reply payload: the 32 bytes of the vault key.
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_vaultKey<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_vaultKey<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
     reply(&env, api::vault_key(handle as u64).map(|k| k.to_vec()))
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_list<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_list<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
     reply(&env, api::list(handle as u64))
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_search<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_search<'l>(
     mut env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -157,7 +157,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_search<'l>(
 
 /// The accounts of a site (kind 0) or an app (kind 1), as list summaries.
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_matches<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_matches<'l>(
     mut env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -169,7 +169,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_matches<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_get<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_get<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -180,7 +180,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_get<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_addOrEdit<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_addOrEdit<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -191,7 +191,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_addOrEdit<'l
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_delete<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_delete<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -202,7 +202,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_delete<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_markFilled<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_markFilled<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -214,12 +214,12 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_markFilled<'
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_checkup<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_checkup<'l>(env: JNIEnv<'l>, _this: JObject<'l>, handle: jlong) -> jbyteArray {
     reply(&env, api::checkup(handle as u64))
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_export<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_export<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -231,7 +231,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_export<'l>(
 
 /// Reply payload: `u32 entries added | new file`.
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_importEntries<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_importEntries<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -245,7 +245,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_importEntrie
 
 /// Reply payload: `u32 added | u32 duplicates | u32 skipped rows | new file`.
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_importCsv<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_importCsv<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -257,7 +257,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_importCsv<'l
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_indexBuild<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_indexBuild<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     handle: jlong,
@@ -268,7 +268,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_indexBuild<'
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_indexContains<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_indexContains<'l>(
     mut env: JNIEnv<'l>,
     _this: JObject<'l>,
     index: JByteArray<'l>,
@@ -283,7 +283,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_indexContain
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_generate<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_generate<'l>(
     env: JNIEnv<'l>,
     _this: JObject<'l>,
     length: jint,
@@ -297,7 +297,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_generate<'l>
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_strength<'l>(env: JNIEnv<'l>, _this: JObject<'l>, password: JByteArray<'l>) -> jint {
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_strength<'l>(env: JNIEnv<'l>, _this: JObject<'l>, password: JByteArray<'l>) -> jint {
     match input(&env, &password) {
         Some(p) => api::strength(&p),
         None => 0,
@@ -306,7 +306,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_strength<'l>
 
 /// Replaces the file at `path` atomically (temp file, fsync, rename, directory fsync). Returns a [`Code`] number.
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_writeFileAtomic<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_writeFileAtomic<'l>(
     mut env: JNIEnv<'l>,
     _this: JObject<'l>,
     path: JString<'l>,
@@ -323,7 +323,7 @@ pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_writeFileAto
 
 /// The bytes of the file at `path`, refused above the size limit before they are read.
 #[no_mangle]
-pub extern "system" fn Java_org_freeholdos_passwords_core_VaultCore_readFileBounded<'l>(
+pub extern "system" fn Java_org_oblivios_passwords_core_VaultCore_readFileBounded<'l>(
     mut env: JNIEnv<'l>,
     _this: JObject<'l>,
     path: JString<'l>,

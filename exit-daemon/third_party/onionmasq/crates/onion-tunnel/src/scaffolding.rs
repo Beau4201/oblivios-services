@@ -167,7 +167,7 @@ pub enum UdpTunnelChoice {
 
 /// What to do with the DNS question of an app.
 ///
-/// FreeholdOS patch 0004: upstream answers every question itself with a fake address that it carries through Tor.
+/// ObliviOS patch 0004: upstream answers every question itself with a fake address that it carries through Tor.
 /// The exit daemon masks only some names (ADR-181, ADR-186): the others are passed on, unchanged, to the resolver
 /// that the app asked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -234,7 +234,7 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
         Ok(0)
     }
 
-    /// Decide what to do with one DNS question of the app with this isolation key (FreeholdOS patch 0004).
+    /// Decide what to do with one DNS question of the app with this isolation key (ObliviOS patch 0004).
     ///
     /// `name` is the queried name as written in the question (with its trailing dot). The default keeps the upstream
     /// behaviour: every name is resolved through Tor.
@@ -244,7 +244,7 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
         DnsDecision::Tor
     }
 
-    /// Whether the app with this isolation key may ask one more DNS question now (FreeholdOS patch 0004). A question that
+    /// Whether the app with this isolation key may ask one more DNS question now (ObliviOS patch 0004). A question that
     /// is not allowed is answered with SERVFAIL. Upstream has one limit for all apps together and then drops every
     /// question for the rest of the window; with every app's DNS passing here, that would silence the whole phone because of
     /// one app. The default allows everything.
@@ -344,7 +344,7 @@ pub trait TunnelScaffolding: Send + Sync + 'static {
     }
 
     /// The counter for one TCP flow through Tor, chosen by its isolation key and the destination it was asked for
-    /// (FreeholdOS patch 0006). The bytes that reach the app on this flow are added to the returned counter, so a
+    /// (ObliviOS patch 0006). The bytes that reach the app on this flow are added to the returned counter, so a
     /// scaffolding can count per destination, not only per app. The default is [`Self::get_bandwidth_counter`], so
     /// the behaviour of a scaffolding that does not override it is unchanged.
     fn get_flow_counter(&self, isolation_key: u64, tor_dst: &TorAddr) -> Option<Arc<BandwidthCounter>> {
@@ -438,7 +438,7 @@ mod test {
         assert_eq!(dummy.udp_prebuild(0), HashMap::new());
     }
 
-    // FreeholdOS patch 0006: the counter of a flow is the counter of its app unless the scaffolding chooses another.
+    // ObliviOS patch 0006: the counter of a flow is the counter of its app unless the scaffolding chooses another.
     #[test]
     fn the_counter_of_a_flow_defaults_to_the_counter_of_its_app() {
         struct PerApp(Arc<BandwidthCounter>);

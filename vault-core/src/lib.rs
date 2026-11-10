@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Core of the FreeholdOS Passwords app (ADR-185).
+//! Core of the ObliviOS Passwords app (ADR-185).
 #![deny(unsafe_code)]
 
 pub mod api;

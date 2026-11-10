@@ -5,7 +5,7 @@
 #   EXIT_BUILD_SSH   user@host of the build server
 set -o errexit -o nounset -o pipefail
 : "${EXIT_BUILD_SSH:?set EXIT_BUILD_SSH=user@host}"
-WORK="${EXIT_WORK:-/srv/freeholdos/exit-daemon-work}"
+WORK="${EXIT_WORK:-/srv/oblivios/exit-daemon-work}"
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 rsync -rlpgoD --checksum --delete --exclude target --exclude .git -e "ssh -o BatchMode=yes" "$SRC"/ "$EXIT_BUILD_SSH:$WORK/src/"
 ssh -o BatchMode=yes "$EXIT_BUILD_SSH" "export EXIT_WORK=$WORK; source $WORK/src/tools/env.sh && cd $WORK/src && cargo metadata --offline --format-version 1 >/dev/null"

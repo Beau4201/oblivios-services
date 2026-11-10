@@ -4,7 +4,7 @@ use vault_core::envelope::{open, seal, MAX_BLOB};
 use vault_core::error::VaultError;
 
 const KEY: [u8; 32] = [0x42; 32];
-const AAD: &[u8] = b"freeholdos-passwords/test";
+const AAD: &[u8] = b"oblivios-passwords/test";
 /// magic 4 + version 2 + nonce 24 + tag 16 = 46 bytes of overhead: 154 bytes of plaintext make a 200-byte blob.
 const PLAINTEXT_FOR_200: usize = 154;
 

@@ -706,7 +706,7 @@ mod test {
         assert!(Parser::parse(&ip4).is_none());
     }
 
-    // FreeholdOS patch 0005: the parser reads packets that an app controls; no packet may make it panic. Seeds are valid
+    // ObliviOS patch 0005: the parser reads packets that an app controls; no packet may make it panic. Seeds are valid
     // packets (IPv4 and IPv6, with and without a hop-by-hop header), mutated at a few bytes, cut, or extended; the rest are
     // random bytes with the version nibble of IPv4 or IPv6.
     struct Rng(u64);

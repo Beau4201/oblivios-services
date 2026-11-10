@@ -36,7 +36,7 @@ fn vault_of(n: u8) -> Vault {
 }
 
 fn payload(entries_json: &str) -> Vec<u8> {
-    format!(r#"{{"format":"freeholdos-passwords-export","version":1,"entries":{entries_json}}}"#).into_bytes()
+    format!(r#"{{"format":"oblivios-passwords-export","version":1,"entries":{entries_json}}}"#).into_bytes()
 }
 
 fn good_entry_json() -> String {
@@ -75,7 +75,7 @@ fn export_contains_no_vault_key_material_and_no_plaintext() {
     let blob = export(&v, PASS, &FAST).unwrap();
     assert!(!blob.windows(32).any(|w| w == vk.as_bytes()));
     assert!(!blob.windows(sealed_vault.len()).any(|w| w == sealed_vault.as_slice()));
-    for needle in ["pw-1", "Site 1", "example", "freeholdos-passwords-export"] {
+    for needle in ["pw-1", "Site 1", "example", "oblivios-passwords-export"] {
         assert!(!blob.windows(needle.len()).any(|w| w == needle.as_bytes()), "{needle} is readable in the file");
     }
 }
@@ -142,7 +142,7 @@ fn unknown_versions_are_unsupported() {
     let mut blob = export(&vault_of(1), PASS, &FAST).unwrap();
     blob[4] = 2; // file header version
     assert_eq!(import(&blob, PASS).err(), Some(VaultError::UnsupportedVersion(2)));
-    let p = br#"{"format":"freeholdos-passwords-export","version":2,"entries":[]}"#;
+    let p = br#"{"format":"oblivios-passwords-export","version":2,"entries":[]}"#;
     assert_eq!(import(&sealed(p), PASS).err(), Some(VaultError::UnsupportedVersion(2)));
 }
 

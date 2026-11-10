@@ -70,7 +70,7 @@ struct IsolatedCookies {
     resolver_recv: mpsc::Receiver<(String, ResolverResult)>,
 }
 
-/// FreeholdOS patch 0004: the fake addresses. `198.18.0.0/15` (the benchmark range of RFC 2544, never routed on the
+/// ObliviOS patch 0004: the fake addresses. `198.18.0.0/15` (the benchmark range of RFC 2544, never routed on the
 /// internet and not used by a LAN) and the upper half of the unique-local `fd66:7265:6568::/48`. One steering rule per
 /// family sends exactly these into the tunnel; the exit daemon checks its rule constants against these.
 pub const FAKE_V4_PREFIX: [u8; 2] = [198, 18];
@@ -192,7 +192,7 @@ const TIME_TO_LIVE_IN_DNS: u64 = 60;
 const SECONDS_TO_LIVE_IN_CACHE: u64 = 70;
 
 /// The amount in seconds between two flushes of the fake address caches (upstream: also the length of a rate limit
-/// window; FreeholdOS patch 0004 limits each app on its own instead, see `TunnelScaffolding::dns_allow`).
+/// window; ObliviOS patch 0004 limits each app on its own instead, see `TunnelScaffolding::dns_allow`).
 const RATE_LIMIT_WINDOW: u64 = 180;
 
 
@@ -235,7 +235,7 @@ impl IsolatedCookies {
         is_fake_address(addr)
     }
 
-    /// Generate a random IPv4 address in the 198.18.0.0/15 subnet (FreeholdOS patch 0004; upstream: 10.0.0.0/8).
+    /// Generate a random IPv4 address in the 198.18.0.0/15 subnet (ObliviOS patch 0004; upstream: 10.0.0.0/8).
     ///
     /// Returns the IPv4 address or [`None`], if the address space is exhausteed.
     fn make_for_v4<S: TunnelScaffolding>(
@@ -255,7 +255,7 @@ impl IsolatedCookies {
             self.begin_resolve(arti.clone(), hostname.clone());
         }
 
-        // FreeholdOS patch 0004: a random IPv4 address in 198.18.0.0/15 (the benchmark range of RFC 2544, never routed on
+        // ObliviOS patch 0004: a random IPv4 address in 198.18.0.0/15 (the benchmark range of RFC 2544, never routed on
         // the internet and not used by a LAN) instead of 10.0.0.0/8. A full range is refused, not a panic.
         if self.map_v4.cache_size() >= self.max_v4 {
             return None;
@@ -293,7 +293,7 @@ impl IsolatedCookies {
             self.begin_resolve(arti.clone(), hostname.clone());
         }
 
-        // FreeholdOS patch 0004: a random IPv6 address in the upper half of the unique-local /48 fd66:7265:6568::/48
+        // ObliviOS patch 0004: a random IPv6 address in the upper half of the unique-local /48 fd66:7265:6568::/48
         // instead of fec0::/10, so that one rule can steer exactly these addresses into the tunnel.
         let ret = loop {
             let mut octets = [0u8; 16];
@@ -522,7 +522,7 @@ impl DnsCookies {
     }
 }
 
-/// FreeholdOS patch 0004: a reply that a forwarded query got, on its way back to the app.
+/// ObliviOS patch 0004: a reply that a forwarded query got, on its way back to the app.
 struct ForwardedReply {
     bytes: Vec<u8>,
     client: IpEndpoint,
@@ -571,7 +571,7 @@ where
         })
     }
 
-    /// FreeholdOS patch 0004: a listener for port 53 whatever the destination address is. The apps' resolver sends its
+    /// ObliviOS patch 0004: a listener for port 53 whatever the destination address is. The apps' resolver sends its
     /// queries to the resolver it was configured with (the Wi-Fi's, or ours on a network of the Tor class), and the
     /// steering rules deliver them here.
     fn new_udp_listener<D>(tunnel: &OnionTunnel<S, D>) -> TunnelResult<UdpSocket> {
@@ -764,7 +764,7 @@ where
         };
         trace!("DNS question from {}: {}", sensitive(from), sensitive(&query));
         let dest = Self::dest_of(&meta, &from);
-        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
+        // ObliviOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
         let scaffolding = self.scaffolding.clone();
         let key = match Self::admit(&query, scaffolding.isolate(from, dest, 17 /* UDP */), |key| scaffolding.dns_allow(key)) {
             Ok(key) => key,
@@ -826,7 +826,7 @@ where
     pub async fn start(&mut self) {
         info!("Starting DNS manager");
 
-        // FreeholdOS patch 0004: no global limit with a discard phase (see `TunnelScaffolding::dns_allow`); the caches are
+        // ObliviOS patch 0004: no global limit with a discard phase (see `TunnelScaffolding::dns_allow`); the caches are
         // flushed at the end of every window to save space, as before.
         let mut flush = tokio::time::interval(Duration::from_secs(RATE_LIMIT_WINDOW));
         loop {
@@ -987,13 +987,13 @@ mod test {
         }
     }
 
-    // FreeholdOS: a query whose owner cannot be found is refused, not given a shared key (ADR-184, finding F03).
+    // ObliviOS: a query whose owner cannot be found is refused, not given a shared key (ADR-184, finding F03).
     #[test]
     fn isolation_failure_is_refused() {
         use crate::dns::DnsManager;
         use dns_message_parser::question::{QClass, QType, Question};
         use dns_message_parser::{Dns, Flags, Opcode, RCode};
-        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
+        // ObliviOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
         let query = Dns {
             id: 0x4242,
             flags: Flags {
@@ -1033,14 +1033,14 @@ mod test {
     }
 
     // The address of the daemon's DNS listener is also the DNS server of the Tor network that the exit app registers
-    // (AndroidPlatform.java in freeholdos-platform, checked against tests/vectors.txt of the daemon).
+    // (AndroidPlatform.java in oblivios-platform, checked against tests/vectors.txt of the daemon).
     #[test]
     fn the_dns_listener_is_at_the_address_the_exit_app_registers() {
         use crate::dns::DnsManager;
         assert_eq!(DnsManager::<()>::V4_ADDRESS, std::net::Ipv4Addr::new(169, 254, 42, 53));
     }
 
-    // FreeholdOS patch 0005: the per-app limit comes after the owner is known, and a refused query is a SERVFAIL ---------
+    // ObliviOS patch 0005: the per-app limit comes after the owner is known, and a refused query is a SERVFAIL ---------
     #[test]
     fn a_query_is_admitted_only_with_a_known_owner_that_is_not_over_its_limit() {
         use crate::dns::DnsManager;
@@ -1071,7 +1071,7 @@ mod test {
         assert_eq!(*asked.borrow(), 0);
     }
 
-    // FreeholdOS patch 0004 -------------------------------------------------------------------------------------------
+    // ObliviOS patch 0004 -------------------------------------------------------------------------------------------
 
     use crate::dns::{
         forward_target, forward_udp, is_fake_address, route_query, Route, FAKE_V4_PREFIX, FAKE_V6_PREFIX, MAX_UDP_DNS,
@@ -1303,7 +1303,7 @@ mod test {
         assert_eq!(forward_udp(up, &[1], Duration::from_millis(200)).await.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
     }
 
-    // FreeholdOS patch 0005: the DNS path reads bytes that an app controls; no input may make it panic. Inputs are random
+    // ObliviOS patch 0005: the DNS path reads bytes that an app controls; no input may make it panic. Inputs are random
     // bytes, valid queries with a few bytes changed or cut, and queries built from random names and types. Whatever
     // decodes goes through the routing and the answer builder, and every answer encodes.
     struct Rng(u64);

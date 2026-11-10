@@ -8,7 +8,7 @@ edition = "2021"
 rust-version = "1.91"
 publish = false
 license = "Apache-2.0"
-description = "FreeholdOS per-app Tor exit daemon (ADR-184)"
+description = "ObliviOS per-app Tor exit daemon (ADR-184)"
 
 [lib]
 name = "exit_daemon"

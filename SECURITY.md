@@ -1,6 +1,6 @@
 # Security policy
 
-FreeholdOS is published as source only: no build, image or update service is offered, and no device is
+ObliviOS is published as source only: no build, image or update service is offered, and no device is
 supported. This policy covers the source in this repository.
 
 ## Reporting a vulnerability
@@ -8,7 +8,7 @@ supported. This policy covers the source in this repository.
 Do not open a public issue for a vulnerability. Send the report by email to
 `beau.ten.berge@gmail.com`, encrypted with the PGP key below if you can.
 
-- Key: `FreeholdOS Security <beau.ten.berge@gmail.com>`, ed25519 with a cv25519 encryption subkey
+- Key: `ObliviOS Security <beau.ten.berge@gmail.com>`, ed25519 with a cv25519 encryption subkey
 - Fingerprint: `8E12 CA71 F0F7 C4C4 9BF3  EE74 0FF0 E5E3 6FEE 6CA9`
 - Public key: `security-contact.asc` in this repository
 
@@ -27,6 +27,6 @@ There is no bug bounty.
 
 ## Scope
 
-In scope: the patches, services and scripts in the FreeholdOS repositories. A weakness that exists in
+In scope: the patches, services and scripts in the ObliviOS repositories. A weakness that exists in
 upstream GrapheneOS or AOSP is better reported to those projects; tell us as well if our patches make it
 worse.

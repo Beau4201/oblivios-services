@@ -48,7 +48,7 @@ use crate::isolation::OnionIsolationKey;
 use crate::parser::ParseResult;
 use crate::scaffolding::TunnelCommand;
 pub use crate::scaffolding::TunnelScaffolding;
-// FreeholdOS patch 0004: the fake address ranges, so that the exit daemon can check its steering rules against them.
+// ObliviOS patch 0004: the fake address ranges, so that the exit daemon can check its steering rules against them.
 pub use crate::dns::{is_fake_address, FAKE_V4_PREFIX, FAKE_V6_PREFIX};
 use crate::tuntap::AsyncTunTapInterface;
 use crate::{parser::Parser, socket::TcpSocket};

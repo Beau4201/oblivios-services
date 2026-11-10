@@ -5,7 +5,7 @@ the platform steers into its tun interface, answers the DNS of masked apps, and 
 of listed hosts on each app's own Tor circuit family. `exitd --routes` (the route helper, same binary) writes the rules that
 steer packets into the tun and nothing else. The design is
 `docs/superpowers/specs/2026-10-18-network-exit-design.md` and
-`docs/superpowers/specs/2026-10-19-compartments-masked-destinations-design.md` in `freeholdos-foundation`, the plan
+`docs/superpowers/specs/2026-10-19-compartments-masked-destinations-design.md` in `oblivios-foundation`, the plan
 `docs/superpowers/plans/2026-10-21-compartments-close-out.md`.
 
 | Part | Role |

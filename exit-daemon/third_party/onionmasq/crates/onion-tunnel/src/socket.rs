@@ -59,7 +59,7 @@ impl UdpSocket {
         self.with(|s| s.bind((addr, port)))
     }
 
-    /// FreeholdOS patch 0004: accept datagrams for this port whatever the destination address is.
+    /// ObliviOS patch 0004: accept datagrams for this port whatever the destination address is.
     pub fn bind_any(&mut self, port: u16) -> Result<(), BindError> {
         self.with(|s| s.bind(port))
     }

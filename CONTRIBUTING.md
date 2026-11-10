@@ -17,11 +17,11 @@ A localhost-only reference implementation of Guardian: `guardian-core`
 platform-independent logic of two other features. The code simulates platform
 effects for deterministic local testing. It is not Android enforcement, it
 contains no GrapheneOS or AOSP source, and it must never claim device-wide
-protection. Real Android integration belongs in `freeholdos-platform`.
+protection. Real Android integration belongs in `oblivios-platform`.
 
 ## Decisions come first
 
-The decision log (`docs/governance/decision-log.md` in `freeholdos-docs`) and
+The decision log (`docs/governance/decision-log.md` in `oblivios-docs`) and
 the Guardian contracts and capability boundaries in the same repository are the
 reference for behaviour. A new field, action, schema or capability needs an
 accepted decision before the code, not after it.
@@ -48,7 +48,7 @@ accepted decision before the code, not after it.
 ## Licence
 
 Apache-2.0 (see `LICENSE` and `NOTICE`). Every source file carries an
-`SPDX-License-Identifier` line. The name FreeholdOS and its logo are not
+`SPDX-License-Identifier` line. The name ObliviOS and its logo are not
 licensed.
 
 ## Commits

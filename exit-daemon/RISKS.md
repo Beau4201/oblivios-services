@@ -23,7 +23,7 @@ binary that ships to users needs them in the platform's notices (open, platform 
 
 ## The control sockets are world-connectable
 
-`init` creates `/dev/socket/exitd` and `/dev/socket/exitd_route` with mode 0666 (`exit.rc` in `freeholdos-platform`). The exit
+`init` creates `/dev/socket/exitd` and `/dev/socket/exitd_route` with mode 0666 (`exit.rc` in `oblivios-platform`). The exit
 app has its own uid, which is in no group of the services, so a group-only mode would refuse it. What keeps every other process
 out is the SELinux policy (only `exit_app` may `connectto` either socket, `[measured]` with `sesearch`) and the services' own
 check of the peer's SELinux context before they read a byte. That is one layer fewer than a mode that names the peer; it is

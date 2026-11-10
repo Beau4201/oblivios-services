@@ -5,7 +5,7 @@
  [features]
  pluggable-transports = []
 -experimental-udp-tunnel = ["experimental-turn-tcp-client"]
-+# FreeholdOS: the TURN client crate is not vendored (the exit daemon carries no UDP, ADR-184), so this feature cannot
++# ObliviOS: the TURN client crate is not vendored (the exit daemon carries no UDP, ADR-184), so this feature cannot
 +# be enabled: turning it on fails to compile instead of quietly building a UDP path.
 +experimental-udp-tunnel = []
  very-verbose = []

@@ -1,6 +1,6 @@
 # Golden vectors of the control protocols: one frame per line, `name TAB hex`. Written from the layouts in control.rs and
 # routes/proto.rs by a script that uses neither codec. The Rust tests (tests/vectors.rs) and the Java host checks of the
-# exit app (privacy/exit/app/tests/HostChecks.java in freeholdos-platform, which keeps an identical copy of this file) build
+# exit app (privacy/exit/app/tests/HostChecks.java in oblivios-platform, which keeps an identical copy of this file) build
 # or read each frame independently from it, so that the two codecs cannot drift. Changing a line is a change of the wire
 # format: bump the protocol version and both codecs. The `const.` lines are the addresses that the exit app registers for the
 # Tor network and that the route helper writes (address and prefix length, the DNS listener's address): they must be equal.

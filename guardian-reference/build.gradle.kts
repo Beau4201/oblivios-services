@@ -14,7 +14,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("org.freeholdos.guardian.reference.GuardianReferenceApplication")
+    mainClass.set("org.oblivios.guardian.reference.GuardianReferenceApplication")
 }
 
 tasks.test { useJUnitPlatform() }

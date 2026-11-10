@@ -16,7 +16,7 @@ use crate::error::VaultError;
 use crate::keys::VaultKey;
 use crate::secret::SecretString;
 
-pub const VAULT_AAD: &[u8] = b"freeholdos-passwords/vault/v1";
+pub const VAULT_AAD: &[u8] = b"oblivios-passwords/vault/v1";
 const SCHEMA: u8 = 1;
 pub const MAX_ENTRIES: usize = 100_000;
 /// Domains or linked packages per entry.

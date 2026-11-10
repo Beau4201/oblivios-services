@@ -144,9 +144,9 @@ fn packages_match_exactly() {
 
 #[test]
 fn index_holds_no_plaintext() {
-    let idx = index_for(vec![entry(1, &["secret-bank.example", "github.com"], &["org.freeholdos.secretapp"])]);
+    let idx = index_for(vec![entry(1, &["secret-bank.example", "github.com"], &["org.oblivios.secretapp"])]);
     let bytes = idx.to_bytes();
-    for needle in ["secret-bank", "bank.example", "github", "freeholdos", "secretapp", ".com"] {
+    for needle in ["secret-bank", "bank.example", "github", "oblivios", "secretapp", ".com"] {
         assert!(!bytes.windows(needle.len()).any(|w| w == needle.as_bytes()), "{needle} found in the index");
     }
 }

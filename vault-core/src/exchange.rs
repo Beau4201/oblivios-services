@@ -5,7 +5,7 @@
 //! key is `HKDF-SHA256(Argon2id(export passphrase, salt, params))`: it has nothing to do with the vault key or the
 //! hardware secret, so an export opens on any device with the passphrase alone. The header is bound into the
 //! authenticated data. The decrypted payload is JSON, so the plaintext format is open:
-//! `{"format":"freeholdos-passwords-export","version":1,"entries":[{"id":"<32 hex>","title":..,"domains":[..],
+//! `{"format":"oblivios-passwords-export","version":1,"entries":[{"id":"<32 hex>","title":..,"domains":[..],
 //! "packages":[..],"username":..,"password":..,"notes":..,"created_ms":..,"edited_ms":..,"last_filled_ms":null|..,
 //! "history":[{"password":..,"replaced_ms":..}]}]}`.
 //!
@@ -30,9 +30,9 @@ use crate::vault::{validate, Entry, Vault, MAX_ENTRIES, MAX_FIELD, MAX_HISTORY, 
 const MAGIC: &[u8; 4] = b"FHPX";
 const VERSION: u8 = 1;
 const HEADER: usize = 4 + 1 + 12 + 16;
-const FORMAT: &str = "freeholdos-passwords-export";
-const AAD: &[u8] = b"freeholdos-passwords/export/v1";
-const KEY_INFO: &[u8] = b"freeholdos-passwords/export-key/v1";
+const FORMAT: &str = "oblivios-passwords-export";
+const AAD: &[u8] = b"oblivios-passwords/export/v1";
+const KEY_INFO: &[u8] = b"oblivios-passwords/export-key/v1";
 
 pub(crate) fn random_16() -> [u8; 16] {
     let mut b = [0u8; 16];

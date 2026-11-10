@@ -52,7 +52,7 @@ A standalone cargo build cannot reach that copy either, so every crate comes fro
 | Item | Value |
 | --- | --- |
 | Toolchain | AOSP `prebuilts/rust-toolchain` 1.93.1, target `aarch64-linux-android`, `--release`, `panic = "abort"`, `lto`, `opt-level = "z"` |
-| `libvault_core.so` | the hash, size and commit of the library that ships are in `freeholdos-platform/passwords/core/SOURCE.md`; this file does not repeat them |
+| `libvault_core.so` | the hash, size and commit of the library that ships are in `oblivios-platform/passwords/core/SOURCE.md`; this file does not repeat them |
 | Reproducible | two builds from a `git archive` of a commit into two target directories give the same SHA-256 (checked again for every library that ships) |
 | Needed libraries | `libc.so`, `libdl.so`, `libm.so` |
 | Exports | exactly the functions of `jni.rs`, listed in `tools/build-android.sh` |

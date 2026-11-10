@@ -4,16 +4,16 @@
 # The server has no cc, make or cmake and the prebuilt NDK directory holds no sysroot, so the C code of the Rust
 # dependencies (aws-lc-sys, lzma-sys) is compiled with the AOSP clang against a sysroot of symlinks to the artefacts
 # of an existing out directory (libc.so, libm.so, libdl.so, liblog.so, crt*.o and the bionic headers). The first
-# build of this kind is recorded in docs/research/network-exit-options.md section 2.1 of freeholdos-foundation.
+# build of this kind is recorded in docs/research/network-exit-options.md section 2.1 of oblivios-foundation.
 # Host-side build scripts and proc macros link with the same clang against the AOSP glibc 2.17 sysroot.
-#   AOSP_TREE  default /srv/freeholdos/platform-primary      AOSP_OUT  default out-lynx (must hold a finished build)
-#   EXIT_WORK  default /srv/freeholdos/exit-daemon-work      (source copy, cargo home, target directories)
+#   AOSP_TREE  default /srv/oblivios/platform-primary      AOSP_OUT  default out-lynx (must hold a finished build)
+#   EXIT_WORK  default /srv/oblivios/exit-daemon-work      (source copy, cargo home, target directories)
 #   EXIT_CARGO_HOME  default $EXIT_WORK/cargo-home    (a second work directory can share the downloaded crates)
 # -Qunused-arguments: compile-only calls (aws-lc-sys builds with -Werror) would otherwise fail on -fuse-ld.
 # Nothing here is deleted: links are replaced in place.
-T="${AOSP_TREE:-/srv/freeholdos/platform-primary}"
+T="${AOSP_TREE:-/srv/oblivios/platform-primary}"
 OUTD="$T/${AOSP_OUT:-out-lynx}"
-WORK="${EXIT_WORK:-/srv/freeholdos/exit-daemon-work}"
+WORK="${EXIT_WORK:-/srv/oblivios/exit-daemon-work}"
 I="$OUTD/soong/.intermediates"
 V=android_arm64_armv8-2a-dotprod_cortex-a76
 CL="$T/prebuilts/clang/host/linux-x86/clang-r596125"

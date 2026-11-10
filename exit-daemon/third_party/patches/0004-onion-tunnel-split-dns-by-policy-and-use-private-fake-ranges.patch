@@ -44,7 +44,7 @@ index c989174..012ca96 100644
      resolver_recv: mpsc::Receiver<(String, ResolverResult)>,
  }
  
-+/// FreeholdOS patch 0004: the fake addresses. `198.18.0.0/15` (the benchmark range of RFC 2544, never routed on the
++/// ObliviOS patch 0004: the fake addresses. `198.18.0.0/15` (the benchmark range of RFC 2544, never routed on the
 +/// internet and not used by a LAN) and the upper half of the unique-local `fd66:7265:6568::/48`. One steering rule per
 +/// family sends exactly these into the tunnel; the exit daemon checks its rule constants against these.
 +pub const FAKE_V4_PREFIX: [u8; 2] = [198, 18];
@@ -165,7 +165,7 @@ index c989174..012ca96 100644
  
 -/// The amount in seconds on how long a rate limit window is open.
 +/// The amount in seconds between two flushes of the fake address caches (upstream: also the length of a rate limit
-+/// window; FreeholdOS patch 0004 limits each app on its own instead, see `TunnelScaffolding::dns_allow`).
++/// window; ObliviOS patch 0004 limits each app on its own instead, see `TunnelScaffolding::dns_allow`).
  const RATE_LIMIT_WINDOW: u64 = 180;
  
 -/// The amount of requests that are processed in the time span of one rate limit
@@ -195,7 +195,7 @@ index c989174..012ca96 100644
      }
  
 -    /// Generate a random IPv4 address in the 10.0.0.0/8 subnet.
-+    /// Generate a random IPv4 address in the 198.18.0.0/15 subnet (FreeholdOS patch 0004; upstream: 10.0.0.0/8).
++    /// Generate a random IPv4 address in the 198.18.0.0/15 subnet (ObliviOS patch 0004; upstream: 10.0.0.0/8).
      ///
      /// Returns the IPv4 address or [`None`], if the address space is exhausteed.
      fn make_for_v4<S: TunnelScaffolding>(
@@ -212,7 +212,7 @@ index c989174..012ca96 100644
 -
 -        loop {
 -            rand::rng().fill_bytes(&mut ret[1..]);
-+        // FreeholdOS patch 0004: a random IPv4 address in 198.18.0.0/15 (the benchmark range of RFC 2544, never routed on
++        // ObliviOS patch 0004: a random IPv4 address in 198.18.0.0/15 (the benchmark range of RFC 2544, never routed on
 +        // the internet and not used by a LAN) instead of 10.0.0.0/8. A full range is refused, not a panic.
 +        if self.map_v4.cache_size() >= self.max_v4 {
 +            return None;
@@ -257,7 +257,7 @@ index c989174..012ca96 100644
 -        let mut ret = [0xfe, 0xc0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 -        loop {
 -            rand::rng().fill_bytes(&mut ret[2..]);
-+        // FreeholdOS patch 0004: a random IPv6 address in the upper half of the unique-local /48 fd66:7265:6568::/48
++        // ObliviOS patch 0004: a random IPv6 address in the upper half of the unique-local /48 fd66:7265:6568::/48
 +        // instead of fec0::/10, so that one rule can steer exactly these addresses into the tunnel.
 +        let ret = loop {
 +            let mut octets = [0u8; 16];
@@ -288,7 +288,7 @@ index c989174..012ca96 100644
      }
  }
  
-+/// FreeholdOS patch 0004: a reply that a forwarded query got, on its way back to the app.
++/// ObliviOS patch 0004: a reply that a forwarded query got, on its way back to the app.
 +struct ForwardedReply {
 +    bytes: Vec<u8>,
 +    client: IpEndpoint,
@@ -338,7 +338,7 @@ index c989174..012ca96 100644
 -    ) -> TunnelResult<UdpSocket> {
 -        let rx_buffer = UdpSocketBuffer::new(vec![UdpPacketMetadata::EMPTY], vec![0; 4096]);
 -        let tx_buffer = UdpSocketBuffer::new(vec![UdpPacketMetadata::EMPTY], vec![0; 4096]);
-+    /// FreeholdOS patch 0004: a listener for port 53 whatever the destination address is. The apps' resolver sends its
++    /// ObliviOS patch 0004: a listener for port 53 whatever the destination address is. The apps' resolver sends its
 +    /// queries to the resolver it was configured with (the Wi-Fi's, or ours on a network of the Tor class), and the
 +    /// steering rules deliver them here.
 +    fn new_udp_listener<D>(tunnel: &OnionTunnel<S, D>) -> TunnelResult<UdpSocket> {
@@ -373,7 +373,7 @@ index c989174..012ca96 100644
 -            IpEndpoint::new(Self::V6_ADDRESS.into(), 53)
 -        };
 -
--        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL. Upstream falls back to a
+-        // ObliviOS: a query whose owner cannot be found is refused with SERVFAIL. Upstream falls back to a
 -        // shared key here, which lets two apps share one DNS isolation (its own comment says so); the exit
 -        // daemon attributes every flow to a uid or refuses it (ADR-184, finding F03).
 -        let isolation_key = match Self::attribute(query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {
@@ -508,7 +508,7 @@ index c989174..012ca96 100644
 +        };
 +        trace!("DNS question from {}: {}", sensitive(from), sensitive(&query));
 +        let dest = Self::dest_of(&meta, &from);
-+        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
++        // ObliviOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
 +        let key = match Self::attribute(&query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {
 +            Ok(key) => key,
 +            Err(refusal) => {
@@ -575,7 +575,7 @@ index c989174..012ca96 100644
      pub async fn start(&mut self) {
          info!("Starting DNS manager");
  
-+        // FreeholdOS patch 0004: no global limit with a discard phase (see `TunnelScaffolding::dns_allow`); the caches are
++        // ObliviOS patch 0004: no global limit with a discard phase (see `TunnelScaffolding::dns_allow`); the caches are
 +        // flushed at the end of every window to save space, as before.
 +        let mut flush = tokio::time::interval(Duration::from_secs(RATE_LIMIT_WINDOW));
          loop {
@@ -656,7 +656,7 @@ index c989174..012ca96 100644
          }
      }
 +
-+    // FreeholdOS patch 0004 -------------------------------------------------------------------------------------------
++    // ObliviOS patch 0004 -------------------------------------------------------------------------------------------
 +
 +    use crate::dns::{
 +        forward_target, forward_udp, is_fake_address, route_query, Route, FAKE_V4_PREFIX, FAKE_V6_PREFIX, MAX_UDP_DNS,
@@ -888,7 +888,7 @@ index c989174..012ca96 100644
 +        assert_eq!(forward_udp(up, &[1], Duration::from_millis(200)).await.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
 +    }
 +
-+    // FreeholdOS patch 0005: the DNS path reads bytes that an app controls; no input may make it panic. Inputs are random
++    // ObliviOS patch 0005: the DNS path reads bytes that an app controls; no input may make it panic. Inputs are random
 +    // bytes, valid queries with a few bytes changed or cut, and queries built from random names and types. Whatever
 +    // decodes goes through the routing and the answer builder, and every answer encodes.
 +    struct Rng(u64);
@@ -962,7 +962,7 @@ index 5cb1e34..aea199a 100644
  use crate::parser::ParseResult;
  use crate::scaffolding::TunnelCommand;
  pub use crate::scaffolding::TunnelScaffolding;
-+// FreeholdOS patch 0004: the fake address ranges, so that the exit daemon can check its steering rules against them.
++// ObliviOS patch 0004: the fake address ranges, so that the exit daemon can check its steering rules against them.
 +pub use crate::dns::{is_fake_address, FAKE_V4_PREFIX, FAKE_V6_PREFIX};
  use crate::tuntap::AsyncTunTapInterface;
  use crate::{parser::Parser, socket::TcpSocket};
@@ -976,7 +976,7 @@ index d944e7e..4514ecc 100644
          assert!(Parser::parse(&ip4).is_none());
      }
 +
-+    // FreeholdOS patch 0005: the parser reads packets that an app controls; no packet may make it panic. Seeds are valid
++    // ObliviOS patch 0005: the parser reads packets that an app controls; no packet may make it panic. Seeds are valid
 +    // packets (IPv4 and IPv6, with and without a hop-by-hop header), mutated at a few bytes, cut, or extended; the rest are
 +    // random bytes with the version nibble of IPv4 or IPv6.
 +    struct Rng(u64);
@@ -1044,7 +1044,7 @@ index f1848a3..260a12f 100644
  
 +/// What to do with the DNS question of an app.
 +///
-+/// FreeholdOS patch 0004: upstream answers every question itself with a fake address that it carries through Tor.
++/// ObliviOS patch 0004: upstream answers every question itself with a fake address that it carries through Tor.
 +/// The exit daemon masks only some names (ADR-181, ADR-186): the others are passed on, unchanged, to the resolver
 +/// that the app asked.
 +#[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1062,7 +1062,7 @@ index f1848a3..260a12f 100644
          Ok(0)
      }
  
-+    /// Decide what to do with one DNS question of the app with this isolation key (FreeholdOS patch 0004).
++    /// Decide what to do with one DNS question of the app with this isolation key (ObliviOS patch 0004).
 +    ///
 +    /// `name` is the queried name as written in the question (with its trailing dot). The default keeps the upstream
 +    /// behaviour: every name is resolved through Tor.
@@ -1072,7 +1072,7 @@ index f1848a3..260a12f 100644
 +        DnsDecision::Tor
 +    }
 +
-+    /// Whether the app with this isolation key may ask one more DNS question now (FreeholdOS patch 0004). A question that
++    /// Whether the app with this isolation key may ask one more DNS question now (ObliviOS patch 0004). A question that
 +    /// is not allowed is answered with SERVFAIL. Upstream has one limit for all apps together and then drops every
 +    /// question for the rest of the window; with every app's DNS passing here, that would silence the whole phone because of
 +    /// one app. The default allows everything.
@@ -1108,7 +1108,7 @@ index 77a3b29..5c8a9a1 100644
  
 -    pub fn send(&mut self, payload: &[u8], endpoint: IpEndpoint) -> Result<(), SendError> {
 -        let ret = self.with(|s| s.send_slice(payload, endpoint));
-+    /// FreeholdOS patch 0004: accept datagrams for this port whatever the destination address is.
++    /// ObliviOS patch 0004: accept datagrams for this port whatever the destination address is.
 +    pub fn bind_any(&mut self, port: u16) -> Result<(), BindError> {
 +        self.with(|s| s.bind(port))
 +    }

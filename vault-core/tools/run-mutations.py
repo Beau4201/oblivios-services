@@ -105,7 +105,7 @@ MUTATIONS = [
     ("kdf: Argon2 version 0x10", K, "Version::V0x13, params)", "Version::V0x10, params)"),
     # keys.rs
     ("keys: hardware secret not mixed in", Y, "Hkdf::<Sha256>::new(Some(hw_secret), &*ikm)", "Hkdf::<Sha256>::new(None, &*ikm)"),
-    ("keys: kek info changed", Y, 'b"freeholdos-passwords/passphrase-kek/v1"', 'b"freeholdos-passwords/passphrase-kek/v2"'),
+    ("keys: kek info changed", Y, 'b"oblivios-passwords/passphrase-kek/v1"', 'b"oblivios-passwords/passphrase-kek/v2"'),
     ("keys: passphrase not mixed in", Y, "let ikm = argon2id(passphrase, salt, params)?;", "let ikm = argon2id(b\"\", salt, params)?;"),
     ("keys: salt not mixed in", Y, "let ikm = argon2id(passphrase, salt, params)?;", "let ikm = argon2id(passphrase, &[0u8; 16], params)?;"),
     # vault.rs

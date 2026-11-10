@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# The core of the FreeholdOS Passwords app (ADR-185): the sealed vault, the key wrappers, the domain index, the checkup
+# The core of the ObliviOS Passwords app (ADR-185): the sealed vault, the key wrappers, the domain index, the checkup
 # and the export file. Built with the AOSP Rust toolchain (1.93.1), `--locked --offline`, from this tree only (tools/env.sh).
 [package]
 name = "vault-core"
@@ -8,7 +8,7 @@ edition = "2021"
 rust-version = "1.91"
 publish = false
 license = "Apache-2.0"
-description = "FreeholdOS Passwords app core (ADR-185)"
+description = "ObliviOS Passwords app core (ADR-185)"
 
 [lib]
 name = "vault_core"

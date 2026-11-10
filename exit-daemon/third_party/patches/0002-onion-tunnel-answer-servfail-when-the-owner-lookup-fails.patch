@@ -27,7 +27,7 @@
 -        let isolation_key = match self.scaffolding.isolate(from, dest, 17 /* UDP */) {
 -            Ok(k) => Some(k),
 -            Err(e) => {
-+        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL. Upstream falls back to a
++        // ObliviOS: a query whose owner cannot be found is refused with SERVFAIL. Upstream falls back to a
 +        // shared key here, which lets two apps share one DNS isolation (its own comment says so); the exit
 +        // daemon attributes every flow to a uid or refuses it (ADR-184, finding F03).
 +        let isolation_key = match Self::attribute(query, self.scaffolding.isolate(from, dest, 17 /* UDP */)) {
@@ -54,13 +54,13 @@
          }
      }
 +
-+    // FreeholdOS: a query whose owner cannot be found is refused, not given a shared key (ADR-184, finding F03).
++    // ObliviOS: a query whose owner cannot be found is refused, not given a shared key (ADR-184, finding F03).
 +    #[test]
 +    fn isolation_failure_is_refused() {
 +        use crate::dns::DnsManager;
 +        use dns_message_parser::question::{QClass, QType, Question};
 +        use dns_message_parser::{Dns, Flags, Opcode, RCode};
-+        // FreeholdOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
++        // ObliviOS: a query whose owner cannot be found is refused with SERVFAIL (ADR-184, finding F03).
 +        let query = Dns {
 +            id: 0x4242,
 +            flags: Flags {

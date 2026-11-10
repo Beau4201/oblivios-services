@@ -8,7 +8,7 @@
 #   VAULT_FETCH_DIR    optional: copy the verified library into this local directory and check its hash there
 # Run on the workstation; it copies the tree to the server and runs itself there.
 set -o errexit -o nounset -o pipefail
-WORK="${VAULT_WORK:-/srv/freeholdos/vault-core-work}"
+WORK="${VAULT_WORK:-/srv/oblivios/vault-core-work}"
 
 if [[ "${VAULT_REMOTE:-}" != 1 ]]; then
   : "${VAULT_BUILD_SSH:?set VAULT_BUILD_SSH=user@host}"
@@ -59,9 +59,9 @@ for lib in $needed; do
   case "$lib" in libc.so|libdl.so|libm.so|liblog.so) ;; *) bad "NEEDED holds $lib" ;; esac
 done
 check "NEEDED $needed"
-# The exports are exactly the JNI surface of org.freeholdos.passwords.core.VaultCore: nothing missing, nothing extra.
+# The exports are exactly the JNI surface of org.oblivios.passwords.core.VaultCore: nothing missing, nothing extra.
 EXPECTED="selfTest create unlockWithPassphrase unlockWithVaultKey lock vaultKey list search matches get addOrEdit delete markFilled checkup export importEntries importCsv indexBuild indexContains generate strength writeFileAtomic readFileBounded"
-want="$(for n in $EXPECTED; do echo "Java_org_freeholdos_passwords_core_VaultCore_$n"; done | sort)"
+want="$(for n in $EXPECTED; do echo "Java_org_oblivios_passwords_core_VaultCore_$n"; done | sort)"
 have="$("$READELF" --dyn-syms "$BIN" | awk '$7 != "UND" && $5 == "GLOBAL" {print $NF}' | sed 's/@.*//' | sort)"
 [[ "$have" == "$want" ]] || bad "exports differ from the JNI surface: $(diff <(echo "$want") <(echo "$have") | tr '\n' ' ')"
 check "exports: the $(wc -w <<<"$EXPECTED") JNI functions and nothing else"

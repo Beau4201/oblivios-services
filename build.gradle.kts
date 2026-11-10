@@ -6,6 +6,6 @@ plugins {
 }
 
 allprojects {
-    group = "org.freeholdos"
+    group = "org.oblivios"
     version = "0.1.0-SNAPSHOT"
 }
