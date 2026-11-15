@@ -89,4 +89,16 @@ class DuressProfileStateStoreTest {
 
         assertInstanceOf(DuressProfileState.Off.class, store.load());
     }
+
+    @Test
+    void loadingAStateFileThatIsNotValidUtf8FailsClosedToOff() throws IOException {
+        Path path = tempDir.resolve("state.txt");
+        // A torn write or a bad block can leave bytes that are no UTF-8 at all; readAllLines
+        // then throws MalformedInputException, which is an IOException, not an
+        // IllegalArgumentException.
+        Files.write(path, new byte[] {(byte) 0xff, (byte) 0xfe, '\n'});
+        DuressProfileStateStore store = new DuressProfileStateStore(path);
+
+        assertInstanceOf(DuressProfileState.Off.class, store.load());
+    }
 }

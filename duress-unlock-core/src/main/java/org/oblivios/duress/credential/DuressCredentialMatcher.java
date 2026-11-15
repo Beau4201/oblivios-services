@@ -49,7 +49,10 @@ public final class DuressCredentialMatcher {
     }
 
     static byte[] effectiveSalt(DuressProfileState state) {
-        if (state instanceof DuressProfileState.Registered registered) {
+        // An empty salt (a state line such as REGISTERED,<id>,,) makes PBKDF2 throw; fall back
+        // to the dummy salt so the attempt is NO_MATCH at the same cost, never an exception.
+        if (state instanceof DuressProfileState.Registered registered
+                && registered.salt().length > 0) {
             return registered.salt();
         }
         return DUMMY_SALT;

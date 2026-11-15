@@ -39,6 +39,29 @@ class DuressCredentialMatcherTest {
     }
 
     @Test
+    void registeredStateWithAnEmptySaltIsNoMatchAndNeverThrows() {
+        // A state file can decode to empty arrays (REGISTERED,<id>,,). PBKDF2 refuses an empty
+        // salt, so the matcher used to throw on the unlock path instead of failing closed.
+        DuressProfileState state =
+                new DuressProfileState.Registered("profile-1", new byte[0], new byte[0]);
+
+        assertEquals(DuressMatchResult.NO_MATCH,
+                DuressCredentialMatcher.matches(state, "5678".toCharArray()));
+    }
+
+    @Test
+    void anEmptyEnteredCredentialIsNoMatchAndNeverThrows() {
+        byte[] salt = DuressCredentialHasher.generateSalt(new SecureRandom());
+        byte[] hash = DuressCredentialHasher.hash("5678".toCharArray(), salt);
+        DuressProfileState state = new DuressProfileState.Registered("profile-1", hash, salt);
+
+        assertEquals(DuressMatchResult.NO_MATCH,
+                DuressCredentialMatcher.matches(state, new char[0]));
+        assertEquals(DuressMatchResult.NO_MATCH,
+                DuressCredentialMatcher.matches(new DuressProfileState.Off(), new char[0]));
+    }
+
+    @Test
     void dummySaltAndHashLengthsMatchRealOnes() {
         byte[] realSalt = DuressCredentialHasher.generateSalt(new SecureRandom());
         byte[] realHash = DuressCredentialHasher.hash("5678".toCharArray(), realSalt);

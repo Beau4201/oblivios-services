@@ -4,6 +4,7 @@ package org.oblivios.duress.state;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,12 +51,13 @@ public final class DuressProfileStateStore {
                 return new DuressProfileState.Off();
             }
             return DuressProfileStateCodec.decode(lines.get(0));
+        } catch (CharacterCodingException | IllegalArgumentException e) {
+            // Fail closed: a corrupted/malformed state file (bytes that are not UTF-8, or a
+            // line the codec refuses) must be treated as "no decoy registered", not crash the
+            // caller. A real read failure (permissions, device error) still propagates below.
+            return new DuressProfileState.Off();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
-        } catch (IllegalArgumentException e) {
-            // Fail closed: a corrupted/malformed state file must be treated
-            // as "no decoy registered", not crash the caller.
-            return new DuressProfileState.Off();
         }
     }
 
