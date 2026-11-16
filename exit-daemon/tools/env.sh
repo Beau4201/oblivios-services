@@ -4,7 +4,7 @@
 # The server has no cc, make or cmake and the prebuilt NDK directory holds no sysroot, so the C code of the Rust
 # dependencies (aws-lc-sys, lzma-sys) is compiled with the AOSP clang against a sysroot of symlinks to the artefacts
 # of an existing out directory (libc.so, libm.so, libdl.so, liblog.so, crt*.o and the bionic headers). The first
-# build of this kind is recorded in docs/research/network-exit-options.md section 2.1 of oblivios-foundation.
+# build of this kind is recorded in the project's research notes, which are not published.
 # Host-side build scripts and proc macros link with the same clang against the AOSP glibc 2.17 sysroot.
 #   AOSP_TREE  default /srv/oblivios/platform-primary      AOSP_OUT  default out-lynx (must hold a finished build)
 #   EXIT_WORK  default /srv/oblivios/exit-daemon-work      (source copy, cargo home, target directories)

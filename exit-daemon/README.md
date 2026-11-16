@@ -3,10 +3,8 @@
 `exitd`, the exit daemon of Compartments (ADR-184, ADR-178, ADR-186): a Rust process that reads the packets of the apps that
 the platform steers into its tun interface, answers the DNS of masked apps, and carries the connections of apps set to Tor and
 of listed hosts on each app's own Tor circuit family. `exitd --routes` (the route helper, same binary) writes the rules that
-steer packets into the tun and nothing else. The design is
-`docs/superpowers/specs/2026-10-18-network-exit-design.md` and
-`docs/superpowers/specs/2026-10-19-compartments-masked-destinations-design.md` in `oblivios-foundation`, the plan
-`docs/superpowers/plans/2026-10-21-compartments-close-out.md`.
+steer packets into the tun and nothing else. The decisions are in the decision log of `oblivios-docs` (ADR-184, ADR-178,
+ADR-186); the design and plan documents are not published.
 
 | Part | Role |
 | --- | --- |

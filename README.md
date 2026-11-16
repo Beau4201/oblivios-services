@@ -1,15 +1,23 @@
-# ObliviOS Guardian Services
+# ObliviOS Services
 
-This repository contains the localhost-only ObliviOS Guardian reference
-application and reusable Guardian core. It simulates platform effects for
-deterministic local testing; `oblivios-platform` is required for real Android
-enforcement.
+Platform-independent logic and native daemons of ObliviOS, kept apart from the
+Android patches in `oblivios-platform`.
 
-Run the complete test entry point with:
+| Directory | What it holds |
+| --- | --- |
+| `duress-unlock-core` | The logic of Duress Unlock (Java, no dependencies). |
+| `airpods-core` | The codec, settings and state machine of AirPods support (Java, no dependencies). |
+| `exit-daemon` | `exitd`, the exit daemon of Compartments (Rust). |
+| `vault-core` | The Rust core of the Passwords app: sealed vault file, key wrappers, checkup, export (Rust). |
+
+The Java modules are tested with:
 
 ```sh
 ./gradlew test
 ```
+
+The Rust crates are built and checked from their own directories; see the
+`README.md` and `SOURCE.md` in each.
 
 ## Stage
 

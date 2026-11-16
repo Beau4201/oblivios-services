@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Builds `exitd` for aarch64-linux-android on the build server (AOSP Rust 1.93.1, `--locked --offline`, release profile
 # with panic = "abort") and then checks THE BINARY, not the exit code: the first build of 2026-10-20 exited 0 with a
-# 1.7 MB file that held no Tor code (docs/research/network-exit-options.md section 2.1 of oblivios-foundation).
+# 1.7 MB file that held no Tor code (recorded in the project's research notes, which are not published).
 #   EXIT_BUILD_SSH    user@host of the build server
 #   EXIT_TARGET_DIR   optional: another cargo target directory (two builds into two directories must give the same hash)
 #   EXIT_FETCH_DIR    optional: copy the verified binary into this local directory and check its hash there

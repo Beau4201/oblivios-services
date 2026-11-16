@@ -3,7 +3,7 @@
 The Rust core of the ObliviOS Passwords app (ADR-185): the sealed vault file, the key wrappers, the domain index, the
 checkup and the export file. The Kotlin app in `oblivios-platform/passwords/` reaches it through one JNI module.
 
-Status: Task 1 of the plan (`2026-10-20-password-manager.md` in `oblivios-foundation`) is the feasibility gate. The
+Status: Task 1 of the implementation plan is the feasibility gate (the plan is not published). The
 crate holds the build tooling and a known-answer check of the dependencies; the vault modules follow task by task.
 
 ## Build and test

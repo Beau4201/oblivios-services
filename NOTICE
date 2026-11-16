@@ -8,37 +8,21 @@ Everything in this repository is licensed under the Apache License, Version 2.0
 
 THIRD-PARTY DEPENDENCIES
 
-Resolved with Gradle 9.6.1 (`./gradlew dependencies`, configurations
-runtimeClasspath and testRuntimeClasspath, all five modules) and read from the
-licence element of each artifact's POM in Maven Central or Google Maven. 125
-artifacts resolve; none is copied into this repository. The wrapper jar
-(gradle/wrapper) is Gradle itself, Apache-2.0.
+Resolved with Gradle 9.6.1 (`./gradlew dependencies`, configuration
+runtimeClasspath and testRuntimeClasspath, both modules). The runtime classpath
+of both Java modules is empty: they have no dependency. The test classpath holds
+nine artifacts, none copied into this repository, and none part of a runtime
+classpath. The wrapper jar (gradle/wrapper) is Gradle itself, Apache-2.0.
 
-Runtime (94 artifacts), all Apache-2.0:
+| Artifact | Licence |
+| --- | --- |
+| JUnit Jupiter 5.11.4 (junit-jupiter, -api, -engine, -params) | Eclipse Public License 2.0 |
+| JUnit Platform 1.11.4 (junit-platform-commons, -engine, -launcher) | Eclipse Public License 2.0 |
+| JUnit BOM 5.11.4 | Eclipse Public License 2.0 |
+| opentest4j 1.3.0 | Apache-2.0 |
 
-| Family                                   | Artifacts |
-| ---------------------------------------- | --------- |
-| JetBrains Compose Multiplatform 1.11.0   | 39 |
-| AndroidX (Collection, Annotation, Lifecycle, Savedstate and others) | 29 + 9 (org.jetbrains.androidx) |
-| Kotlin 2.3.20 and kotlinx (stdlib, coroutines, serialization, datetime, atomicfu) | 11 |
-| Skiko 0.144.6                            | 3 |
-| JetBrains annotations, JetBrains runtime, JSpecify | 3 |
-
-Skiko bundles native libraries (Skia and others) with their own licences. They
-are not itemised here.
-
-Tests only (31 artifacts), not part of any runtime classpath:
-
-| Licence                                              | Artifacts |
-| ---------------------------------------------------- | --------- |
-| Apache-2.0 (Guava, Truth, AutoValue annotations and others) | 18 |
-| Eclipse Public License 2.0 (JUnit 5, JUnit Platform, JUnit Vintage) | 9 |
-| Eclipse Public License 1.0 (JUnit 4)                 | 1 |
-| BSD-3-Clause (Hamcrest core)                         | 1 |
-| MIT (animal-sniffer-annotations)                     | 1 |
-| GPL-2.0 with classpath exception, or MIT (checker-compat-qual) | 1 |
-
-Licences of the last five rows come from the artifact's POM or its parent POM.
+The licences are those declared in each artifact's POM on Maven Central; they
+were not re-read from the artifacts on 2026-11-16.
 
 TRADEMARKS
 
