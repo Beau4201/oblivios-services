@@ -12,7 +12,9 @@ Resolved with Gradle 9.6.1 (`./gradlew dependencies`, configuration
 runtimeClasspath and testRuntimeClasspath, both modules). The runtime classpath
 of both Java modules is empty: they have no dependency. The test classpath holds
 nine artifacts, none copied into this repository, and none part of a runtime
-classpath. The wrapper jar (gradle/wrapper) is Gradle itself, Apache-2.0.
+classpath. The wrapper (gradlew, gradlew.bat and gradle/wrapper) is Gradle itself, Apache-2.0. The POMs
+of the JUnit artifacts also declare org.apiguardian:apiguardian-api 1.1.2 as a dependency;
+whether the resolved test classpath holds it, and its licence, were not read.
 
 | Artifact | Licence |
 | --- | --- |
@@ -37,8 +39,48 @@ exit-daemon/third_party/onionmasq holds three crates of Onionmasq (Tor Project, 
 (LICENSE-MIT, LICENSE-APACHE) and the changes are the patches in
 exit-daemon/third_party/patches (see exit-daemon/SOURCE.md).
 
-exit-daemon/Cargo.lock names 552 Rust packages that are fetched at build time and linked
-statically into the `exitd` binary (Arti, aws-lc and others, with a mix of MIT, Apache-2.0,
-ISC, OpenSSL-style, MPL-2.0 and similar licences). The aggregated attribution that a shipped
-binary needs (for example from `cargo about`) is not generated yet; it must exist, and
-`cargo audit` must have been run, before an image carries the daemon.
+exit-daemon/Cargo.lock names 548 Rust packages from crates.io and 4 in-tree packages (the daemon
+and the three Onionmasq crates). The 548 are fetched at build time; the ones a target needs
+are linked statically into the `exitd` binary (Arti, aws-lc and others, with a mix of MIT,
+Apache-2.0, ISC, OpenSSL-style, MPL-2.0 and similar licences). exit-daemon/NOTICE lists the
+licence expression of every package. The lock lists every package that any target may
+resolve; the subset linked into `exitd` has not been computed. The aggregated attribution
+that a shipped binary needs (for example from `cargo about`) is not generated yet; it must
+exist, and `cargo audit` must have been run again (RISKS.md names the run of 2026-10-22),
+before an image carries the daemon.
+
+vault-core/Cargo.lock names 72 Rust packages from crates.io and the crate itself; each is
+pinned with its SHA-256 and listed with its licence in vault-core/SOURCE.md and in the SBOM
+of oblivios-docs. The crate psl compiles in the Public Suffix List (data/rules.txt of psl
+2.1.244), which is MPL-2.0 (publicsuffix.org); the list is not modified by this project.
+
+THIRD-PARTY DATA IN THE REPOSITORY
+
+vault-core/data/common-passwords.txt is a processed copy of 10k-most-common.txt of SecLists
+(github.com/danielmiessler/SecLists, commit 913b327317496d062bcc7cace524aaad8a693be2): lower-cased
+and de-duplicated, order kept, 10 001 entries (vault-core/SOURCE.md). SecLists is MIT licensed:
+
+  MIT License
+
+  Copyright (c) 2018 Daniel Miessler
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+The SHA-256 of that text is the one that vault-core/SOURCE.md records for the LICENSE of SecLists at
+that commit.

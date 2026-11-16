@@ -18,7 +18,7 @@ ADR-186); the design and plan documents are not published.
 | `src/server.rs` | the control server: peer check before the first byte (by SELinux type and a uid of user 0, or by exact uid), a new connection of the peer replaces the old one, a frame must be complete within ten seconds |
 | `src/routes/` | the route helper: `spec` (the closed rule language), `netlink` (messages and the parser of the kernel's rule dump), `reconcile` (adds before it removes, sends nothing when the plan is in place), `proto` and `helper` (its control protocol), `sys` (the only `unsafe` of the helper) |
 | `src/config.rs`, `src/args.rs`, `src/main.rs` | the Arti configuration with an explicit memory quota, the command line (`exitd` is the daemon and `exitd --routes` the route helper; the mask list is required and a daemon whose list does not load exits with status 2), the entry point (one policy table shared by the control server and the packet path; the Tor client is created at start and bootstrapped only when the table first holds a Tor or masked class) |
-| `third_party/onionmasq/` | the vendored library, see `SOURCE.md` (four patches; the fourth splits DNS by policy) |
+| `third_party/onionmasq/` | the vendored library, see `SOURCE.md` (six patches; the fourth splits DNS by policy) |
 
 ## Build and test
 
@@ -69,6 +69,6 @@ read-back matches the `Debug` text `max: ByteQty(<bytes>)`; a changed text fails
   app reports the tier as limited there (`MSK-008`).
 - The 4096-byte TCP buffers of the packet layer limit throughput on a slow circuit; not measured yet (`MSK-002c`).
 - The speed guard acts from the next DNS answer, not on a flow that is open, and a hold of 30 minutes ends: a video that runs longer goes through Tor for 4 MiB again before it is passed on again (`MSK-011`).
-- `cargo audit` ran on 2026-10-22 (`RISKS.md`, "Advisories"): the fixable advisories are fixed, three remain and are assessed there. The licence
+- `cargo audit` ran on 2026-10-22 (`RISKS.md`, "Advisories"): the fixable advisories are fixed, three remain and are assessed there. On 2026-11-16 OSV lists five further advisories for packages of the lock (`crypto-bigint`, `ctutils`, `libsqlite3-sys`, `rustix`, `tokio`; the SBOM in `oblivios-docs` names them): not assessed yet, and `Cargo.lock` is not updated for them. The licence
   texts of the third-party dependencies are not bundled, only their SPDX expressions (`NOTICE`, `RISKS.md`).
 - A TCP/UDP/IPv6 lookup by `sock_diag` was shown on a phone for TCP over IPv4 only.

@@ -8,7 +8,7 @@ supported. This policy covers the source in this repository.
 Do not open a public issue for a vulnerability. Send the report by email to
 `beau.ten.berge@gmail.com`, encrypted with the PGP key below if you can.
 
-- Key: `ObliviOS Security <beau.ten.berge@gmail.com>`, ed25519 with a cv25519 encryption subkey
+- Key: user id `FreeholdOS Security <beau.ten.berge@gmail.com>` (the earlier name of the project), ed25519 with a cv25519 encryption subkey
 - Fingerprint: `8E12 CA71 F0F7 C4C4 9BF3  EE74 0FF0 E5E3 6FEE 6CA9`
 - Public key: `security-contact.asc` in this repository
 
