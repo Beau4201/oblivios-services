@@ -11,7 +11,7 @@ for Android is built on. The daemon uses it as a library (`onion-tunnel`) and im
 | Licence | `MIT OR Apache-2.0`: `third_party/onionmasq/LICENSE-MIT` (Tor Project, 2019-2022) and `LICENSE-APACHE` are copied unchanged; the dual licence is stated in the "License" section of the upstream `README.md`. No crate `Cargo.toml` upstream has a `license` field |
 | Crates | `crates/onion-tunnel`, `crates/onionmasq-device-testing`, `crates/simple-proc-net` (all of `onion-tunnel`'s path dependencies that the daemon needs) |
 | Not vendored | `onionmasq` (the binary: the daemon has its own `main`), `onionmasq-mobile` and `onionmasq-apple` (JNI and Apple layers), `experimental-turn-tcp-client` (the TURN UDP path, which the daemon never enables) |
-| Lock file | `Cargo.lock` of the daemon is the upstream lock reduced by `cargo metadata --offline` to the daemon's tree: 552 packages, no version differs from upstream, 62 upstream packages dropped, `exit-daemon` added. Builds use `--locked` |
+| Lock file | `Cargo.lock` of the daemon is the upstream lock reduced by `cargo metadata --offline` to the daemon's tree: 552 packages, 62 upstream packages dropped, `exit-daemon` added. Three versions differ from upstream since 2026-11-17 (`tokio` 1.53.3, `rustix` 1.1.6, `ctutils` 0.4.4, for the advisories of `RISKS.md`): only their version and checksum lines were edited, `cargo metadata --locked` accepts the file, and 344 host tests pass. Builds use `--locked` |
 
 The upstream workspace `Cargo.toml` is not kept: the daemon's `Cargo.toml` is the workspace root and names the three
 crates as members (two workspace roots in one tree are refused by cargo). The upstream `[profile.release]`

@@ -43,6 +43,38 @@ Arti uses `rustls` for the TLS links to relays with its own certificate verifier
 verification of `rustls-webpki` is not used `[verified-in-source: tor-rtcompat 0.46.0 src/impls/rustls.rs]`. The run is repeated
 at every update of `Cargo.lock`.
 
+### Advisories of OSV on 2026-11-16 (five), assessed 2026-11-17
+
+The first three are fixed by a lock update that moves only those packages (`tokio` 1.53.1 to 1.53.3, `rustix` 1.1.4 to
+1.1.6, `ctutils` 0.4.2 to 0.4.4; `cargo metadata --locked` accepts the edit, 344 host tests pass, the build is
+reproducible, see `SOURCE.md`). The other two are not fixed and are assessed here.
+
+- `ctutils` 0.4.2, RUSTSEC-2026-0385 (a mask generation that may branch on a secret; fixed in 0.4.4). It is linked: `polyval`
+  of `tor-proto` uses it `[measured: cargo tree -i ctutils, target aarch64-linux-android]`. Updated.
+- `rustix` 1.1.4, RUSTSEC-2026-0486 (the xattr functions mark unwritten bytes as initialised; fixed in 1.1.6). It is linked
+  through `tempfile`. No crate of the tree calls an xattr function `[verified-in-source: grep of tempfile, tor-*, arti-client, the
+  daemon and the vendored crates for getxattr, lgetxattr, fgetxattr, listxattr, llistxattr, flistxattr: no match]`. Updated.
+- `tokio` 1.53.1, RUSTSEC-2026-0386 (`AsyncFd::new` and its three siblings are safe functions that accept any file
+  descriptor; fixed in 1.53.3). 1.53.3 deprecates those constructors in favour of unsafe ones; it does not change what they do,
+  so the weakness of the API stays in the updated lock. The calls in the tree are in the vendored `onion-tunnel`
+  (`tuntap.rs`, on a descriptor that code has just opened itself), in `inotify` (through `notify` and `tor-config`) and in
+  `tokio` itself `[verified-in-source: grep for the four constructors in the tree and the crates]`. The use-after-free needs
+  the descriptor to be duplicated and closed while the `AsyncFd` lives and its number to be reused; nothing in these
+  call sites does that and none was found exploitable, which is a reading, not a proof. Updated for the version, residual risk
+  accepted.
+- `crypto-bigint` 0.5.5, RUSTSEC-2026-0387 (timing of constant-time operations; fixed only from 0.7.6, another minor line). The
+  package is in `Cargo.lock` and in no dependency graph of any target: `cargo tree --target all -i crypto-bigint` prints
+  nothing `[measured: 2026-11-17]`, so it is not compiled into `exitd`. Not changed. `Cargo.lock` still lists it, so the
+  SBOM lists it too and says it is not linked.
+- `libsqlite3-sys` 0.37.0, RUSTSEC-2026-0459 (SQLite before 3.54.0 can return uninitialised memory when a database is opened
+  with a `-wal` file of another page size; fixed in `libsqlite3-sys` 0.39.0, which comes with `rusqlite` 0.41). It is linked:
+  `rusqlite` 0.39 of `tor-dirmgr` pins it `[measured: cargo tree -i libsqlite3-sys]`, so the fix needs an Arti release
+  that uses `rusqlite` 0.41; a lock edit alone cannot do it. The flaw needs a process to open a database and `-wal` file
+  that someone else wrote. The daemon names the Arti state and cache directories itself (`arti_toml` in `config.rs`); who can
+  write there is set by the file modes and the SELinux labels that the exit app and the policy give, which this
+  assessment did not re-read. Not fixed, accepted until an Arti release that uses `rusqlite` 0.41 is taken in; reopen then,
+  or when someone other than the daemon can write those directories.
+
 ## Availability
 
 A panic, a crash loop or a stuck Tor bootstrap is an outage of every app set to Tor (no network, never Direct, ADR-178) and,
