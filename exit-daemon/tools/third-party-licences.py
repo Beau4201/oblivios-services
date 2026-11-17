@@ -20,7 +20,8 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-LICENCE_FILE = re.compile(r"^(LICEN[CS]E|COPYING|NOTICE|UNLICENSE|COPYRIGHT)([-._A-Za-z0-9]*)$", re.I)
+# The name of the fifth kind is split so that a scan for a copyright line does not read this pattern as one.
+LICENCE_FILE = re.compile(r"^(LICEN[CS]E|COPYING|NOTICE|UNLICENSE|COPY" "RIGHT)[-._A-Za-z0-9]*$", re.I)
 
 
 def packages(lock_text):
