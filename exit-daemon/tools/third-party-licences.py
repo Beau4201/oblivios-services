@@ -20,7 +20,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-# The name of the fifth kind is split so that a scan for a copyright line does not read this pattern as one.
+# The name of the fifth kind is split so that a scan of this file does not read the pattern as a notice line.
 LICENCE_FILE = re.compile(r"^(LICEN[CS]E|COPYING|NOTICE|UNLICENSE|COPY" "RIGHT)[-._A-Za-z0-9]*$", re.I)
 
 
