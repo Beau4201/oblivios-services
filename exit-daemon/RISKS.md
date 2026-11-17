@@ -75,6 +75,12 @@ reproducible, see `SOURCE.md`). The other two are not fixed and are assessed her
   assessment did not re-read. Not fixed, accepted until an Arti release that uses `rusqlite` 0.41 is taken in; reopen then,
   or when someone other than the daemon can write those directories.
 
+The OSV query that followed the update (2026-11-17) no longer lists `tokio`, `rustix` or `ctutils`, and lists two new
+notices of the same kind as `bincode` and `paste`: `chrono` 0.4.45 (RUSTSEC-2026-0543) and `humantime` 2.4.0
+(RUSTSEC-2026-0542), both "unmaintained" with no vulnerability and no patched version. `humantime` is linked (through
+`arti-client` and `humantime-serde`); `chrono` is in no dependency graph of the Android target `[measured: cargo tree -i]`.
+Nothing to change; both wait for an Arti release that drops them.
+
 ## Availability
 
 A panic, a crash loop or a stuck Tor bootstrap is an outage of every app set to Tor (no network, never Direct, ADR-178) and,
