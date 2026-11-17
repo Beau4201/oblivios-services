@@ -8,7 +8,7 @@ ADR-186); the design and plan documents are not published.
 
 | Part | Role |
 | --- | --- |
-| `src/control.rs` | the typed control protocol, version 4 (frames, sequence numbers, `Ack` and `Error`, uid classes, per-company overrides, `Failures`, `Promoted`, `Release`, `SetCountry`: the exit country of an app uid, ADR-208) |
+| `src/control.rs` | the typed control protocol, version 5 (frames, sequence numbers, `Ack` and `Error`, uid classes, per-company overrides, `Failures`, `Promoted`, `Release`, `SetCountry`: the exit country of an app uid, ADR-208) |
 | `src/policy.rs` | the class of each app uid (Tor, masked, exempt) and the overrides, as the exit app sent them |
 | `src/masklist.rs` | the mask list: names matched by the longest domain suffix, protected rows (company 0) shield what is below them |
 | `src/scaffolding.rs` | the `TunnelScaffolding` of the daemon: attributes every flow to a uid or refuses it, admits a TCP flow only for the class that may have it, decides per DNS question (Tor or pass on), limits DNS per app, bounds flows and commands, feeds the ladder |
@@ -69,6 +69,6 @@ read-back matches the `Debug` text `max: ByteQty(<bytes>)`; a changed text fails
   app reports the tier as limited there (`MSK-008`).
 - The 4096-byte TCP buffers of the packet layer limit throughput on a slow circuit; not measured yet (`MSK-002c`).
 - The speed guard acts from the next DNS answer, not on a flow that is open, and a hold of 30 minutes ends: a video that runs longer goes through Tor for 4 MiB again before it is passed on again (`MSK-011`).
-- `cargo audit` ran on 2026-10-22 (`RISKS.md`, "Advisories"): the fixable advisories are fixed, three remain and are assessed there. On 2026-11-16 OSV lists five further advisories for packages of the lock (`crypto-bigint`, `ctutils`, `libsqlite3-sys`, `rustix`, `tokio`; the SBOM in `oblivios-docs` names them): not assessed yet, and `Cargo.lock` is not updated for them. The licence
-  texts of the third-party dependencies are not bundled, only their SPDX expressions (`NOTICE`, `RISKS.md`).
+- `cargo audit` ran on 2026-10-22 and OSV was queried on 2026-11-16 and 2026-11-17 (`RISKS.md`, "Advisories"): `tokio`, `rustix` and `ctutils` are updated in `Cargo.lock`; `crypto-bigint` (in the lock, not compiled in), `libsqlite3-sys` (linked, fix needs a new Arti release) and the unmaintained-crate notices are assessed there. The SBOM in `oblivios-docs` names them. The licence
+  texts of the registry packages of the lock are made by `tools/third-party-licences.py` and committed next to the prebuilt binary in `oblivios-platform` (`privacy/exit/daemon/THIRD-PARTY-LICENSES.txt`); `NOTICE` and `RISKS.md` list the SPDX expressions.
 - A TCP/UDP/IPv6 lookup by `sock_diag` was shown on a phone for TCP over IPv4 only.

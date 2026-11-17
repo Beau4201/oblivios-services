@@ -3,8 +3,11 @@
 The Rust core of the ObliviOS Passwords app (ADR-185): the sealed vault file, the key wrappers, the domain index, the
 checkup and the export file. The Kotlin app in `oblivios-platform/passwords/` reaches it through one JNI module.
 
-Status: Task 1 of the implementation plan is the feasibility gate (the plan is not published). The
-crate holds the build tooling and a known-answer check of the dependencies; the vault modules follow task by task.
+Contents of `src/`: the sealed container and envelope (`container.rs`, `envelope.rs`), key derivation and wrappers
+(`kdf.rs`, `keys.rs`), the vault and its store (`vault.rs`, `store.rs`), the domain index (`index.rs`, `punycode.rs`), the checkup
+(`checkup.rs`), the export and import files (`exchange.rs`, `csvimport.rs`), the password generator (`generator.rs`) and the JNI surface
+(`jni.rs`). The prebuilt `libvault_core.so` in `oblivios-platform` is built from this crate; its record is
+`passwords/core/SOURCE.md` there. What was tested on a device is stated in the records of the Passwords app, not here.
 
 ## Build and test
 
@@ -21,6 +24,6 @@ their checksums: [`SOURCE.md`](SOURCE.md).
 
 ## Rules of the crate
 
-- `#![deny(unsafe_code)]` everywhere except `src/ffi.rs` (replaced by `jni.rs` in Task 8).
+- `#![deny(unsafe_code)]` everywhere except `src/jni.rs`, the only module that allows `unsafe` (the `#[no_mangle]` exports).
 - `panic = "abort"`: every panic ends the process, so code reachable from the JNI surface validates its input first.
 - No network crate in `Cargo.lock`, no network import in the library.
