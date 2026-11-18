@@ -9,4 +9,4 @@ ObliviOS is a small project run by one person. The rules are short.
 
 A comment that breaks these rules is hidden or deleted, and a person who keeps breaking them is blocked. The maintainer decides and says why when asked.
 
-To report behaviour that you do not want to raise in public, write to the contact in [`SECURITY.md`](SECURITY.md).
+To report behaviour that you do not want to raise in public, write to the contact in `SECURITY.md`.
