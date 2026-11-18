@@ -1,3 +1,13 @@
+<p align="center">
+  <a href="https://oblivios.org">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://oblivios.org/brand/lockup-dark.svg">
+      <img alt="ObliviOS" src="https://oblivios.org/brand/lockup-light.svg" width="220">
+    </picture>
+  </a><br>
+  <a href="https://oblivios.org">oblivios.org</a>
+</p>
+
 <h1 align="center">oblivios-services</h1>
 
 <p align="center">
