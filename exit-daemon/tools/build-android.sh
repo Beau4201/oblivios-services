@@ -8,7 +8,7 @@
 #   EXIT_FETCH_DIR    optional: copy the verified binary into this local directory and check its hash there
 # Run on the workstation; it copies the tree to the server and runs itself there.
 set -o errexit -o nounset -o pipefail
-WORK="${EXIT_WORK:-/srv/oblivios/exit-daemon-work}"
+WORK="${EXIT_WORK:?set EXIT_WORK}"
 
 if [[ "${EXIT_REMOTE:-}" != 1 ]]; then
   : "${EXIT_BUILD_SSH:?set EXIT_BUILD_SSH=user@host}"

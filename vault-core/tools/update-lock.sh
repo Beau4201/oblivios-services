@@ -6,7 +6,7 @@
 #   VAULT_BUILD_SSH   user@host of the build server
 set -o errexit -o nounset -o pipefail
 : "${VAULT_BUILD_SSH:?set VAULT_BUILD_SSH=user@host}"
-WORK="${VAULT_WORK:-/srv/oblivios/vault-core-work}"
+WORK="${VAULT_WORK:?set VAULT_WORK}"
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 ssh -o BatchMode=yes "$VAULT_BUILD_SSH" "mkdir -p $WORK/src"
 rsync -rlpgoD --checksum --delete --exclude target --exclude .git -e "ssh -o BatchMode=yes" "$SRC"/ "$VAULT_BUILD_SSH:$WORK/src/"

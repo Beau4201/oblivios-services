@@ -12,7 +12,7 @@
 # cannot be affected).
 # One run at a time (flock on the server).
 set -o errexit -o nounset -o pipefail
-WORK="${EXIT_WORK:-/srv/oblivios/exit-daemon-work}"
+WORK="${EXIT_WORK:?set EXIT_WORK}"
 
 if [[ "${EXIT_REMOTE:-}" != 1 ]]; then
   : "${EXIT_BUILD_SSH:?set EXIT_BUILD_SSH=user@host}"

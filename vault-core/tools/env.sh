@@ -6,13 +6,13 @@
 # of an existing out directory (libc.so, libm.so, libdl.so, liblog.so, crt*.o and the bionic headers). The first
 # build of this kind is recorded in the exit-daemon tooling (docs/research/network-exit-options.md section 2.1).
 # Host-side build scripts and proc macros link with the same clang against the AOSP glibc 2.17 sysroot.
-#   AOSP_TREE  default /srv/oblivios/platform-primary      AOSP_OUT  default out-lynx (must hold a finished build)
-#   VAULT_WORK  default /srv/oblivios/vault-core-work      (source copy, cargo home, target directories)
+#   AOSP_TREE  required      AOSP_OUT  default out-lynx (must hold a finished build)
+#   VAULT_WORK  required      (source copy, cargo home, target directories)
 # -Qunused-arguments: compile-only calls would otherwise fail on -fuse-ld.
 # Nothing here is deleted: links are replaced in place.
-T="${AOSP_TREE:-/srv/oblivios/platform-primary}"
+T="${AOSP_TREE:?set AOSP_TREE}"
 OUTD="$T/${AOSP_OUT:-out-lynx}"
-WORK="${VAULT_WORK:-/srv/oblivios/vault-core-work}"
+WORK="${VAULT_WORK:?set VAULT_WORK}"
 I="$OUTD/soong/.intermediates"
 V=android_arm64_armv8-2a-dotprod_cortex-a76
 CL="$T/prebuilts/clang/host/linux-x86/clang-r596125"

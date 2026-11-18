@@ -10,7 +10,7 @@
 # The whole workspace is tested: the vendored crates and their patches are part of what ships.
 # One run at a time (flock on the server).
 set -o errexit -o nounset -o pipefail
-WORK="${VAULT_WORK:-/srv/oblivios/vault-core-work}"
+WORK="${VAULT_WORK:?set VAULT_WORK}"
 
 if [[ "${VAULT_REMOTE:-}" != 1 ]]; then
   : "${VAULT_BUILD_SSH:?set VAULT_BUILD_SSH=user@host}"

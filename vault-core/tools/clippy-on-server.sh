@@ -6,7 +6,7 @@
 # the script fails on it; other clippy warnings are printed and counted. A run that checked nothing fails too.
 #   VAULT_BUILD_SSH   user@host of the build server
 set -o errexit -o nounset -o pipefail
-WORK="${VAULT_WORK:-/srv/oblivios/vault-core-work}"
+WORK="${VAULT_WORK:?set VAULT_WORK}"
 if [[ "${VAULT_REMOTE:-}" != 1 ]]; then
   : "${VAULT_BUILD_SSH:?set VAULT_BUILD_SSH=user@host}"
   SRC="${VAULT_SRC:-$(cd "$(dirname "$0")/.." && pwd)}"
