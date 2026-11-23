@@ -25,6 +25,9 @@
 > ([ADR-171](https://github.com/Beau4201/oblivios-docs/blob/main/docs/governance/decision-log.md)). Nothing here is Android enforcement on
 > its own, and the repository contains no GrapheneOS or AOSP source.
 
+> **Guides.** [Start here](https://oblivios.dev/guide/start) says what ObliviOS is and is not. [Build with it](https://oblivios.dev/guide/build)
+> is a build guide for a Pixel 7a and a Pixel 10a; each command in it is marked as verified or not run.
+
 ## Modules
 
 | Module | Language | What it holds | Ships as |
