@@ -102,6 +102,16 @@ public final class DutchPack implements CountryPack {
                 LocalDate.of(year, 12, 25), LocalDate.of(year, 12, 26));
     }
 
+    private static final List<String> HOLIDAY_NAMES = List.of(
+            "Nieuwjaarsdag", "Goede Vrijdag", "Eerste Paasdag", "Tweede Paasdag", "Koningsdag", "Bevrijdingsdag",
+            "Hemelvaartsdag", "Eerste Pinksterdag", "Tweede Pinksterdag", "Eerste Kerstdag", "Tweede Kerstdag");
+
+    @Override
+    public String holidayName(LocalDate date) {
+        int i = publicHolidays(date.getYear()).indexOf(date);
+        return i < 0 ? "Feestdag" : HOLIDAY_NAMES.get(i);
+    }
+
     @Override
     public List<String> homeWifiPatterns() {
         return List.of("Ziggo#######", "KPN######", "Odido-######", "FRITZ!Box ####", "TP-LINK_####");

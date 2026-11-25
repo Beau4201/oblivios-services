@@ -4,6 +4,7 @@ package org.oblivios.decoy.content.story;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,14 +22,17 @@ public final class Timeline {
     private final LocalTime sleepTime;
     private final Instant phoneStart;
     private final Instant now;
+    private final ZoneId zone;
     private final List<String> warnings;
 
-    private Timeline(List<Place> places, LocalTime wake, LocalTime sleep, Instant phoneStart, Instant now, List<String> warnings) {
+    private Timeline(List<Place> places, LocalTime wake, LocalTime sleep, Instant phoneStart, Instant now, ZoneId zone,
+            List<String> warnings) {
         this.places = List.copyOf(places);
         this.wakeTime = wake;
         this.sleepTime = sleep;
         this.phoneStart = phoneStart;
         this.now = now;
+        this.zone = zone;
         this.warnings = List.copyOf(warnings);
     }
 
@@ -67,7 +71,7 @@ public final class Timeline {
         Instant limit = now.minus(Duration.ofDays(180L + r.nextInt(91)));
         Instant phoneStart = candidate.isBefore(limit) ? candidate : limit;
 
-        return new Timeline(places, wake, sleep, phoneStart, now, warnings);
+        return new Timeline(places, wake, sleep, phoneStart, now, p.inputs().zone(), warnings);
     }
 
     /** A point between {@code minKm} and {@code maxKm} from {@code from}, uniform over the ring's area. */
@@ -98,6 +102,11 @@ public final class Timeline {
     /** The moment the story ends: no event of any surface lies after it. */
     public Instant now() {
         return now;
+    }
+
+    /** The time zone of the owner's story; day and hour of every event are read in it. */
+    public ZoneId zone() {
+        return zone;
     }
 
     public List<String> warnings() {

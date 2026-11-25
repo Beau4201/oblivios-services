@@ -20,6 +20,11 @@ public interface CountryPack {
 
     List<LocalDate> publicHolidays(int year);
 
+    /** The local name of a public holiday of {@link #publicHolidays}; a generic title where the pack has none. */
+    default String holidayName(LocalDate date) {
+        return "Public holiday";
+    }
+
     /** Templates of home Wi-Fi names; a {@code #} stands for one random digit. */
     List<String> homeWifiPatterns();
 }
