@@ -3,6 +3,7 @@ package org.oblivios.decoy.content.pool;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -16,6 +17,7 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -434,7 +436,9 @@ class ConversationPickerTest {
         for (int[] range : new int[][] {{2, 2}, {0, 0}}) {
             CountryPack pack = packWithGroups(range[0], range[1]);
             Setup s = setup(9, b -> b.friendGroups(Set.of(PersonaProfile.FriendGroup.SPORT)).circle(PersonaProfile.CircleSize.LARGE), pack);
-            List<PoolConversation> pool = new ArrayList<>(groupsOf(s, GroupKind.FRIENDS, friendsOfOneOrigin(s, 3), 6, "g-"));
+            List<Contact> four = friendsOfOneOrigin(s, 4);
+            List<PoolConversation> pool = new ArrayList<>(groupsOf(s, GroupKind.FRIENDS, four, 3, "g-"));
+            pool.addAll(groupsOf(s, GroupKind.FRIENDS, four.subList(0, 3), 3, "h-"));
             assertEquals(range[0], pick(s, pool, 9).groups().size());
         }
     }
@@ -460,7 +464,10 @@ class ConversationPickerTest {
     void groupMessagesNameTheirSender() throws IOException {
         CountryPack pack = packWithGroups(2, 2);
         Setup s = setup(11, b -> b.friendGroups(Set.of(PersonaProfile.FriendGroup.SPORT)).circle(PersonaProfile.CircleSize.LARGE), pack);
-        Picked p = pick(s, groupsOf(s, GroupKind.FRIENDS, friendsOfOneOrigin(s, 4), 4, "m-"), 11);
+        List<Contact> four = friendsOfOneOrigin(s, 4);
+        List<PoolConversation> pool = new ArrayList<>(groupsOf(s, GroupKind.FRIENDS, four, 2, "four-"));
+        pool.addAll(groupsOf(s, GroupKind.FRIENDS, four.subList(0, 3), 2, "three-"));
+        Picked p = pick(s, pool, 11);
         assertEquals(2, p.groups().size());
         for (FilledConversation g : p.groups()) {
             for (SmsMessage m : g.messages()) {
@@ -511,6 +518,84 @@ class ConversationPickerTest {
         }
         assertTrue(sms > 0);
         assertTrue(RollForward.plan(snap, NOW, Seed.of(1, 1), List.of()).events().stream().noneMatch(e -> e.kind().equals("SMS")));
+    }
+
+    private static Setup married(long n) {
+        return setup(n, b -> b.relationship(PersonaProfile.Relationship.MARRIED).household(2).texting(PersonaProfile.Texting.HIGH));
+    }
+
+    @Test
+    void aRejectingJudgeIsAskedAtMostFourTimesPerConversation() {
+        Setup s = married(7);
+        List<PoolConversation> pool = fitting(s, contact(s, Relation.PARTNER), 200, Set.of(), null, "r-");
+        int[] asked = {0};
+        Judge never = (c, p, others) -> {
+            asked[0]++;
+            return new Judge.Verdict(false, "never");
+        };
+        assertTrue(pick(s, pool, 7, never).byContact().isEmpty());
+        // a partner wants at most 19 conversations and one for the reserve; each costs the first candidate and three replacements
+        assertTrue(asked[0] <= 4 * 20, "asked " + asked[0] + " times");
+    }
+
+    @Test
+    void aRejectedReserveConversationIsReplaced() {
+        Setup s = married(7);
+        List<PoolConversation> pool = fitting(s, contact(s, Relation.PARTNER), 200, Set.of(), null, "v-");
+        String first = pick(s, pool, 7).reserve().get(0).poolId();
+        Judge notThat = (c, p, others) -> new Judge.Verdict(!c.poolId().equals(first), "rejected for the test");
+        List<FilledConversation> reserve = pick(s, pool, 7, notThat).reserve();
+        assertEquals(1, reserve.size());
+        assertNotEquals(first, reserve.get(0).poolId());
+    }
+
+    @Test
+    void aSlotHasOneValueInAConversation() {
+        Setup s = married(15);
+        Contact partner = contact(s, Relation.PARTNER);
+        String text = "{DAY} {TIME} {AMOUNT}";
+        List<PoolConversation> pool = fitting(s, partner, 20, Set.of(), text, "slot-").stream().map(c -> withText(c, 7, text)).toList();
+        List<FilledConversation> got = pick(s, pool, 15).byContact().get(partner.id());
+        assertFalse(got.isEmpty());
+        got.forEach(f -> assertEquals(f.messages().get(3).body(), f.messages().get(7).body(), f.poolId()));
+    }
+
+    @Test
+    void conversationsOfOneContactNeverOverlap() {
+        for (long n = 0; n < 8; n++) {
+            Setup s = married(n);
+            Contact partner = contact(s, Relation.PARTNER);
+            List<FilledConversation> got = new ArrayList<>(
+                    pick(s, fitting(s, partner, 40, Set.of(), null, "o" + n + "-"), n).byContact().get(partner.id()));
+            got.sort(Comparator.comparing((FilledConversation c) -> c.messages().get(0).at()));
+            for (int i = 1; i < got.size(); i++) {
+                List<SmsMessage> before = got.get(i - 1).messages();
+                assertTrue(got.get(i).messages().get(0).at().isAfter(before.get(before.size() - 1).at()),
+                        "seed " + n + ": two conversations of one thread run through each other");
+            }
+        }
+    }
+
+    @Test
+    void conversationWiderThanTheWakingDayIsNotPicked() {
+        Setup s = married(4);
+        List<PoolConversation> pool = fitting(s, contact(s, Relation.PARTNER), 3, Set.of(), null, "late-").stream().map(c -> {
+            List<PoolMessage> m = new ArrayList<>(c.messages());
+            PoolMessage first = m.get(0);
+            PoolMessage last = m.get(m.size() - 1);
+            m.set(0, new PoolMessage(first.day(), 5, first.side(), first.text()));
+            m.set(m.size() - 1, new PoolMessage(last.day(), 1435, last.side(), last.text()));
+            return new PoolConversation(c.id(), c.situation(), c.language(), c.group(), c.sides(), c.topics(), c.requires(), c.mix(), m);
+        }).toList();
+        assertTrue(all(pick(s, pool, 4)).isEmpty(), "00:05 and 23:55 do not both fit a waking day with the gaps kept");
+    }
+
+    @Test
+    void noTwoGroupsOfTheSameMembers() throws IOException {
+        CountryPack pack = packWithGroups(2, 2);
+        Setup s = setup(11, b -> b.friendGroups(Set.of(PersonaProfile.FriendGroup.SPORT)).circle(PersonaProfile.CircleSize.LARGE), pack);
+        Picked p = pick(s, groupsOf(s, GroupKind.FRIENDS, friendsOfOneOrigin(s, 3), 4, "same-"), 11);
+        assertEquals(1, p.groups().size(), "one set of recipients is one thread on a phone");
     }
 
     @Test

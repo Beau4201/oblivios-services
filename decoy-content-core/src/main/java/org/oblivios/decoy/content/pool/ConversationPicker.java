@@ -4,13 +4,13 @@ package org.oblivios.decoy.content.pool;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -133,22 +133,12 @@ public final class ConversationPicker {
                 if (wanted == 0) {
                     continue;
                 }
-                List<PoolConversation> candidates = ordered(fitting(oneToOne, contact), r);
+                Iterator<PoolConversation> candidates = ordered(fitting(oneToOne, contact), r).iterator();
                 List<FilledConversation> got = new ArrayList<>();
-                int next = 0;
-                while (got.size() < wanted && next < candidates.size()) {
-                    for (int tries = 0; tries < TRIES && next < candidates.size(); ) {
-                        PoolConversation cand = candidates.get(next++);
-                        if (used.contains(cand.id())) {
-                            continue;
-                        }
-                        tries++;
-                        used.add(cand.id());
-                        FilledConversation f = accept(cand, List.of(contact), styles.personaTowards().get(contact.relation()));
-                        if (f != null) {
-                            got.add(f);
-                            break;
-                        }
+                for (int slot = 0; slot < wanted; slot++) {
+                    FilledConversation f = firstTaken(candidates, List.of(contact), styles.personaTowards().get(contact.relation()), got);
+                    if (f != null) {
+                        got.add(f);
                     }
                 }
                 if (got.size() < wanted) {
@@ -170,19 +160,31 @@ public final class ConversationPicker {
                 if (weight(contact.relation()) < 2) {
                     continue;
                 }
-                for (PoolConversation cand : ordered(fitting(oneToOne, contact), seed.stream("reserve." + contact.id()))) {
-                    if (used.contains(cand.id())) {
-                        continue;
-                    }
-                    used.add(cand.id());
-                    FilledConversation f = accept(cand, List.of(contact), styles.personaTowards().get(contact.relation()));
-                    if (f != null) {
-                        reserve.add(f);
-                    }
-                    break;
+                Iterator<PoolConversation> candidates =
+                        ordered(fitting(oneToOne, contact), seed.stream("reserve." + contact.id())).iterator();
+                // the roll-forward moves a reserve conversation to new days, so it takes no day of the thread
+                FilledConversation f = firstTaken(candidates, List.of(contact), styles.personaTowards().get(contact.relation()), List.of());
+                if (f != null) {
+                    reserve.add(f);
                 }
             }
             return new Picked(byContact, groups, reserve, warnings);
+        }
+
+        /** One place in a thread: the first unused candidate the plan takes, or one of at most three replacements. */
+        FilledConversation firstTaken(Iterator<PoolConversation> candidates, List<Contact> members, StyleVector owner,
+                List<FilledConversation> thread) {
+            for (int tries = 0; tries < TRIES && candidates.hasNext(); ) {
+                PoolConversation cand = candidates.next();
+                if (used.add(cand.id())) {
+                    tries++;
+                    FilledConversation f = accept(cand, members, owner, thread);
+                    if (f != null) {
+                        return f;
+                    }
+                }
+            }
+            return null;
         }
 
         int wanted(Relation rel, RandomGenerator r) {
@@ -238,8 +240,9 @@ public final class ConversationPicker {
             };
         }
 
+        /** The story holds its days, and a waking day holds its times with the gaps kept. */
         boolean placeable(PoolConversation c) {
-            return !lastStart(c).isBefore(firstStart());
+            return !lastStart(c).isBefore(firstStart()) && maxMinute(c) - minMinute(c) <= sleepMinute() - wakeMinute();
         }
 
         LocalDate firstStart() {
@@ -247,8 +250,47 @@ public final class ConversationPicker {
         }
 
         LocalDate lastStart(PoolConversation c) {
-            int lastDay = c.messages().stream().mapToInt(PoolMessage::day).max().orElse(0);
-            return LocalDate.ofInstant(t.now(), t.zone()).minusDays(1L + lastDay);
+            return LocalDate.ofInstant(t.now(), t.zone()).minusDays(1L + lastDay(c));
+        }
+
+        /** The start days on which the conversation shares no day with an earlier one of its thread. */
+        List<LocalDate> freeStarts(PoolConversation c, List<FilledConversation> thread) {
+            List<LocalDate> out = new ArrayList<>();
+            for (LocalDate d = firstStart(); !d.isAfter(lastStart(c)); d = d.plusDays(1)) {
+                LocalDate from = d;
+                LocalDate to = d.plusDays(lastDay(c));
+                if (thread.stream().noneMatch(f -> !date(f.messages().get(0)).isAfter(to)
+                        && !date(f.messages().get(f.messages().size() - 1)).isBefore(from))) {
+                    out.add(d);
+                }
+            }
+            return out;
+        }
+
+        LocalDate date(SmsMessage m) {
+            return LocalDate.ofInstant(m.at(), t.zone());
+        }
+
+        static int lastDay(PoolConversation c) {
+            return c.messages().stream().mapToInt(PoolMessage::day).max().orElse(0);
+        }
+
+        static int minMinute(PoolConversation c) {
+            return c.messages().stream().mapToInt(PoolMessage::minute).min().orElse(0);
+        }
+
+        static int maxMinute(PoolConversation c) {
+            return c.messages().stream().mapToInt(PoolMessage::minute).max().orElse(0);
+        }
+
+        int wakeMinute() {
+            return t.wakeTime().toSecondOfDay() / 60;
+        }
+
+        /** The last minute of the waking day; with a bedtime after midnight the conversation stays inside the day. */
+        int sleepMinute() {
+            int sleep = t.sleepTime().toSecondOfDay() / 60;
+            return sleep <= wakeMinute() ? 1439 : sleep;
         }
 
         List<PoolConversation> fitting(Map<Relation, List<PoolConversation>> index, Contact contact) {
@@ -291,9 +333,13 @@ public final class ConversationPicker {
             return out;
         }
 
-        /** Fills, rewrites and judges a conversation; null when the judge rejects it. */
-        FilledConversation accept(PoolConversation cand, List<Contact> members, StyleVector owner) {
-            FilledConversation f = fill(cand, members);
+        /** Fills, rewrites and judges a conversation; null when the thread has no free day left or the judge rejects it. */
+        FilledConversation accept(PoolConversation cand, List<Contact> members, StyleVector owner, List<FilledConversation> thread) {
+            List<LocalDate> starts = freeStarts(cand, thread);
+            if (starts.isEmpty()) {
+                return null;
+            }
+            FilledConversation f = fill(cand, members, starts);
             if (rewriter != null) {
                 List<StyleVector> others = members.stream().map(m -> styles.contacts().get(m.id())).toList();
                 f = rewriter.rewrite(f, owner, others, p.language());
@@ -304,22 +350,13 @@ public final class ConversationPicker {
             return f;
         }
 
-        FilledConversation fill(PoolConversation c, List<Contact> members) {
+        FilledConversation fill(PoolConversation c, List<Contact> members, List<LocalDate> starts) {
             RandomGenerator r = seed.stream("fill." + c.id());
             ZoneId zone = t.zone();
-            LocalDate first = firstStart();
-            long span = ChronoUnit.DAYS.between(first, lastStart(c));
-            LocalDate start = first.plusDays(r.nextLong(span + 1));
-            int wake = t.wakeTime().toSecondOfDay() / 60;
-            int sleep = t.sleepTime().toSecondOfDay() / 60;
-            if (sleep <= wake) {
-                sleep = 1439; // a bedtime after midnight: keep the conversation inside the day
-            }
-            int minM = c.messages().stream().mapToInt(PoolMessage::minute).min().orElse(0);
-            int maxM = c.messages().stream().mapToInt(PoolMessage::minute).max().orElse(0);
-            int lo = wake - minM;
-            int hi = sleep - maxM;
-            int shift = lo <= hi ? lo + r.nextInt(hi - lo + 1) : lo;
+            LocalDate start = starts.get(r.nextInt(starts.size()));
+            int lo = wakeMinute() - minMinute(c);
+            int hi = sleepMinute() - maxMinute(c);
+            int shift = lo + r.nextInt(hi - lo + 1);
 
             String own = p.inputs().ownerName().trim().split("\\s+")[0];
             Set<String> memberIds = new HashSet<>();
@@ -330,18 +367,20 @@ public final class ConversationPicker {
             String shop = shops.isEmpty() ? "" : shops.get(r.nextInt(shops.size())).name();
             String market = supermarkets.isEmpty() ? "" : supermarkets.get(r.nextInt(supermarkets.size())).name();
 
+            // one value per slot in a conversation: the time that is proposed is the time that is agreed
+            Map<Slot, String> values = new EnumMap<>(Slot.class);
             List<SmsMessage> out = new ArrayList<>();
             for (PoolMessage m : c.messages()) {
-                int minute = Math.min(1439, m.minute() + shift);
+                int minute = m.minute() + shift;
                 LocalDate day = start.plusDays(m.day());
                 var at = day.atTime(LocalTime.of(minute / 60, minute % 60)).atZone(zone).toInstant();
                 StringBuilder sb = new StringBuilder();
                 Matcher x = SLOT.matcher(m.text());
                 while (x.find()) {
-                    String value = switch (Slot.valueOf(x.group(1))) {
+                    String value = values.computeIfAbsent(Slot.valueOf(x.group(1)), slot -> switch (slot) {
                         case NAME_A -> own;
                         case NAME_B, NAME_C, NAME_D, NAME_E, NAME_F, NAME_G, NAME_H ->
-                                firstName(members.get(Slot.valueOf(x.group(1)).ordinal() - Slot.NAME_B.ordinal()));
+                                firstName(members.get(slot.ordinal() - Slot.NAME_B.ordinal()));
                         case NAME_OTHER -> other;
                         case PLACE_CAFE -> cafe;
                         case PLACE_SHOP -> shop;
@@ -351,7 +390,7 @@ public final class ConversationPicker {
                         case TIME -> String.format(Locale.ROOT, "%02d:%02d", 7 + r.nextInt(16), 5 * r.nextInt(12));
                         case AMOUNT -> pack.amount(5 + r.nextInt(196));
                         case CLUB -> throw new IllegalStateException("a club slot is never picked");
-                    };
+                    });
                     x.appendReplacement(sb, Matcher.quoteReplacement(value));
                 }
                 x.appendTail(sb);
@@ -372,6 +411,8 @@ public final class ConversationPicker {
             int[] range = pack.mmsGroups();
             int count = range[0] + r.nextInt(range[1] - range[0] + 1);
             List<FilledConversation> out = new ArrayList<>();
+            // one set of recipients is one thread on a phone: a second group of the same members would run into the first
+            Set<Set<String>> casts = new HashSet<>();
             int tries = 0;
             for (PoolConversation cand : ordered(pool, r)) {
                 if (out.size() >= count) {
@@ -380,14 +421,20 @@ public final class ConversationPicker {
                 if (used.contains(cand.id()) || !fitsPersona(cand.sides().get(0), styles.persona())) {
                     continue;
                 }
-                List<Contact> members = assign(cand, r);
+                List<Contact> members = assign(cand);
                 if (members == null) {
                     continue;
                 }
+                Set<String> cast = new HashSet<>();
+                members.forEach(m -> cast.add(m.id()));
+                if (casts.contains(cast)) {
+                    continue;
+                }
                 used.add(cand.id());
-                FilledConversation f = accept(cand, members, styles.persona());
+                FilledConversation f = accept(cand, members, styles.persona(), List.of());
                 if (f != null) {
                     out.add(f);
+                    casts.add(cast);
                     tries = 0;
                 } else if (++tries >= TRIES) {
                     count--; // the slot is lost after the first candidate and three replacements
@@ -398,7 +445,7 @@ public final class ConversationPicker {
         }
 
         /** A member of the circle for every side, of a kind the group allows; null when a side has none. */
-        List<Contact> assign(PoolConversation g, RandomGenerator r) {
+        List<Contact> assign(PoolConversation g) {
             List<Contact> allowed = new ArrayList<>();
             for (Contact c : people.contacts()) {
                 if (allowed(g.group(), c)) {
