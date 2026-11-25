@@ -75,9 +75,10 @@ class CalendarAndTravelTest {
         Setup s = setup(1);
         int year = LocalDate.ofInstant(NOW, ZoneOffset.UTC).getYear();
         LocalDate phoneStart = LocalDate.ofInstant(s.timeline().phoneStart(), s.timeline().zone());
-        for (int y = year - 2; y <= year; y++) {
+        LocalDate horizon = LocalDate.ofInstant(NOW, ZoneOffset.UTC).plusDays(CalendarSurface.HORIZON_DAYS);
+        for (int y = year - 2; y <= year + 1; y++) {
             for (LocalDate h : nl().publicHolidays(y)) {
-                if (h.isAfter(LocalDate.ofInstant(NOW, ZoneOffset.UTC)) || h.isBefore(phoneStart)) {
+                if (h.isAfter(horizon) || h.isBefore(phoneStart)) {
                     continue;
                 }
                 boolean found = s.calendar().events().stream().anyMatch(e -> !e.yearly()
@@ -152,11 +153,28 @@ class CalendarAndTravelTest {
     }
 
     @Test
-    void noEventAfterNowOrBeforeThePhoneStart() {
+    void upcomingEntriesExistWithinTheHorizon() {
+        // a calendar with nothing ahead is a tell; ahead means appointments and holidays, never past the horizon
+        for (long n = 0; n < 20; n++) {
+            Setup s = setup(n);
+            Instant limit = NOW.plus(Duration.ofDays(CalendarSurface.HORIZON_DAYS));
+            List<CalEvent> ahead = s.calendar().events().stream().filter(e -> !e.yearly() && e.start().isAfter(NOW)).toList();
+            // a holiday sits at midnight UTC, an appointment in the waking hours
+            long appointments = ahead.stream().filter(e -> !e.start().equals(e.start().truncatedTo(java.time.temporal.ChronoUnit.DAYS))).count();
+            assertTrue(appointments >= 3 && appointments <= 8, "upcoming appointments " + appointments + " for seed " + n);
+            for (CalEvent e : ahead) {
+                assertFalse(e.start().isAfter(limit), "beyond the horizon: " + e);
+            }
+            assertFalse(s.calendar().events().stream().anyMatch(e -> e.yearly() && e.start().isAfter(NOW)));
+        }
+    }
+
+    @Test
+    void noEventBeyondTheHorizonOrBeforeThePhoneStart() {
         for (long n = 0; n < 15; n++) {
             Setup s = setup(n);
             for (CalEvent e : s.calendar().events()) {
-                assertFalse(e.start().isAfter(s.timeline().now()), "event after now: " + e);
+                assertFalse(e.start().isAfter(s.timeline().now().plus(Duration.ofDays(CalendarSurface.HORIZON_DAYS))), "event beyond the horizon: " + e);
                 if (!e.yearly()) {
                     assertFalse(e.start().isBefore(s.timeline().phoneStart().minus(Duration.ofDays(1))), "event before the phone start: " + e);
                 }

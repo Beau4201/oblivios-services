@@ -34,6 +34,7 @@ import org.oblivios.decoy.content.surface.AppsPlan;
 import org.oblivios.decoy.content.surface.BluetoothPair;
 import org.oblivios.decoy.content.surface.BrowserPlan;
 import org.oblivios.decoy.content.surface.CalEvent;
+import org.oblivios.decoy.content.surface.CalendarSurface;
 import org.oblivios.decoy.content.surface.CalendarPlan;
 import org.oblivios.decoy.content.surface.Call;
 import org.oblivios.decoy.content.surface.CallType;
@@ -307,7 +308,7 @@ class ContentPlanValidatorTest {
         planted.put("install", swap(p, new AppsPlan(plus(p.apps().apps(), new AppEntry("org.example.late", late, "1.0.0", 1, 1)))));
         planted.put("visit", swap(p, new BrowserPlan(plus(p.browser().history(), new Visit("late.example", "https://late.example/", late)), p.browser().cookies(), p.browser().bookmarks())));
         planted.put("notification", swap(p, new TracesPlan(plus(p.traces().notifications(), new NotificationRecord("org.example.chat", "x", late)), p.traces().cacheDirTimes())));
-        planted.put("event", swap(p, new CalendarPlan(plus(p.calendar().events(), new CalEvent("Late", late, false)), p.calendar().alarms(), p.calendar().notes())));
+        planted.put("event", swap(p, new CalendarPlan(plus(p.calendar().events(), new CalEvent("Late", NOW.plus(Duration.ofDays(CalendarSurface.HORIZON_DAYS + 10)), false)), p.calendar().alarms(), p.calendar().notes())));
         for (Map.Entry<String, ContentPlan> e : planted.entrySet()) {
             List<Violation> found = ContentPlanValidator.check(e.getValue());
             assertEquals(Set.of("R-FUTURE"), ids(found), e.getKey() + ": " + found);
@@ -316,10 +317,19 @@ class ContentPlanValidatorTest {
 
     @Test
     void eventAfterNow() {
+        // a calendar entry may lie ahead, up to the horizon; past it is a contradiction
         ContentPlan p = plan(6);
         List<CalEvent> events = new ArrayList<>(p.calendar().events());
-        events.add(new CalEvent("Dentist", NOW.plus(Duration.ofDays(2)), false));
+        events.add(new CalEvent("Dentist", NOW.plus(Duration.ofDays(CalendarSurface.HORIZON_DAYS + 10)), false));
         assertOnly("R-FUTURE", with(p, null, new CalendarPlan(events, p.calendar().alarms(), p.calendar().notes()), null, null, null));
+    }
+
+    @Test
+    void upcomingAppointmentIsNoContradiction() {
+        ContentPlan p = plan(6);
+        List<CalEvent> events = new ArrayList<>(p.calendar().events());
+        events.add(new CalEvent("Dentist", NOW.plus(Duration.ofDays(CalendarSurface.HORIZON_DAYS - 1)), false));
+        assertTrue(ContentPlanValidator.check(with(p, null, new CalendarPlan(events, p.calendar().alarms(), p.calendar().notes()), null, null, null)).isEmpty());
     }
 
     @Test

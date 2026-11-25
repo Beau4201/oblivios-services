@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.oblivios.decoy.content.check;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -16,6 +17,7 @@ import org.oblivios.decoy.content.country.SenderKind;
 import org.oblivios.decoy.content.plan.ContentPlan;
 import org.oblivios.decoy.content.story.Place;
 import org.oblivios.decoy.content.surface.CalEvent;
+import org.oblivios.decoy.content.surface.CalendarSurface;
 import org.oblivios.decoy.content.surface.Contact;
 import org.oblivios.decoy.content.surface.MediaItem;
 import org.oblivios.decoy.content.surface.Trip;
@@ -125,7 +127,7 @@ public final class ContentPlanValidator {
         }
     }
 
-    /** No instant of any surface lies after the moment the story ends. */
+    /** No instant of any surface lies after the moment the story ends; calendar entries may reach the horizon past it. */
     private static void future(ContentPlan p, List<Violation> v) {
         Instant now = p.timeline().now();
         BiConsumer<String, Instant> late = (what, at) -> {
@@ -137,7 +139,13 @@ public final class ContentPlanValidator {
         p.people().threads().forEach(t -> t.messages().forEach(m -> late.accept("SMS", m.at())));
         p.people().voicemails().forEach(m -> late.accept("voicemail", m.at()));
         p.people().contacts().forEach(c -> late.accept("last contact of " + c.name(), c.lastContacted()));
-        p.calendar().events().forEach(e -> late.accept("calendar entry '" + e.title() + "'", e.start()));
+        // a calendar entry may lie ahead, up to the horizon the generator uses
+        Instant horizon = now.plus(Duration.ofDays(CalendarSurface.HORIZON_DAYS));
+        p.calendar().events().forEach(e -> {
+            if (e.start().isAfter(horizon)) {
+                v.add(new Violation("R-FUTURE", "calendar entry '" + e.title() + "' at " + e.start() + " lies after the horizon " + horizon));
+            }
+        });
         p.calendar().notes().forEach(n -> late.accept("note", n.created()));
         p.travel().trips().forEach(t -> late.accept("trip " + t.id(), t.to()));
         p.media().items().forEach(i -> late.accept("taken " + i.name(), i.taken()));

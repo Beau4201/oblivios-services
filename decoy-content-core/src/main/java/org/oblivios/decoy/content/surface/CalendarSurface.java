@@ -18,8 +18,15 @@ import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.story.Timeline;
 
-/** Calendar entries, alarms and notes of the story. Nothing lies after now (the validator rule R-FUTURE). */
+/**
+ * Calendar entries, alarms and notes of the story. Entries reach {@link #HORIZON_DAYS} days past now (a few
+ * appointments and the coming public holidays, because a calendar with nothing ahead is a tell); nothing else of the
+ * story lies after now (the validator rule R-FUTURE).
+ */
 public final class CalendarSurface {
+    /** How far ahead of now a calendar entry may lie; the checker allows exactly this. */
+    public static final int HORIZON_DAYS = 90;
+
     private static final List<String> APPOINTMENTS_NL = List.of("Tandarts", "Overleg", "Huisarts", "Kapper", "Sporten",
             "Teamlunch", "Afspraak bank", "Auto APK", "Ouderavond", "Fysiotherapie");
     private static final List<String> APPOINTMENTS_EN = List.of("Dentist", "Meeting", "Doctor", "Haircut", "Gym",
@@ -47,9 +54,10 @@ public final class CalendarSurface {
                 events.add(new CalEvent(title, contact.birthday().atStartOfDay(ZoneOffset.UTC).toInstant(), true));
             }
         }
-        for (int year = startDate.getYear(); year <= nowDate.getYear(); year++) {
+        LocalDate horizonDate = nowDate.plusDays(HORIZON_DAYS);
+        for (int year = startDate.getYear(); year <= horizonDate.getYear(); year++) {
             for (LocalDate h : c.publicHolidays(year)) {
-                if (!h.isBefore(startDate) && !h.isAfter(nowDate)) {
+                if (!h.isBefore(startDate) && !h.isAfter(horizonDate)) {
                     events.add(new CalEvent(c.holidayName(h), h.atStartOfDay(ZoneOffset.UTC).toInstant(), false));
                 }
             }
@@ -57,13 +65,17 @@ public final class CalendarSurface {
         List<String> titles = dutch ? APPOINTMENTS_NL : APPOINTMENTS_EN;
         long days = Math.max(1, Duration.between(t.phoneStart(), t.now()).toDays());
         int appointments = (int) Math.min(600, Math.max(45, days / 6));
-        for (int i = 0; i < appointments; i++) {
+        int upcoming = 3 + r.nextInt(6);
+        for (int i = 0; i < appointments + upcoming; i++) {
             String title = titles.get(r.nextInt(titles.size()));
             if (r.nextInt(100) < 25 && !people.contacts().isEmpty()) {
                 String name = people.contacts().get(r.nextInt(people.contacts().size())).name();
                 title = (dutch ? "Lunch met " : "Lunch with ") + name;
             }
-            events.add(new CalEvent(title, Events.randomInstant(r, t.phoneStart(), t.now(), zone, LocalTime.of(8, 0), LocalTime.of(20, 0)), false));
+            // the last few lie ahead: from tomorrow to the horizon
+            Instant from = i < appointments ? t.phoneStart() : t.now().plus(Duration.ofDays(1));
+            Instant to = i < appointments ? t.now() : t.now().plus(Duration.ofDays(HORIZON_DAYS));
+            events.add(new CalEvent(title, Events.randomInstant(r, from, to, zone, LocalTime.of(8, 0), LocalTime.of(20, 0)), false));
         }
         events.sort(Comparator.comparing(CalEvent::start));
 
