@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.lang.LanguagePack;
 
 /**
  * The events a decoy gains while it was not used: calls and messages with its contacts between the latest event and
@@ -33,7 +34,7 @@ public final class RollForward {
         }
         RandomGenerator r = fresh.stream("rollforward");
         ZoneId zone = snapshot.persona().inputs().zone();
-        boolean dutch = "nl".equals(snapshot.persona().inputs().locale().getLanguage());
+        LanguagePack lang = LanguagePack.of(snapshot.persona().inputs().locale().toLanguageTag());
         List<String> firstNames = snapshot.contacts().stream().map(c -> c.name().split(" ")[0]).distinct().toList();
         double gapDays = Duration.between(latest, now).toMinutes() / 1440.0;
         int calls = (int) Math.min(MAX_CALLS, Math.round(gapDays * CALLS_PER_DAY * (0.8 + 0.4 * r.nextDouble())));
@@ -56,7 +57,7 @@ public final class RollForward {
                 continue;
             }
             events.add(new RollForwardEvent("SMS", when,
-                    contact(snapshot, r).id() + "|" + (r.nextBoolean() ? "IN" : "OUT") + "|" + SmsText.message(dutch, r, firstNames, List.of())));
+                    contact(snapshot, r).id() + "|" + (r.nextBoolean() ? "IN" : "OUT") + "|" + SmsText.message(lang, r, firstNames, List.of())));
         }
         events.sort(Comparator.comparing(RollForwardEvent::when).thenComparing(RollForwardEvent::kind).thenComparing(RollForwardEvent::detail));
         return new RollForwardPlan(events);

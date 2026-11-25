@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.random.RandomGenerator;
 import java.util.regex.Matcher;
+import org.oblivios.decoy.content.lang.LanguagePack;
 
 /**
  * The text of a message between the decoy owner and a contact. There is no shared list of sentences: a message is a
@@ -16,46 +17,20 @@ import java.util.regex.Matcher;
  * text indistinguishable from a person's.
  */
 final class SmsText {
-    private static final List<String> SHORT_NL = List.of("Ok", "Top", "Haha ja", "Prima", "Doen we", "Klopt", "Zeker", "Dankjewel");
-    private static final List<String> SHORT_EN = List.of("Ok", "Sure", "Haha yes", "Fine", "Deal", "Right", "Thanks", "Perfect");
-    private static final List<String> DAYS_NL = List.of("maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag");
-    private static final List<String> DAYS_EN = List.of("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday");
-
-    private static final List<String> NL = List.of(
-            "Zie je me {day} om {time}?",
-            "Lukt {day} om {time} voor jou?",
-            "{name} komt {day} om {time}, past dat?",
-            "Heb je {name} nog gesproken sinds {day}? Bel me rond {time}",
-            "Ik ben {n} minuten later dan {time}, sorry!",
-            "Ik heb {name} gezegd dat we er {day} om {time} zijn",
-            "Ik ben er rond {time}, wacht je op me bij {place}?",
-            "Ik ben over {n} minuten bij {place}, kom je rond {time} ook?",
-            "Afspraak bij {place} op {day} om {time}, niet vergeten");
-    private static final List<String> EN = List.of(
-            "See you {day} at {time}?",
-            "Does {day} at {time} work for you?",
-            "{name} is coming {day} at {time}, is that ok?",
-            "Did you talk to {name} since {day}? Call me around {time}",
-            "I am {n} minutes later than {time}, sorry!",
-            "I told {name} we will be there {day} at {time}",
-            "I will be there around {time}, will you wait for me at {place}?",
-            "I will be at {place} in {n} minutes, are you coming around {time}?",
-            "Appointment at {place} on {day} at {time}, do not forget");
-
     private SmsText() {}
 
     /** {@code names} are first names of contacts, {@code places} names of cafes and shops of the story; either may be empty. */
-    static String message(boolean dutch, RandomGenerator r, List<String> names, List<String> places) {
+    static String message(LanguagePack lang, RandomGenerator r, List<String> names, List<String> places) {
         if (r.nextInt(4) == 0) {
-            List<String> shortReplies = dutch ? SHORT_NL : SHORT_EN;
+            List<String> shortReplies = lang.list("sms.short");
             return shortReplies.get(r.nextInt(shortReplies.size()));
         }
-        List<String> usable = (dutch ? NL : EN).stream()
+        List<String> usable = lang.list("sms.templates").stream()
                 .filter(t -> !t.contains("{place}") || !places.isEmpty())
                 .filter(t -> !t.contains("{name}") || !names.isEmpty())
                 .toList();
         String text = usable.get(r.nextInt(usable.size()));
-        List<String> days = dutch ? DAYS_NL : DAYS_EN;
+        List<String> days = lang.list("weekdays");
         while (text.contains("{")) {
             if (text.contains("{day}")) {
                 text = text.replaceFirst("\\{day}", days.get(r.nextInt(days.size())));

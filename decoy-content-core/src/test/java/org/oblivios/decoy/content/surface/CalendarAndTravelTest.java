@@ -25,6 +25,7 @@ import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.MonthCount;
 import org.oblivios.decoy.content.story.Place;
 import org.oblivios.decoy.content.story.PlaceKind;
@@ -50,7 +51,7 @@ class CalendarAndTravelTest {
         }
         Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), nl(), NOW, Seed.of(n, 3));
         People people = PeopleSurface.generate(p, t, nl(), Seed.of(n, 4));
-        return new Setup(t, people, CalendarSurface.generate(people, t, nl(), Seed.of(n, 5)), TravelSurface.generate(t, nl(), Seed.of(n, 6)));
+        return new Setup(t, people, CalendarSurface.generate(people, t, nl(), LanguagePack.of("nl"), Seed.of(n, 5)), TravelSurface.generate(t, nl(), LanguagePack.of("nl"), Seed.of(n, 6)));
     }
 
     @Test

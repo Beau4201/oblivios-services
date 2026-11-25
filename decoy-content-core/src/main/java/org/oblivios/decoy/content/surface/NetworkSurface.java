@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.random.RandomGenerator;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.Place;
 import org.oblivios.decoy.content.story.PlaceKind;
 
@@ -20,12 +22,13 @@ public final class NetworkSurface {
         RandomGenerator r = ctx.seed().stream("network");
         List<WifiNetwork> wifi = new ArrayList<>();
         List<String> patterns = ctx.pack().homeWifiPatterns();
+        LanguagePack lang = LanguagePack.of(ctx.persona().inputs().locale().toLanguageTag());
         for (Place place : ctx.timeline().places()) {
             String ssid;
             switch (place.kind()) {
                 case HOME -> ssid = fill(patterns.get(r.nextInt(patterns.size())), r);
                 case WORK -> ssid = fill("WORK-####", r);
-                case CAFE -> ssid = place.name() + " guest";
+                case CAFE -> ssid = lang.format("wifi.guest", Map.of("place", place.name()));
                 default -> {
                     continue;
                 }

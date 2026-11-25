@@ -128,7 +128,7 @@ class MailAndRollForwardTest {
     }
 
     @Test
-    void mailIsOrderedByDateAndFollowsTheLanguage() {
+    void mailIsOrderedByDateAndFollowsTheCountryLanguage() {
         for (long n = 0; n < 5; n++) {
             List<MailMessage> messages = mail(setup(n), ServerProbe.HONOURED, n).messages();
             for (int i = 1; i < messages.size(); i++) {
@@ -137,9 +137,14 @@ class MailAndRollForwardTest {
         }
         Persona english = Persona.derive(Seed.of(1, 1), new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.US));
         Setup s = setup(1);
+        // a sender of the country writes in the country's language, whatever the persona speaks
         MailPlan en = MailSurface.generate(english, s.timeline(), nl(), ServerProbe.HONOURED, Seed.of(1, 5));
         MailPlan nlPlan = mail(s, ServerProbe.HONOURED, 1);
-        assertNotEquals(en.messages().get(0).subject(), nlPlan.messages().get(0).subject());
+        assertEquals(nlPlan.messages().get(0).subject(), en.messages().get(0).subject());
+        // the neutral pack has no language: its senders write in the persona's language
+        MailPlan enNeutral = MailSurface.generate(english, s.timeline(), Packs.neutral(), ServerProbe.HONOURED, Seed.of(1, 5));
+        MailPlan nlNeutral = MailSurface.generate(s.persona(), s.timeline(), Packs.neutral(), ServerProbe.HONOURED, Seed.of(1, 5));
+        assertNotEquals(nlNeutral.messages().get(0).subject(), enNeutral.messages().get(0).subject());
     }
 
     @Test

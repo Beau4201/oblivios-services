@@ -20,10 +20,10 @@ import org.junit.jupiter.api.Test;
 
 class CountryPackTest {
 
-    /** The free mobile blocks of the ACM register, read 2026-11-25, in the register's own notation. */
+    /** The free mobile blocks of the ACM register, read 2026-11-25, as first and last number of each block. */
     private static final String[] ACM_FREE_BLOCKS = {
-        "062-5780000 t/m 062-5999999", "062-1010000 t/m 062-1099999", "062-1720000 t/m 062-1799999",
-        "062-7660000 t/m 062-7739999", "062-7750000 t/m 062-7809999", "061-5970000 t/m 061-5999999",
+        "062-5780000 to 062-5999999", "062-1010000 to 062-1099999", "062-1720000 to 062-1799999",
+        "062-7660000 to 062-7739999", "062-7750000 to 062-7809999", "061-5970000 to 061-5999999",
     };
 
     private static boolean inAcmFreeBlock(String e164) {
@@ -32,7 +32,7 @@ class CountryPackTest {
         }
         long national = Long.parseLong(e164.substring(3)); // 6xxxxxxxx, the leading 0 dropped
         for (String block : ACM_FREE_BLOCKS) {
-            String[] ends = block.split(" t/m ");
+            String[] ends = block.split(" to ");
             long from = Long.parseLong(ends[0].replace("-", "")); // 0625780000
             long to = Long.parseLong(ends[1].replace("-", ""));
             if (national >= from && national <= to) {

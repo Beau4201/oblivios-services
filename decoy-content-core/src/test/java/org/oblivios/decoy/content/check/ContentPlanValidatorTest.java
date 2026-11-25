@@ -167,7 +167,7 @@ class ContentPlanValidatorTest {
     void birthdayWithoutContact() {
         ContentPlan p = plan(4);
         List<CalEvent> events = new ArrayList<>(p.calendar().events());
-        events.add(new CalEvent("Verjaardag Nobody Known", Instant.parse("1980-03-14T00:00:00Z"), true));
+        events.add(new CalEvent("Birthday: Nobody Known", Instant.parse("1980-03-14T00:00:00Z"), true));
         assertOnly("R-BIRTHDAY", with(p, null, new CalendarPlan(events, p.calendar().alarms(), p.calendar().notes()), null, null, null));
     }
 
@@ -356,7 +356,7 @@ class ContentPlanValidatorTest {
 
     @Test
     void aCountryWithoutVerifiedNumbersGivesNoPlan() {
-        PersonaInputs de = new PersonaInputs("Sam Example", "Berlin", "DE", ZoneId.of("Europe/Berlin"), Locale.GERMANY);
+        PersonaInputs de = new PersonaInputs("Sam Example", "Berlin", "DE", ZoneId.of("Europe/Berlin"), Locale.forLanguageTag("en-DE"));
         assertThrows(IllegalArgumentException.class,
                 () -> ContentPlanner.build(de, counts(), List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3)));
     }

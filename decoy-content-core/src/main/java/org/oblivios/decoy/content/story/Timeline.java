@@ -8,12 +8,14 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.lang.LanguagePack;
 
 /** The one timeline behind every surface: where the owner lives and works, when the day starts, and since when the phone exists. */
 public final class Timeline {
@@ -47,19 +49,20 @@ public final class Timeline {
             warnings.add("city '" + p.inputs().city() + "' has no place data: the capital is used");
         }
 
+        LanguagePack lang = LanguagePack.of(p.inputs().locale().toLanguageTag());
         List<Place> places = new ArrayList<>();
         double[] home = around(centre, 0.3, 4.0, r);
-        places.add(new Place("Home", home[0], home[1], PlaceKind.HOME));
+        places.add(new Place(lang.text("place.home"), home[0], home[1], PlaceKind.HOME));
         double[] work = around(home, 3.0, 15.0, r);
-        places.add(new Place("Work", work[0], work[1], PlaceKind.WORK));
+        places.add(new Place(lang.text("place.work"), work[0], work[1], PlaceKind.WORK));
         for (int i = 0; i < 2; i++) {
             double[] cafe = around(home, 0.3, 3.0, r);
-            places.add(new Place("Cafe " + c.familyName(r), cafe[0], cafe[1], PlaceKind.CAFE));
+            places.add(new Place(lang.format("place.cafe", Map.of("name", c.familyName(r))), cafe[0], cafe[1], PlaceKind.CAFE));
         }
         List<Sender> shops = c.senders(SenderKind.SHOP);
         for (int i = 0; i < 3; i++) {
             double[] shop = around(home, 0.3, 4.0, r);
-            String name = shops.isEmpty() ? "Supermarket" : shops.get(r.nextInt(shops.size())).name();
+            String name = shops.isEmpty() ? lang.text("place.supermarket") : shops.get(r.nextInt(shops.size())).name();
             places.add(new Place(name, shop[0], shop[1], PlaceKind.SHOP));
         }
 

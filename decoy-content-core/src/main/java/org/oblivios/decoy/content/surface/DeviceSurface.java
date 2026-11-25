@@ -8,26 +8,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.random.RandomGenerator;
+import org.oblivios.decoy.content.lang.LanguagePack;
 
 /** Device name, languages, learned words, ringtones, Do Not Disturb, accessibility, default apps, backup state. */
 public final class DeviceSurface {
-    private static final List<String> EXTRA_WORDS = List.of("jaja", "oke", "thx", "lekker", "gezellig", "ff", "zeg", "nice",
-            "top", "sorry", "later", "morgen", "weekend", "vakantie", "afspraak", "pakket", "bonnetje", "wifi");
-
     private DeviceSurface() {}
 
     public static DevicePlan generate(SurfaceContext ctx) {
         RandomGenerator r = ctx.seed().stream("device");
-        boolean dutch = "nl".equals(ctx.persona().inputs().locale().getLanguage());
+        LanguagePack lang = LanguagePack.of(ctx.persona().inputs().locale().toLanguageTag());
         String given = ctx.persona().inputs().ownerName().split("\\s+")[0];
-        String name = dutch ? "Telefoon van " + given : given + "'s phone";
+        String name = lang.format("device.name", Map.of("name", given));
 
         List<String> languages = new ArrayList<>();
         languages.add(ctx.persona().inputs().locale().toLanguageTag());
         if (!languages.contains("en-US")) {
             languages.add("en-US");
         }
-        List<String> layouts = dutch ? List.of("English (US)", "Dutch") : List.of("English (US)");
+        List<String> layouts = lang.list("device.keyboard.layouts");
 
         Set<String> words = new LinkedHashSet<>();
         for (Contact c : ctx.people().contacts()) {
@@ -35,7 +33,7 @@ public final class DeviceSurface {
                 words.add(c.name().split("\\s+")[0].toLowerCase(java.util.Locale.ROOT));
             }
         }
-        for (String w : EXTRA_WORDS) {
+        for (String w : lang.list("device.keyboard.words")) {
             if (r.nextInt(100) < 60) {
                 words.add(w);
             }

@@ -9,6 +9,7 @@ import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
 import org.oblivios.decoy.content.story.VolumeModel;
@@ -52,8 +53,9 @@ public final class ContentPlanner {
         VolumeModel volume = VolumeModel.fromCounts(counts, seed);
         Timeline timeline = Timeline.generate(persona, volume, pack, now, seed);
         People people = PeopleSurface.generate(persona, timeline, pack, seed);
-        CalendarPlan calendar = CalendarSurface.generate(people, timeline, pack, seed);
-        TravelPlan travel = TravelSurface.generate(timeline, pack, seed);
+        LanguagePack lang = LanguagePack.of(in.locale().toLanguageTag());
+        CalendarPlan calendar = CalendarSurface.generate(people, timeline, pack, lang, seed);
+        TravelPlan travel = TravelSurface.generate(timeline, pack, lang, seed);
         SurfaceContext ctx = new SurfaceContext(persona, timeline, people, pack, apps, currentSsid, now, seed);
         MediaPlan media = MediaSurface.generate(volume, timeline, travel, pack, cam, chosen, seed);
 

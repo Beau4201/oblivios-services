@@ -44,4 +44,13 @@ public interface CountryPack {
 
     /** The minimum and maximum number of group threads per decoy. */
     int[] mmsGroups();
+
+    /** Web sites of the browser history: the global ones first, then the country's own. */
+    List<String> sites();
+
+    /** Cities of a trip inside the country; empty when the pack has none, so every trip is a flight. */
+    List<City> domesticTrips();
+
+    /** Cities of a trip abroad. */
+    List<City> abroadTrips();
 }

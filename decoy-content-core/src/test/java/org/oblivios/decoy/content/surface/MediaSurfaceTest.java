@@ -32,6 +32,7 @@ import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.MonthCount;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
@@ -77,7 +78,7 @@ class MediaSurfaceTest {
         }
         VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2));
         Timeline t = Timeline.generate(p, v, nl(), NOW, Seed.of(n, 3));
-        TravelPlan travel = TravelSurface.generate(t, nl(), Seed.of(n, 6));
+        TravelPlan travel = TravelSurface.generate(t, nl(), LanguagePack.of("nl"), Seed.of(n, 6));
         List<ChosenPhoto> chosen = chosen(chosenCount);
         return new Setup(v, t, travel, chosen, MediaSurface.generate(v, t, travel, nl(), CAM, chosen, Seed.of(n, 7)));
     }
@@ -369,7 +370,7 @@ class MediaSurfaceTest {
         }
         VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(1, 2));
         Timeline t = Timeline.generate(p, v, nl(), NOW, Seed.of(1, 3));
-        MediaPlan plan = MediaSurface.generate(v, t, TravelSurface.generate(t, nl(), Seed.of(1, 6)), nl(), seconds, List.of(), Seed.of(1, 7));
+        MediaPlan plan = MediaSurface.generate(v, t, TravelSurface.generate(t, nl(), LanguagePack.of("nl"), Seed.of(1, 6)), nl(), seconds, List.of(), Seed.of(1, 7));
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern(seconds.fileNameTemplate()).withZone(ZONE);
         Set<String> names = new HashSet<>();
         for (MediaItem i : plan.items()) {

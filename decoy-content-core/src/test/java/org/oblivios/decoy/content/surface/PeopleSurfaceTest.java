@@ -31,8 +31,8 @@ import org.oblivios.decoy.content.story.VolumeModel;
 class PeopleSurfaceTest {
     private static final Instant NOW = Instant.parse("2026-11-25T12:00:00Z");
     private static final String[] ACM_FREE_BLOCKS = {
-        "062-5780000 t/m 062-5999999", "062-1010000 t/m 062-1099999", "062-1720000 t/m 062-1799999",
-        "062-7660000 t/m 062-7739999", "062-7750000 t/m 062-7809999", "061-5970000 t/m 061-5999999",
+        "062-5780000 to 062-5999999", "062-1010000 to 062-1099999", "062-1720000 to 062-1799999",
+        "062-7660000 to 062-7739999", "062-7750000 to 062-7809999", "061-5970000 to 061-5999999",
     };
     private static final Pattern SIX_DIGITS = Pattern.compile("\\b\\d{6}\\b");
 
@@ -42,7 +42,7 @@ class PeopleSurfaceTest {
         }
         long national = Long.parseLong(e164.substring(3));
         for (String block : ACM_FREE_BLOCKS) {
-            String[] ends = block.split(" t/m ");
+            String[] ends = block.split(" to ");
             if (national >= Long.parseLong(ends[0].replace("-", "")) && national <= Long.parseLong(ends[1].replace("-", ""))) {
                 return true;
             }

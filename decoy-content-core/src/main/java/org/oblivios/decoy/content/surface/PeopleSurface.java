@@ -20,13 +20,15 @@ import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.NoVerifiedRange;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.Place;
 import org.oblivios.decoy.content.story.PlaceKind;
 import org.oblivios.decoy.content.story.Timeline;
 
 /** Contacts, call log, SMS threads and voicemail, all of one life story. */
 public final class PeopleSurface {
-    private static final List<String> GROUPS = List.of("Family", "Friends", "Friends", "Work", "Work", "Other", "Other", "Other");
+    /** Indices into the language's {@code contact.groups} (family, friends, work, other), weighted by repetition. */
+    private static final int[] GROUP_WEIGHTS = {0, 1, 1, 2, 2, 3, 3, 3};
     private PeopleSurface() {}
 
     /** Throws {@link IllegalArgumentException} when the pack has no verified number range: no number is invented. */
@@ -41,7 +43,9 @@ public final class PeopleSurface {
     private static People build(Persona p, Timeline t, CountryPack c, Seed s) throws NoVerifiedRange {
         RandomGenerator r = s.stream("people");
         ZoneId zone = p.inputs().zone();
-        boolean dutch = "nl".equals(p.inputs().locale().getLanguage());
+        LanguagePack lang = LanguagePack.of(p.inputs().locale().toLanguageTag());
+        LanguagePack service = LanguagePack.forService(c, lang.tag());
+        List<String> groupNames = lang.list("contact.groups");
         Set<String> used = new HashSet<>();
         String own = freshNumber(c, r, used);
 
@@ -59,7 +63,7 @@ public final class PeopleSurface {
             names[i] = r.nextInt(100) < 25 ? c.givenName(r) : c.givenName(r) + " " + c.familyName(r);
             numbers[i] = freshNumber(c, r, used);
             favourite[i] = i < favourites;
-            groups[i] = GROUPS.get(r.nextInt(GROUPS.size()));
+            groups[i] = groupNames.get(GROUP_WEIGHTS[r.nextInt(GROUP_WEIGHTS.length)]);
             birthdays[i] = r.nextInt(100) < 40 ? LocalDate.of(1955 + r.nextInt(55), 1 + r.nextInt(12), 1 + r.nextInt(28)) : null;
             photos[i] = r.nextInt(100) < 15 ? PhotoKind.INITIALS : PhotoKind.NONE;
         }
@@ -91,7 +95,7 @@ public final class PeopleSurface {
                 int n = 2 + r.nextInt(29);
                 for (int k = 0; k < n; k++) {
                     msgs.add(new SmsMessage(Events.randomInstant(r, t.phoneStart(), t.now(), zone, earliest, latest),
-                            r.nextBoolean(), SmsText.message(dutch, r, firstNames, placeNames), true));
+                            r.nextBoolean(), SmsText.message(lang, r, firstNames, placeNames), true));
                 }
                 msgs.sort(Comparator.comparing(SmsMessage::at));
                 threads.add(new SmsThread(numbers[i], names[i], null, msgs));
@@ -102,12 +106,12 @@ public final class PeopleSurface {
             List<Sender> senders = c.senders(kind);
             if (!senders.isEmpty()) {
                 Sender sender = senders.get(r.nextInt(senders.size()));
-                threads.add(serviceThread(sender, kind, dutch, r, t, zone, earliest, latest, true));
+                threads.add(serviceThread(sender, kind, service, r, t, zone, earliest, latest, true));
             }
         }
         if (c.senders(SenderKind.BANK).isEmpty() && c.senders(SenderKind.OPERATOR).isEmpty() && !c.senders(SenderKind.GLOBAL).isEmpty()) {
             Sender g = c.senders(SenderKind.GLOBAL).get(r.nextInt(c.senders(SenderKind.GLOBAL).size()));
-            threads.add(serviceThread(g, SenderKind.GLOBAL, dutch, r, t, zone, earliest, latest, true));
+            threads.add(serviceThread(g, SenderKind.GLOBAL, service, r, t, zone, earliest, latest, true));
         }
 
         List<Voicemail> voicemails = new ArrayList<>();
@@ -132,7 +136,7 @@ public final class PeopleSurface {
         return new People(own, contacts, calls, threads, voicemails);
     }
 
-    private static SmsThread serviceThread(Sender sender, SenderKind kind, boolean dutch, RandomGenerator r, Timeline t,
+    private static SmsThread serviceThread(Sender sender, SenderKind kind, LanguagePack lang, RandomGenerator r, Timeline t,
             ZoneId zone, LocalTime earliest, LocalTime latest, boolean withCode) {
         List<SmsMessage> msgs = new ArrayList<>();
         int n = 3 + r.nextInt(10);
@@ -141,27 +145,20 @@ public final class PeopleSurface {
         for (int k = 0; k < n; k++) {
             boolean code = wantsCode && withCode && (k == 0 || r.nextInt(100) < 50);
             msgs.add(new SmsMessage(Events.randomInstant(r, t.phoneStart(), t.now(), zone, earliest, latest), true,
-                    serviceText(kind, dutch, code, customer, r), true));
+                    serviceText(kind, lang, code, customer, r), true));
         }
         msgs.sort(Comparator.comparing(SmsMessage::at));
         return new SmsThread(sender.name(), sender.name(), kind, msgs);
     }
 
-    private static String serviceText(SenderKind kind, boolean dutch, boolean code, int customer, RandomGenerator r) {
+    private static String serviceText(SenderKind kind, LanguagePack lang, boolean code, int customer, RandomGenerator r) {
         int six = 100000 + r.nextInt(900000);
         if (code) {
-            return dutch ? "Uw verificatiecode is " + six + ". Deel deze code nooit met anderen."
-                    : "Your verification code is " + six + ". Never share it with anyone.";
+            return lang.format("sms.service.code", Map.of("code", String.valueOf(six)));
         }
         // a transaction text carries its own reference: a thread of one sentence repeated is the same on every phone and on no real one
         int ref = 10_000_000 + r.nextInt(90_000_000);
-        return switch (kind) {
-            case BANK -> dutch ? "Uw betaling met referentie " + ref + " is geaccepteerd." : "Your payment with reference " + ref + " was accepted.";
-            case OPERATOR -> dutch ? "Uw tegoed is bijna op. Klantnummer " + customer + "." : "Your balance is running low. Customer number " + customer + ".";
-            case PARCEL -> dutch ? "Uw pakket " + ref + " wordt vandaag bezorgd." : "Your parcel " + ref + " is out for delivery today.";
-            case SHOP -> dutch ? "Uw bestelling " + ref + " is verzonden." : "Your order " + ref + " has shipped.";
-            case GLOBAL -> dutch ? "Nieuwe aanmelding op uw account. Referentie " + ref + "." : "New sign-in to your account. Reference " + ref + ".";
-        };
+        return lang.format("sms.service." + kind.name(), Map.of("ref", String.valueOf(ref), "customer", String.valueOf(customer)));
     }
 
     /** Favourites are called about six times as often as the others. */
