@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+plugins { java }
+
+java {
+    toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
+}
+
+repositories { mavenCentral() }
+
+dependencies {
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test { useJUnitPlatform() }
