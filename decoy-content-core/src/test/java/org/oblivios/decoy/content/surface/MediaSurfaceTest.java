@@ -63,7 +63,7 @@ class MediaSurfaceTest {
         List<ChosenPhoto> out = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             out.add(new ChosenPhoto("/sdcard/DCIM/Camera/own_" + i + ".jpg",
-                    Instant.parse("2025-03-01T08:00:00Z").plusSeconds(i * 86_400L * 3 + i * 977L), Set.of("gps")));
+                    Instant.parse("2025-03-01T08:00:00Z").plusSeconds(i * 86_400L * 3 + i * 977L), i % 2 == 0 ? Set.of("owner-name") : Set.of()));
         }
         return out;
     }
@@ -254,6 +254,33 @@ class MediaSurfaceTest {
             LocalTime was = c.taken().atZone(ZONE).toLocalTime().withNano(0);
             assertEquals(was, i.taken().atZone(ZONE).toLocalTime().withNano(0), "time of day of " + c.path());
         }
+    }
+
+    @Test
+    void chosenPhotosCarryTheOwnersStripMarksAndAlwaysTheGps() {
+        // the real GPS tag is the owner's real place: it never stays, whatever the owner marked
+        boolean sawChosenCopy = false;
+        for (long n = 0; n < 10; n++) {
+            Setup s = setup(n);
+            for (MediaItem i : s.plan().items()) {
+                if (i.kind() == MediaKind.CAMERA_FILL || i.kind() == MediaKind.SAVED || i.kind() == MediaKind.SCREENSHOT
+                        || i.kind() == MediaKind.DOCUMENT) {
+                    assertTrue(i.stripFields().isEmpty(), i.name());
+                    continue;
+                }
+                String source = i.sourceId();
+                ChosenPhoto c = s.chosen().stream().filter(x -> x.path().equals(source)).findFirst().orElse(null);
+                if (c == null) {
+                    continue; // a copy of a fill or saved item
+                }
+                Set<String> expected = new HashSet<>(c.stripFields());
+                expected.add("gps");
+                assertEquals(expected, i.stripFields(), i.kind() + " " + i.name());
+            }
+            sawChosenCopy |= s.plan().items().stream().anyMatch(i -> i.kind() == MediaKind.COPY
+                    && s.chosen().stream().anyMatch(x -> x.path().equals(i.sourceId())));
+        }
+        assertTrue(sawChosenCopy, "no copy of a chosen photo in 10 plans: the copy case is unchecked");
     }
 
     @Test

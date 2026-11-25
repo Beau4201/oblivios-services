@@ -34,6 +34,11 @@ public final class PeopleSurface {
 
     private PeopleSurface() {}
 
+    /** The short messages of the story's language; the roll-forward draws from the same lists. */
+    static List<String> phrases(boolean dutch) {
+        return dutch ? PHRASES_NL : PHRASES_EN;
+    }
+
     /** Throws {@link IllegalArgumentException} when the pack has no verified number range: no number is invented. */
     public static People generate(Persona p, Timeline t, CountryPack c, Seed s) {
         try {

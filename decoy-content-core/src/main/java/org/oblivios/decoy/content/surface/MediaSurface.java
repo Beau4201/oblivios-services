@@ -145,10 +145,12 @@ public final class MediaSurface {
                     }
                 }
                 cap.merge(month, -1, Integer::sum);
+                Set<String> strip = new HashSet<>(photo.stripFields());
+                strip.add("gps"); // the real tag is the owner's real place, whatever the owner marked
                 LocalTime timeOfDay = photo.taken().atZone(zone).toLocalTime().withNano(0);
                 Named named = timed(withMillis(draw(windows.get(month), r, timeOfDay), r, windows.get(month)[1]), cameraName);
                 items.add(new MediaItem(MediaKind.CAMERA_CHOSEN, named.name(), named.at(), addedFor(named.at()), photo.path(), null,
-                        0, 0, true, null, null, null));
+                        0, 0, true, null, null, null, strip));
             }
             if (dropped > 0) {
                 warnings.add(dropped + " chosen photos exceed the camera volume of the story and are not used");
@@ -170,7 +172,7 @@ public final class MediaSurface {
                         lon = place.lon() + (r.nextDouble() * 2 - 1) * GPS_JITTER_DEGREES;
                     }
                     items.add(new MediaItem(MediaKind.CAMERA_FILL, named.name(), named.at(), addedFor(named.at()),
-                            "fill:" + String.format("%016x", ids.nextLong()), null, cam.width(), cam.height(), true, cam.id(), lat, lon));
+                            "fill:" + String.format("%016x", ids.nextLong()), null, cam.width(), cam.height(), true, cam.id(), lat, lon, Set.of()));
                 }
             }
         }
@@ -207,7 +209,7 @@ public final class MediaSurface {
                     int[] size = SAVED_SIZES.get(r.nextInt(SAVED_SIZES.size()));
                     String name = unique(SAVED_BASES.get(r.nextInt(SAVED_BASES.size())), SAVED_EXTENSIONS.get(r.nextInt(SAVED_EXTENSIONS.size())));
                     items.add(new MediaItem(MediaKind.SAVED, name, at, addedFor(at), "saved:" + String.format("%016x", r.nextLong()), null,
-                            size[0], size[1], false, null, null, null));
+                            size[0], size[1], false, null, null, null, Set.of()));
                 }
             }
         }
@@ -237,7 +239,7 @@ public final class MediaSurface {
 
         private MediaItem shot(Named named, String sourceId) {
             return new MediaItem(MediaKind.SCREENSHOT, named.name(), named.at(), addedFor(named.at()), sourceId, null, 0, 0, false,
-                    null, null, null);
+                    null, null, null, Set.of());
         }
 
         private void documents() {
@@ -265,7 +267,7 @@ public final class MediaSurface {
                     source = "doc:scan";
                 }
                 items.add(new MediaItem(MediaKind.DOCUMENT, unique(base, ".pdf"), at, addedFor(at), source, null, 0, 0, false, null, null,
-                        null));
+                        null, Set.of()));
             }
         }
 
@@ -282,7 +284,7 @@ public final class MediaSurface {
             for (MediaItem o : order.subList(0, n)) {
                 int dot = o.name().lastIndexOf('.');
                 items.add(new MediaItem(MediaKind.COPY, unique(o.name().substring(0, dot) + "-edited", o.name().substring(dot)), o.taken(),
-                        addedFor(o.taken()), o.sourceId(), o.name(), o.width(), o.height(), o.exif(), o.profileId(), o.lat(), o.lon()));
+                        addedFor(o.taken()), o.sourceId(), o.name(), o.width(), o.height(), o.exif(), o.profileId(), o.lat(), o.lon(), o.stripFields()));
             }
         }
 
