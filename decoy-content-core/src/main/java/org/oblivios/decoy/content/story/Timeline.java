@@ -20,13 +20,15 @@ public final class Timeline {
     private final LocalTime wakeTime;
     private final LocalTime sleepTime;
     private final Instant phoneStart;
+    private final Instant now;
     private final List<String> warnings;
 
-    private Timeline(List<Place> places, LocalTime wake, LocalTime sleep, Instant phoneStart, List<String> warnings) {
+    private Timeline(List<Place> places, LocalTime wake, LocalTime sleep, Instant phoneStart, Instant now, List<String> warnings) {
         this.places = List.copyOf(places);
         this.wakeTime = wake;
         this.sleepTime = sleep;
         this.phoneStart = phoneStart;
+        this.now = now;
         this.warnings = List.copyOf(warnings);
     }
 
@@ -65,7 +67,7 @@ public final class Timeline {
         Instant limit = now.minus(Duration.ofDays(180L + r.nextInt(91)));
         Instant phoneStart = candidate.isBefore(limit) ? candidate : limit;
 
-        return new Timeline(places, wake, sleep, phoneStart, warnings);
+        return new Timeline(places, wake, sleep, phoneStart, now, warnings);
     }
 
     /** A point between {@code minKm} and {@code maxKm} from {@code from}, uniform over the ring's area. */
@@ -91,6 +93,11 @@ public final class Timeline {
 
     public Instant phoneStart() {
         return phoneStart;
+    }
+
+    /** The moment the story ends: no event of any surface lies after it. */
+    public Instant now() {
+        return now;
     }
 
     public List<String> warnings() {
