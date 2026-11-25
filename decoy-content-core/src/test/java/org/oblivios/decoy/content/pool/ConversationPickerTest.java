@@ -40,6 +40,7 @@ import org.oblivios.decoy.content.plan.ContentPlan;
 import org.oblivios.decoy.content.plan.ContentPlanner;
 import org.oblivios.decoy.content.pool.TestPool.AcceptAllJudge;
 import org.oblivios.decoy.content.pool.TestPool.IdentityRewriter;
+import org.oblivios.decoy.content.story.PlaceKind;
 import org.oblivios.decoy.content.story.MonthCount;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
@@ -241,6 +242,10 @@ class ConversationPickerTest {
         List<FilledConversation> got = pick(s, pool, 4).byContact().getOrDefault(partner.id(), List.of());
         assertEquals(2, got.size());
         got.forEach(f -> assertTrue(f.poolId().startsWith("cafe-"), f.poolId()));
+        // the cafe in the text is a cafe of the story, which the other surfaces show too
+        Set<String> said = new HashSet<>();
+        s.timeline().places().stream().filter(x -> x.kind() == PlaceKind.CAFE).forEach(x -> said.add("at " + x.name() + " then"));
+        got.forEach(f -> assertTrue(said.contains(f.messages().get(3).body()), f.messages().get(3).body()));
     }
 
     @Test
@@ -304,6 +309,8 @@ class ConversationPickerTest {
             Setup s = setup(n, b -> b);
             Timeline t = s.timeline();
             LocalTime wake = t.wakeTime();
+            // with a bedtime after midnight a conversation stays inside its day
+            LocalTime sleep = t.sleepTime().isAfter(wake) ? t.sleepTime() : LocalTime.of(23, 59);
             for (FilledConversation c : all(pick(s, POOL, n))) {
                 Instant previous = Instant.MIN;
                 for (SmsMessage m : c.messages()) {
@@ -312,6 +319,7 @@ class ConversationPickerTest {
                     previous = m.at();
                     LocalTime local = m.at().atZone(t.zone()).toLocalTime();
                     assertFalse(local.isBefore(wake), local + " before waking at " + wake);
+                    assertFalse(local.isAfter(sleep), local + " after bedtime at " + sleep);
                 }
             }
         }
@@ -402,12 +410,14 @@ class ConversationPickerTest {
     }
 
     @Test
-    void groupsComeFromTheCircleByKind() {
-        Setup s = setup(8, b -> b.friendGroups(Set.of(PersonaProfile.FriendGroup.SPORT)).circle(PersonaProfile.CircleSize.LARGE));
+    void groupsComeFromTheCircleByKind() throws IOException {
+        Setup s = setup(8, b -> b.friendGroups(Set.of(PersonaProfile.FriendGroup.SPORT)).circle(PersonaProfile.CircleSize.LARGE),
+                packWithGroups(2, 2));
         List<Contact> friends = friendsOfOneOrigin(s, 3);
         List<PoolConversation> pool = new ArrayList<>(groupsOf(s, GroupKind.FRIENDS, friends, 4, "friends-"));
         pool.addAll(groupsOf(s, GroupKind.WORK_TEAM, friends, 4, "work-"));
         Picked p = pick(s, pool, 8);
+        assertEquals(1, p.groups().size(), "the friends make one group, the work team none");
         for (FilledConversation g : p.groups()) {
             assertTrue(g.poolId().startsWith("friends-"), "friends filled a work team: " + g.poolId());
             Set<PersonaProfile.FriendGroup> origins = new HashSet<>();
@@ -558,6 +568,8 @@ class ConversationPickerTest {
         List<FilledConversation> got = pick(s, pool, 15).byContact().get(partner.id());
         assertFalse(got.isEmpty());
         got.forEach(f -> assertEquals(f.messages().get(3).body(), f.messages().get(7).body(), f.poolId()));
+        got.forEach(f -> assertTrue(f.messages().get(3).body().matches("\\S+ (0[7-9]|1\\d|2[0-2]):[0-5][05] \\S+"),
+                "a time outside the day: " + f.messages().get(3).body()));
     }
 
     @Test
