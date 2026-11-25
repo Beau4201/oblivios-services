@@ -123,14 +123,21 @@ public final class PoolSchema {
         if (rest.indexOf('{') >= 0 || rest.indexOf('}') >= 0) {
             out.add(new Problem(i, "unbalanced brace in '" + t + "'"));
         }
-        if (DIGITS.matcher(t).find()) {
-            out.add(new Problem(i, "a run of 6 or more digits"));
+        contactData(t).forEach(found -> out.add(new Problem(i, found)));
+    }
+
+    /** What in a text could reach a real person: a run of 6 or more digits, a link or an address. */
+    public static List<String> contactData(String text) {
+        List<String> out = new ArrayList<>();
+        if (DIGITS.matcher(text).find()) {
+            out.add("a run of 6 or more digits");
         }
-        if (LINK.matcher(t).find()) {
-            out.add(new Problem(i, "a link"));
+        if (LINK.matcher(text).find()) {
+            out.add("a link");
         }
-        if (ADDRESS.matcher(t).find()) {
-            out.add(new Problem(i, "an address"));
+        if (ADDRESS.matcher(text).find()) {
+            out.add("an address");
         }
+        return out;
     }
 }
