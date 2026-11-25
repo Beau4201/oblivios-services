@@ -14,6 +14,7 @@ import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
 import org.oblivios.decoy.content.story.VolumeModel;
+import org.oblivios.decoy.content.style.Styles;
 import org.oblivios.decoy.content.surface.AppSpec;
 import org.oblivios.decoy.content.surface.AppsSurface;
 import org.oblivios.decoy.content.surface.BrowserSurface;
@@ -66,6 +67,7 @@ public final class ContentPlanner {
         warnings.addAll(media.warnings());
         return new ContentPlan(persona, timeline, people, calendar, travel, DeviceSurface.generate(ctx), NetworkSurface.generate(ctx),
                 UsageSurface.generate(ctx), AppsSurface.generate(ctx), BrowserSurface.generate(ctx), VaultSurface.generate(ctx),
-                TracesSurface.generate(ctx), media, MailSurface.generate(persona, timeline, pack, probe, seed), warnings);
+                TracesSurface.generate(ctx), media, MailSurface.generate(persona, timeline, pack, probe, seed),
+                Styles.book(persona, people, seed), warnings);
     }
 }

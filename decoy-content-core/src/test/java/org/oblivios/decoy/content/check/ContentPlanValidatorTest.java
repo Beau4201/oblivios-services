@@ -114,7 +114,7 @@ class ContentPlanValidatorTest {
     private static ContentPlan with(ContentPlan p, People people, CalendarPlan calendar, NetworkPlan network, MediaPlan media, MailPlan mail) {
         return new ContentPlan(p.persona(), p.timeline(), people != null ? people : p.people(), calendar != null ? calendar : p.calendar(),
                 p.travel(), p.device(), network != null ? network : p.network(), p.usage(), p.apps(), p.browser(), p.vault(), p.traces(),
-                media != null ? media : p.media(), mail != null ? mail : p.mail(), p.warnings());
+                media != null ? media : p.media(), mail != null ? mail : p.mail(), p.styles(), p.warnings());
     }
 
     private static People withPeople(People p, List<Call> calls, List<SmsThread> threads) {
@@ -268,7 +268,7 @@ class ContentPlanValidatorTest {
             }
         }
         return new ContentPlan(p.persona(), p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
-                traces, media, mail, p.warnings());
+                traces, media, mail, p.styles(), p.warnings());
     }
 
     private static <T> List<T> plus(List<T> list, T extra) {
