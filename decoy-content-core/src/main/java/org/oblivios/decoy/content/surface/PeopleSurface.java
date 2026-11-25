@@ -158,12 +158,14 @@ public final class PeopleSurface {
             return dutch ? "Uw verificatiecode is " + six + ". Deel deze code nooit met anderen."
                     : "Your verification code is " + six + ". Never share it with anyone.";
         }
+        // every text carries its own reference: a thread of one sentence repeated is the same on every phone and on no real one
+        int ref = 10_000_000 + r.nextInt(90_000_000);
         return switch (kind) {
-            case BANK -> dutch ? "Uw betaling is geaccepteerd." : "Your payment was accepted.";
-            case OPERATOR -> dutch ? "Uw tegoed is bijna op." : "Your balance is running low.";
-            case PARCEL -> dutch ? "Uw pakket wordt vandaag bezorgd." : "Your parcel is out for delivery today.";
-            case SHOP -> dutch ? "Uw bestelling is verzonden." : "Your order has shipped.";
-            case GLOBAL -> dutch ? "Nieuwe aanmelding op uw account." : "New sign-in to your account.";
+            case BANK -> dutch ? "Uw betaling met referentie " + ref + " is geaccepteerd." : "Your payment with reference " + ref + " was accepted.";
+            case OPERATOR -> dutch ? "Uw tegoed is bijna op. Klantnummer " + ref + "." : "Your balance is running low. Customer number " + ref + ".";
+            case PARCEL -> dutch ? "Uw pakket " + ref + " wordt vandaag bezorgd." : "Your parcel " + ref + " is out for delivery today.";
+            case SHOP -> dutch ? "Uw bestelling " + ref + " is verzonden." : "Your order " + ref + " has shipped.";
+            case GLOBAL -> dutch ? "Nieuwe aanmelding op uw account. Referentie " + ref + "." : "New sign-in to your account. Reference " + ref + ".";
         };
     }
 

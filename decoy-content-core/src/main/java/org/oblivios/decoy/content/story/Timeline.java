@@ -112,4 +112,16 @@ public final class Timeline {
     public List<String> warnings() {
         return warnings;
     }
+
+    /** Value equality over everything the timeline holds, so that two plans built from one seed compare equal. */
+    @Override
+    public boolean equals(Object o) {
+        return o instanceof Timeline t && places.equals(t.places) && wakeTime.equals(t.wakeTime) && sleepTime.equals(t.sleepTime)
+                && phoneStart.equals(t.phoneStart) && now.equals(t.now) && zone.equals(t.zone) && warnings.equals(t.warnings);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(places, wakeTime, sleepTime, phoneStart, now, zone, warnings);
+    }
 }
