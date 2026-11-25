@@ -25,6 +25,7 @@ import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.story.MonthCount;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
@@ -161,6 +162,22 @@ class MailAndRollForwardTest {
         return new ContentSnapshot(s.persona(), latestEvent, s.people().contacts());
     }
 
+    /** Eight rewritten conversations of twenty messages with the first contacts, each text naming its contact. */
+    private static List<FilledConversation> reserve(Setup s) {
+        List<FilledConversation> out = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Contact c = s.people().contacts().get(i);
+            List<SmsMessage> m = new ArrayList<>();
+            Instant base = NOW.minus(Duration.ofDays(100));
+            for (int k = 0; k < 20; k++) {
+                m.add(new SmsMessage(base.plus(Duration.ofMinutes(3L * k)), k % 2 == 1, "see you soon " + c.name().split(" ")[0] + " " + k,
+                        true, null));
+            }
+            out.add(new FilledConversation("r" + i, "test", null, List.of(c.id()), Set.of(), m, true));
+        }
+        return out;
+    }
+
     private static long count(RollForwardPlan plan, String kind) {
         return plan.events().stream().filter(e -> e.kind().equals(kind)).count();
     }
@@ -170,7 +187,7 @@ class MailAndRollForwardTest {
         Setup s = setup(1);
         Instant last = NOW.minus(Duration.ofDays(30));
         Set<String> ids = s.people().contacts().stream().map(Contact::id).collect(Collectors.toSet());
-        RollForwardPlan plan = RollForward.plan(snapshot(s, last), NOW, Seed.of(9, 9));
+        RollForwardPlan plan = RollForward.plan(snapshot(s, last), NOW, Seed.of(9, 9), reserve(s));
         assertTrue(count(plan, "CALL") >= 1 && count(plan, "SMS") >= 1, "events " + plan.events().size());
         for (RollForwardEvent e : plan.events()) {
             assertTrue(e.when().isAfter(last), "not after the last event: " + e);
@@ -183,13 +200,13 @@ class MailAndRollForwardTest {
     void longGapIsBounded() {
         Setup s = setup(1);
         for (int days : new int[] {180, 3650}) {
-            RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(days))), NOW, Seed.of(9, days));
+            RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(days))), NOW, Seed.of(9, days), reserve(s));
             assertTrue(count(plan, "SMS") <= 60, days + " days: SMS " + count(plan, "SMS"));
             assertTrue(count(plan, "CALL") <= 40, days + " days: calls " + count(plan, "CALL"));
             assertEquals(plan.events().size(), count(plan, "SMS") + count(plan, "CALL"));
         }
         // a gap of 180 days is large enough to reach the caps, so the bound is the rule that holds the count
-        RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(180))), NOW, Seed.of(9, 180));
+        RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(180))), NOW, Seed.of(9, 180), reserve(s));
         assertTrue(count(plan, "SMS") >= 30 && count(plan, "CALL") >= 20);
     }
 
@@ -200,7 +217,7 @@ class MailAndRollForwardTest {
         Instant latest = NOW.minus(Duration.ofDays(40));
         ContentSnapshot snap = snapshot(s, latest);
         for (long n = 0; n < 8000; n++) {
-            for (RollForwardEvent e : RollForward.plan(snap, NOW, Seed.of(n, 77)).events()) {
+            for (RollForwardEvent e : RollForward.plan(snap, NOW, Seed.of(n, 77), reserve(s)).events()) {
                 assertTrue(e.when().isAfter(latest), "event at or before the latest event, seed " + n + ": " + e);
             }
         }
@@ -209,28 +226,28 @@ class MailAndRollForwardTest {
     @Test
     void clockMovedBack() {
         Setup s = setup(1);
-        RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.plus(Duration.ofDays(3))), NOW, Seed.of(9, 9));
+        RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.plus(Duration.ofDays(3))), NOW, Seed.of(9, 9), reserve(s));
         assertTrue(plan.events().isEmpty());
     }
 
     @Test
     void noGapNoEvents() {
         Setup s = setup(1);
-        assertTrue(RollForward.plan(snapshot(s, NOW), NOW, Seed.of(9, 9)).events().isEmpty());
-        assertTrue(RollForward.plan(snapshot(s, NOW.minus(Duration.ofMinutes(20))), NOW, Seed.of(9, 9)).events().isEmpty());
+        assertTrue(RollForward.plan(snapshot(s, NOW), NOW, Seed.of(9, 9), reserve(s)).events().isEmpty());
+        assertTrue(RollForward.plan(snapshot(s, NOW.minus(Duration.ofMinutes(20))), NOW, Seed.of(9, 9), reserve(s)).events().isEmpty());
     }
 
     @Test
     void noContactsNoEvents() {
         Setup s = setup(1);
         ContentSnapshot empty = new ContentSnapshot(s.persona(), NOW.minus(Duration.ofDays(30)), List.of());
-        assertTrue(RollForward.plan(empty, NOW, Seed.of(9, 9)).events().isEmpty());
+        assertTrue(RollForward.plan(empty, NOW, Seed.of(9, 9), reserve(s)).events().isEmpty());
     }
 
     @Test
     void eventsAreOrderedAndInWakingHours() {
         Setup s = setup(2);
-        RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(60))), NOW, Seed.of(5, 5));
+        RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(60))), NOW, Seed.of(5, 5), reserve(s));
         Instant previous = Instant.MIN;
         for (RollForwardEvent e : plan.events()) {
             assertFalse(e.when().isBefore(previous));
@@ -246,7 +263,7 @@ class MailAndRollForwardTest {
         Set<String> firstNames = s.people().contacts().stream().map(c -> c.name().split(" ")[0]).collect(Collectors.toSet());
         boolean named = false;
         for (long n = 0; n < 20; n++) {
-            RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(90))), NOW, Seed.of(n, 5));
+            RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(90))), NOW, Seed.of(n, 5), reserve(s));
             for (RollForwardEvent e : plan.events()) {
                 named |= e.kind().equals("SMS") && firstNames.stream().anyMatch(f -> e.detail().split("\\|", 3)[2].contains(" " + f));
             }
@@ -258,7 +275,7 @@ class MailAndRollForwardTest {
     void rollForwardIsDeterministicPerFreshSeed() {
         Setup s = setup(1);
         ContentSnapshot snap = snapshot(s, NOW.minus(Duration.ofDays(45)));
-        assertEquals(RollForward.plan(snap, NOW, Seed.of(1, 1)), RollForward.plan(snap, NOW, Seed.of(1, 1)));
-        assertNotEquals(RollForward.plan(snap, NOW, Seed.of(1, 1)), RollForward.plan(snap, NOW, Seed.of(1, 2)));
+        assertEquals(RollForward.plan(snap, NOW, Seed.of(1, 1), reserve(s)), RollForward.plan(snap, NOW, Seed.of(1, 1), reserve(s)));
+        assertNotEquals(RollForward.plan(snap, NOW, Seed.of(1, 1), reserve(s)), RollForward.plan(snap, NOW, Seed.of(1, 2), reserve(s)));
     }
 }

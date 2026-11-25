@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,8 +22,7 @@ import org.oblivios.decoy.content.country.NoVerifiedRange;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
 import org.oblivios.decoy.content.lang.LanguagePack;
-import org.oblivios.decoy.content.story.Place;
-import org.oblivios.decoy.content.story.PlaceKind;
+import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.story.Timeline;
 
 /** Contacts, call log, SMS threads and voicemail, all of one life story. */
@@ -69,11 +69,6 @@ public final class PeopleSurface {
             photos[i] = r.nextInt(100) < 15 ? PhotoKind.INITIALS : PhotoKind.NONE;
         }
 
-        // the slots of a message: first names of the contacts and the cafes and shops of the story
-        List<String> firstNames = java.util.Arrays.stream(names).map(n -> n.split(" ")[0]).distinct().toList();
-        List<String> placeNames = t.places().stream().filter(place -> place.kind() == PlaceKind.CAFE || place.kind() == PlaceKind.SHOP)
-                .map(Place::name).distinct().toList();
-
         LocalTime earliest = t.wakeTime();
         LocalTime latest = LocalTime.of(23, 30);
         long days = Math.max(1, Duration.between(t.phoneStart(), t.now()).toDays());
@@ -88,21 +83,8 @@ public final class PeopleSurface {
         }
         calls.sort(Comparator.comparing(Call::at));
 
+        // personal and group threads come from the conversation pool (withConversations); only service threads are made here
         List<SmsThread> threads = new ArrayList<>();
-        Map<String, Instant> lastSms = new HashMap<>();
-        for (int i = 0; i < count; i++) {
-            if (r.nextInt(100) < 30 && threads.size() < 60) {
-                List<SmsMessage> msgs = new ArrayList<>();
-                int n = 2 + r.nextInt(29);
-                for (int k = 0; k < n; k++) {
-                    msgs.add(new SmsMessage(Events.randomInstant(r, t.phoneStart(), t.now(), zone, earliest, latest),
-                            r.nextBoolean(), SmsText.message(lang, r, firstNames, placeNames), true));
-                }
-                msgs.sort(Comparator.comparing(SmsMessage::at));
-                threads.add(new SmsThread(numbers[i], names[i], null, msgs));
-                lastSms.put(numbers[i], msgs.get(msgs.size() - 1).at());
-            }
-        }
         for (SenderKind kind : List.of(SenderKind.BANK, SenderKind.OPERATOR, SenderKind.PARCEL, SenderKind.SHOP)) {
             List<Sender> senders = c.senders(kind);
             if (!senders.isEmpty()) {
@@ -129,14 +111,58 @@ public final class PeopleSurface {
         }
         List<Contact> contacts = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            Instant a = lastCall.get(numbers[i]);
-            Instant b = lastSms.get(numbers[i]);
-            Instant last = a == null ? b : b == null ? a : a.isAfter(b) ? a : b;
             Circle.Member m = circle.get(i);
-            contacts.add(new Contact(ids[i], names[i], numbers[i], favourite[i], groups[i], birthdays[i], last, photos[i],
+            contacts.add(new Contact(ids[i], names[i], numbers[i], favourite[i], groups[i], birthdays[i], lastCall.get(numbers[i]), photos[i],
                     m.relation(), m.birthYear(), m.gender(), m.origin()));
         }
         return new People(own, contacts, calls, threads, voicemails);
+    }
+
+    /**
+     * The people with the picked conversations as threads: the conversations of one contact form one thread, each group
+     * conversation its own. The time a contact was last contacted follows its calls and its one-to-one messages.
+     */
+    public static People withConversations(People people, List<FilledConversation> conversations) {
+        Map<String, Contact> byId = new LinkedHashMap<>();
+        people.contacts().forEach(c -> byId.put(c.id(), c));
+        Map<String, List<SmsMessage>> personal = new LinkedHashMap<>();
+        List<SmsThread> groups = new ArrayList<>();
+        for (FilledConversation f : conversations) {
+            if (f.group() == null) {
+                personal.computeIfAbsent(f.contactIds().get(0), k -> new ArrayList<>()).addAll(f.messages());
+            } else {
+                List<SmsMessage> msgs = new ArrayList<>(f.messages());
+                msgs.sort(Comparator.comparing(SmsMessage::at));
+                List<String> numbers = new ArrayList<>();
+                List<String> titles = new ArrayList<>();
+                for (String id : f.contactIds()) {
+                    numbers.add(byId.get(id).number());
+                    titles.add(byId.get(id).name().trim().split("\\s+")[0]);
+                }
+                groups.add(new SmsThread(String.join(";", numbers), String.join(", ", titles), null, msgs, f.contactIds()));
+            }
+        }
+        List<SmsThread> threads = new ArrayList<>(people.threads());
+        Map<String, Instant> lastSms = new HashMap<>();
+        for (Contact c : people.contacts()) {
+            List<SmsMessage> msgs = personal.get(c.id());
+            if (msgs == null) {
+                continue;
+            }
+            msgs.sort(Comparator.comparing(SmsMessage::at));
+            threads.add(new SmsThread(c.number(), c.name(), null, msgs, List.of()));
+            lastSms.put(c.id(), msgs.get(msgs.size() - 1).at());
+        }
+        threads.addAll(groups);
+        List<Contact> contacts = new ArrayList<>();
+        for (Contact c : people.contacts()) {
+            Instant a = c.lastContacted();
+            Instant b = lastSms.get(c.id());
+            Instant last = a == null ? b : b == null ? a : a.isAfter(b) ? a : b;
+            contacts.add(new Contact(c.id(), c.name(), c.number(), c.favourite(), c.group(), c.birthday(), last, c.photo(), c.relation(),
+                    c.birthYear(), c.gender(), c.origin()));
+        }
+        return new People(people.ownNumber(), contacts, people.calls(), threads, people.voicemails());
     }
 
     private static SmsThread serviceThread(Sender sender, SenderKind kind, LanguagePack lang, RandomGenerator r, Timeline t,
@@ -148,10 +174,10 @@ public final class PeopleSurface {
         for (int k = 0; k < n; k++) {
             boolean code = wantsCode && withCode && (k == 0 || r.nextInt(100) < 50);
             msgs.add(new SmsMessage(Events.randomInstant(r, t.phoneStart(), t.now(), zone, earliest, latest), true,
-                    serviceText(kind, lang, code, customer, r), true));
+                    serviceText(kind, lang, code, customer, r), true, null));
         }
         msgs.sort(Comparator.comparing(SmsMessage::at));
-        return new SmsThread(sender.name(), sender.name(), kind, msgs);
+        return new SmsThread(sender.name(), sender.name(), kind, msgs, List.of());
     }
 
     private static String serviceText(SenderKind kind, LanguagePack lang, boolean code, int customer, RandomGenerator r) {

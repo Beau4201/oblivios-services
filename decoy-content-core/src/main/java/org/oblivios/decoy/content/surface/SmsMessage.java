@@ -3,4 +3,5 @@ package org.oblivios.decoy.content.surface;
 
 import java.time.Instant;
 
-public record SmsMessage(Instant at, boolean incoming, String body, boolean read) {}
+/** One message; {@code from} is the contact id of the sender of an incoming group message, {@code null} otherwise. */
+public record SmsMessage(Instant at, boolean incoming, String body, boolean read, String from) {}

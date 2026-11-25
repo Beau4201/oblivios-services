@@ -3,6 +3,7 @@ package org.oblivios.decoy.content.plan;
 
 import java.util.List;
 import org.oblivios.decoy.content.Persona;
+import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.style.StyleBook;
 import org.oblivios.decoy.content.surface.AppsPlan;
@@ -18,11 +19,17 @@ import org.oblivios.decoy.content.surface.TravelPlan;
 import org.oblivios.decoy.content.surface.UsagePlan;
 import org.oblivios.decoy.content.surface.VaultPlan;
 
-/** Everything the decoy shows, behind one life story. {@code warnings} gather what the planner defaulted or dropped, for the setup to tell the owner. */
+/**
+ * Everything the decoy shows, behind one life story. {@code conversations} are the pool conversations of the personal
+ * and group threads; {@code reserve} the rewritten conversations kept back for the roll-forward. {@code warnings} gather
+ * what the planner defaulted or dropped, for the setup to tell the owner.
+ */
 public record ContentPlan(Persona persona, Timeline timeline, People people, CalendarPlan calendar, TravelPlan travel, DevicePlan device,
         NetworkPlan network, UsagePlan usage, AppsPlan apps, BrowserPlan browser, VaultPlan vault, TracesPlan traces, MediaPlan media,
-        MailPlan mail, StyleBook styles, List<String> warnings) {
+        MailPlan mail, StyleBook styles, List<FilledConversation> conversations, List<FilledConversation> reserve, List<String> warnings) {
     public ContentPlan {
+        conversations = List.copyOf(conversations);
+        reserve = List.copyOf(reserve);
         warnings = List.copyOf(warnings);
     }
 }

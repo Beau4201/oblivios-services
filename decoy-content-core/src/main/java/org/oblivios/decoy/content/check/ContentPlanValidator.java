@@ -86,7 +86,7 @@ public final class ContentPlanValidator {
             pack.senders(kind).forEach(s -> known.add(s.name()));
         }
         p.people().threads().forEach(t -> {
-            if (!known.contains(t.address())) {
+            if (t.members().isEmpty() && !known.contains(t.address())) { // a group thread is checked by its members
                 v.add(new Violation("R-SMS-SENDER", "thread with " + t.address() + ", which is no contact and no sender of the country pack"));
             }
         });

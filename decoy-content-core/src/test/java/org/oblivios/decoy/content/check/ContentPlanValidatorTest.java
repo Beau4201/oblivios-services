@@ -21,6 +21,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.oblivios.decoy.content.persona.PersonaProfile;
+import org.oblivios.decoy.content.pool.PoolConversation;
+import org.oblivios.decoy.content.pool.TestPool;
+import org.oblivios.decoy.content.pool.TestPool.AcceptAllJudge;
+import org.oblivios.decoy.content.pool.TestPool.IdentityRewriter;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.plan.ContentPlan;
@@ -64,6 +68,7 @@ import org.oblivios.decoy.content.surface.SmsThread;
 import org.oblivios.decoy.content.surface.WifiNetwork;
 
 class ContentPlanValidatorTest {
+    private static final List<PoolConversation> POOL = TestPool.random(5000, Seed.of(17, 17));
     private static final ZoneId ZONE = ZoneId.of("Europe/Amsterdam");
     private static final Instant NOW = Instant.parse("2026-11-25T12:00:00Z");
     /** A test fixture, not a measured profile: the real one comes from the owner's sample photos (Task 5). */
@@ -103,7 +108,9 @@ class ContentPlanValidatorTest {
     }
 
     private static ContentPlan plan(long n) {
-        return ContentPlanner.build(PersonaProfile.open(inputs()), counts(), chosen(), apps(), "AndroidWifi", CAM, ServerProbe.HONOURED, NOW, Seed.of(n, n * 31 + 7));
+        return ContentPlanner.build(PersonaProfile.open(inputs()), counts(), chosen(), apps(), "AndroidWifi", CAM, ServerProbe.HONOURED, NOW, Seed.of(n, n * 31 + 7),
+                // a pool per plan: with the identity rewriter a shared pool would repeat its texts, which the real rewriter prevents
+                TestPool.random(5000, Seed.of(n, 5000)), new IdentityRewriter(), new AcceptAllJudge());
     }
 
     private static Set<String> ids(List<Violation> v) {
@@ -114,7 +121,7 @@ class ContentPlanValidatorTest {
     private static ContentPlan with(ContentPlan p, People people, CalendarPlan calendar, NetworkPlan network, MediaPlan media, MailPlan mail) {
         return new ContentPlan(p.persona(), p.timeline(), people != null ? people : p.people(), calendar != null ? calendar : p.calendar(),
                 p.travel(), p.device(), network != null ? network : p.network(), p.usage(), p.apps(), p.browser(), p.vault(), p.traces(),
-                media != null ? media : p.media(), mail != null ? mail : p.mail(), p.styles(), p.warnings());
+                media != null ? media : p.media(), mail != null ? mail : p.mail(), p.styles(), p.conversations(), p.reserve(), p.warnings());
     }
 
     private static People withPeople(People p, List<Call> calls, List<SmsThread> threads) {
@@ -160,7 +167,7 @@ class ContentPlanValidatorTest {
     void smsFromUnknownSender() {
         ContentPlan p = plan(3);
         List<SmsThread> threads = new ArrayList<>(p.people().threads());
-        threads.add(new SmsThread("Mallory Bank", "Mallory Bank", null, List.of(new SmsMessage(NOW.minus(Duration.ofDays(3)), true, "hello", true))));
+        threads.add(new SmsThread("Mallory Bank", "Mallory Bank", null, List.of(new SmsMessage(NOW.minus(Duration.ofDays(3)), true, "hello", true, null)), List.of()));
         assertOnly("R-SMS-SENDER", with(p, withPeople(p.people(), null, threads), null, null, null, null));
     }
 
@@ -200,7 +207,7 @@ class ContentPlanValidatorTest {
         for (int i = 0; i < 20_000; i++) {
             many.add(new ChosenPhoto("/sdcard/DCIM/Camera/many_" + i + ".jpg", Instant.parse("2025-03-01T08:00:00Z").plusSeconds(i * 61L), Set.of()));
         }
-        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), many, apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3));
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), many, apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
         assertTrue(p.warnings().stream().anyMatch(w -> w.contains("chosen photos")), "warnings " + p.warnings());
         assertTrue(ContentPlanValidator.check(p).isEmpty());
     }
@@ -268,7 +275,7 @@ class ContentPlanValidatorTest {
             }
         }
         return new ContentPlan(p.persona(), p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
-                traces, media, mail, p.styles(), p.warnings());
+                traces, media, mail, p.styles(), p.conversations(), p.reserve(), p.warnings());
     }
 
     private static <T> List<T> plus(List<T> list, T extra) {
@@ -286,7 +293,7 @@ class ContentPlanValidatorTest {
         Map<String, ContentPlan> planted = new java.util.LinkedHashMap<>();
         planted.put("call", swap(p, new People(pe.ownNumber(), pe.contacts(), plus(pe.calls(), new Call(number, late, 5, CallType.INCOMING)), pe.threads(), pe.voicemails())));
         planted.put("sms", swap(p, new People(pe.ownNumber(), pe.contacts(), pe.calls(),
-                plus(pe.threads(), new SmsThread(number, "x", null, List.of(new SmsMessage(late, true, "hi", true)))), pe.voicemails())));
+                plus(pe.threads(), new SmsThread(number, "x", null, List.of(new SmsMessage(late, true, "hi", true, null)), List.of())), pe.voicemails())));
         planted.put("voicemail", swap(p, new People(pe.ownNumber(), pe.contacts(), pe.calls(), pe.threads(), plus(pe.voicemails(), new Voicemail(number, late, 5)))));
         Contact c0 = pe.contacts().get(0);
         List<Contact> contacts = new ArrayList<>(pe.contacts());
@@ -351,7 +358,7 @@ class ContentPlanValidatorTest {
     @Test
     void thinCountsStillGiveACleanPlanWithWarnings() {
         VolumeCounts thin = new VolumeCounts(List.of(new MonthCount(YearMonth.of(2026, 10), 30, 2, 1, 100_000L)));
-        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), thin, List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3));
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), thin, List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
         assertFalse(p.warnings().isEmpty());
         assertTrue(ContentPlanValidator.check(p).isEmpty());
     }
@@ -360,12 +367,12 @@ class ContentPlanValidatorTest {
     void aCountryWithoutVerifiedNumbersGivesNoPlan() {
         PersonaInputs de = new PersonaInputs("Sam Example", "Berlin", "DE", ZoneId.of("Europe/Berlin"), Locale.forLanguageTag("en-DE"));
         assertThrows(IllegalArgumentException.class,
-                () -> ContentPlanner.build(PersonaProfile.open(de), counts(), List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3)));
+                () -> ContentPlanner.build(PersonaProfile.open(de), counts(), List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge()));
     }
 
     @Test
     void refusedMailboxStillGivesAPlanWithoutMail() {
-        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), List.of(), apps(), null, CAM, ServerProbe.IGNORED, NOW, Seed.of(3, 3));
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), List.of(), apps(), null, CAM, ServerProbe.IGNORED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
         assertTrue(p.mail().messages().isEmpty());
         assertTrue(p.mail().refusedNotice().isPresent());
         assertTrue(ContentPlanValidator.check(p).isEmpty());

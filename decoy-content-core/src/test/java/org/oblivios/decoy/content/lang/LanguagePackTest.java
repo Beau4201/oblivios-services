@@ -160,24 +160,4 @@ class LanguagePackTest {
         assertTrue(seen > 0);
     }
 
-    @Test
-    void personalTextsFollowThePersonaLanguage() {
-        LanguagePack en = LanguagePack.of("en");
-        List<String> personal = new ArrayList<>(en.list("sms.short"));
-        personal.addAll(en.list("sms.templates"));
-        int seen = 0;
-        for (long n = 0; n < 3; n++) {
-            for (SmsThread t : people("en-US", n).threads()) {
-                if (t.senderKind() != null) {
-                    continue;
-                }
-                for (SmsMessage m : t.messages()) {
-                    assertTrue(matchesAny(m.body(), personal), "not a personal text of the persona's language: " + m.body());
-                    seen++;
-                }
-            }
-        }
-        assertTrue(seen > 0);
-        assertFalse(personal.isEmpty());
-    }
 }
