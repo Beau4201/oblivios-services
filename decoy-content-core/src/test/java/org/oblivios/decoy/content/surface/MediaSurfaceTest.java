@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
@@ -71,7 +72,7 @@ class MediaSurfaceTest {
 
     private static Setup setup(long n, YearMonth last, int chosenCount) {
         Persona p = Persona.derive(Seed.of(n, 1),
-                new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL")));
+                PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             months.add(new MonthCount(last.minusMonths(29 - i), 60 + i * 5, 10, 8, 1_000_000L));
@@ -363,7 +364,7 @@ class MediaSurfaceTest {
         // a camera that names files to the second, and a month with thousands of photos, force clashes
         DeviceCameraProfile seconds = new DeviceCameraProfile(4080, 3072, List.of(table(8)), "IMG_\\d{8}_\\d{6}\\.jpg",
                 "'IMG_'yyyyMMdd_HHmmss'.jpg'", false);
-        Persona p = Persona.derive(Seed.of(1, 1), new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL")));
+        Persona p = Persona.derive(Seed.of(1, 1), PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(5 - i), 6000, 10, 8, 1_000_000L));

@@ -34,7 +34,7 @@ public final class RollForward {
         }
         RandomGenerator r = fresh.stream("rollforward");
         ZoneId zone = snapshot.persona().inputs().zone();
-        LanguagePack lang = LanguagePack.of(snapshot.persona().inputs().locale().toLanguageTag());
+        LanguagePack lang = LanguagePack.of(snapshot.persona().language());
         List<String> firstNames = snapshot.contacts().stream().map(c -> c.name().split(" ")[0]).distinct().toList();
         double gapDays = Duration.between(latest, now).toMinutes() / 1440.0;
         int calls = (int) Math.min(MAX_CALLS, Math.round(gapDays * CALLS_PER_DAY * (0.8 + 0.4 * r.nextDouble())));

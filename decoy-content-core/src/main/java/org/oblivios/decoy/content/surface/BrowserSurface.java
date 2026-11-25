@@ -17,7 +17,7 @@ public final class BrowserSurface {
 
     public static BrowserPlan generate(SurfaceContext ctx) {
         RandomGenerator r = ctx.seed().stream("browser");
-        List<String> paths = LanguagePack.of(ctx.persona().inputs().locale().toLanguageTag()).list("browser.paths");
+        List<String> paths = LanguagePack.of(ctx.persona().language()).list("browser.paths");
         List<String> pool = new ArrayList<>(ctx.pack().sites());
         Collections.shuffle(pool, new java.util.Random(r.nextLong()));
         List<String> domains = new ArrayList<>(pool.subList(0, Math.min(pool.size(), 24)));

@@ -43,7 +43,7 @@ public final class PeopleSurface {
     private static People build(Persona p, Timeline t, CountryPack c, Seed s) throws NoVerifiedRange {
         RandomGenerator r = s.stream("people");
         ZoneId zone = p.inputs().zone();
-        LanguagePack lang = LanguagePack.of(p.inputs().locale().toLanguageTag());
+        LanguagePack lang = LanguagePack.of(p.language());
         LanguagePack service = LanguagePack.forService(c, lang.tag());
         List<String> groupNames = lang.list("contact.groups");
         Set<String> used = new HashSet<>();

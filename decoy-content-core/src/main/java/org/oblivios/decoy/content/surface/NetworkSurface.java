@@ -22,7 +22,7 @@ public final class NetworkSurface {
         RandomGenerator r = ctx.seed().stream("network");
         List<WifiNetwork> wifi = new ArrayList<>();
         List<String> patterns = ctx.pack().homeWifiPatterns();
-        LanguagePack lang = LanguagePack.of(ctx.persona().inputs().locale().toLanguageTag());
+        LanguagePack lang = LanguagePack.of(ctx.persona().language());
         for (Place place : ctx.timeline().places()) {
             String ssid;
             switch (place.kind()) {

@@ -46,7 +46,7 @@ public final class MailSurface {
         RandomGenerator r = s.stream("mail");
         ZoneId zone = t.zone();
         // mail from a sender of the country is written in the country's language (ADR-321)
-        LanguagePack lang = LanguagePack.forService(c, p.inputs().locale().toLanguageTag());
+        LanguagePack lang = LanguagePack.forService(c, p.language());
 
         List<SenderKind> kinds = new ArrayList<>();
         for (SenderKind k : SenderKind.values()) {

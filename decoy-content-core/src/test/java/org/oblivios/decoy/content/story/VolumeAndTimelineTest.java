@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
+import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
@@ -35,7 +36,7 @@ class VolumeAndTimelineTest {
 
     private static Persona persona(String city) {
         return Persona.derive(Seed.of(1, 2),
-                new PersonaInputs("Sam Example", city, "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL")));
+                PersonaProfile.open(new PersonaInputs("Sam Example", city, "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"))), 2026);
     }
 
     private static CountryPack nl() {

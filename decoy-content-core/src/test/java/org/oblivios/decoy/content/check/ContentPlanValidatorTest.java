@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.plan.ContentPlan;
@@ -102,7 +103,7 @@ class ContentPlanValidatorTest {
     }
 
     private static ContentPlan plan(long n) {
-        return ContentPlanner.build(inputs(), counts(), chosen(), apps(), "AndroidWifi", CAM, ServerProbe.HONOURED, NOW, Seed.of(n, n * 31 + 7));
+        return ContentPlanner.build(PersonaProfile.open(inputs()), counts(), chosen(), apps(), "AndroidWifi", CAM, ServerProbe.HONOURED, NOW, Seed.of(n, n * 31 + 7));
     }
 
     private static Set<String> ids(List<Violation> v) {
@@ -199,7 +200,7 @@ class ContentPlanValidatorTest {
         for (int i = 0; i < 20_000; i++) {
             many.add(new ChosenPhoto("/sdcard/DCIM/Camera/many_" + i + ".jpg", Instant.parse("2025-03-01T08:00:00Z").plusSeconds(i * 61L), Set.of()));
         }
-        ContentPlan p = ContentPlanner.build(inputs(), counts(), many, apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3));
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), many, apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3));
         assertTrue(p.warnings().stream().anyMatch(w -> w.contains("chosen photos")), "warnings " + p.warnings());
         assertTrue(ContentPlanValidator.check(p).isEmpty());
     }
@@ -349,7 +350,7 @@ class ContentPlanValidatorTest {
     @Test
     void thinCountsStillGiveACleanPlanWithWarnings() {
         VolumeCounts thin = new VolumeCounts(List.of(new MonthCount(YearMonth.of(2026, 10), 30, 2, 1, 100_000L)));
-        ContentPlan p = ContentPlanner.build(inputs(), thin, List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3));
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), thin, List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3));
         assertFalse(p.warnings().isEmpty());
         assertTrue(ContentPlanValidator.check(p).isEmpty());
     }
@@ -358,12 +359,12 @@ class ContentPlanValidatorTest {
     void aCountryWithoutVerifiedNumbersGivesNoPlan() {
         PersonaInputs de = new PersonaInputs("Sam Example", "Berlin", "DE", ZoneId.of("Europe/Berlin"), Locale.forLanguageTag("en-DE"));
         assertThrows(IllegalArgumentException.class,
-                () -> ContentPlanner.build(de, counts(), List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3)));
+                () -> ContentPlanner.build(PersonaProfile.open(de), counts(), List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3)));
     }
 
     @Test
     void refusedMailboxStillGivesAPlanWithoutMail() {
-        ContentPlan p = ContentPlanner.build(inputs(), counts(), List.of(), apps(), null, CAM, ServerProbe.IGNORED, NOW, Seed.of(3, 3));
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), List.of(), apps(), null, CAM, ServerProbe.IGNORED, NOW, Seed.of(3, 3));
         assertTrue(p.mail().messages().isEmpty());
         assertTrue(p.mail().refusedNotice().isPresent());
         assertTrue(ContentPlanValidator.check(p).isEmpty());

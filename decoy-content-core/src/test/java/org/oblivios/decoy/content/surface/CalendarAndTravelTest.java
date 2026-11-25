@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
@@ -44,7 +45,7 @@ class CalendarAndTravelTest {
 
     private static Setup setup(long n) {
         Persona p = Persona.derive(Seed.of(n, 1),
-                new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL")));
+                PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(29 - i), 60 + i * 5, 10, 8, 1_000_000L));

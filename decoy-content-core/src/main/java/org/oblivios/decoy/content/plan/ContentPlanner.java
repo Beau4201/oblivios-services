@@ -10,6 +10,7 @@ import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
 import org.oblivios.decoy.content.lang.LanguagePack;
+import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
 import org.oblivios.decoy.content.story.VolumeModel;
@@ -46,14 +47,15 @@ import org.oblivios.decoy.content.surface.VaultSurface;
 public final class ContentPlanner {
     private ContentPlanner() {}
 
-    public static ContentPlan build(PersonaInputs in, VolumeCounts counts, List<ChosenPhoto> chosen, List<AppSpec> apps, String currentSsid,
-            DeviceCameraProfile cam, ServerProbe probe, Instant now, Seed seed) {
-        Persona persona = Persona.derive(seed, in);
+    public static ContentPlan build(PersonaProfile profile, VolumeCounts counts, List<ChosenPhoto> chosen, List<AppSpec> apps,
+            String currentSsid, DeviceCameraProfile cam, ServerProbe probe, Instant now, Seed seed) {
+        PersonaInputs in = profile.inputs();
+        Persona persona = Persona.derive(seed, profile, now.atZone(in.zone()).getYear());
         CountryPack pack = Packs.forDevice(in.countryCode(), in.zone(), in.locale()).pack();
         VolumeModel volume = VolumeModel.fromCounts(counts, seed);
         Timeline timeline = Timeline.generate(persona, volume, pack, now, seed);
         People people = PeopleSurface.generate(persona, timeline, pack, seed);
-        LanguagePack lang = LanguagePack.of(in.locale().toLanguageTag());
+        LanguagePack lang = LanguagePack.of(persona.language());
         CalendarPlan calendar = CalendarSurface.generate(people, timeline, pack, lang, seed);
         TravelPlan travel = TravelSurface.generate(timeline, pack, lang, seed);
         SurfaceContext ctx = new SurfaceContext(persona, timeline, people, pack, apps, currentSsid, now, seed);

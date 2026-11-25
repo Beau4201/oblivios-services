@@ -16,7 +16,7 @@ public final class DeviceSurface {
 
     public static DevicePlan generate(SurfaceContext ctx) {
         RandomGenerator r = ctx.seed().stream("device");
-        LanguagePack lang = LanguagePack.of(ctx.persona().inputs().locale().toLanguageTag());
+        LanguagePack lang = LanguagePack.of(ctx.persona().language());
         String given = ctx.persona().inputs().ownerName().split("\\s+")[0];
         String name = lang.format("device.name", Map.of("name", given));
 

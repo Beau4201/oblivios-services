@@ -49,7 +49,7 @@ public final class Timeline {
             warnings.add("city '" + p.inputs().city() + "' has no place data: the capital is used");
         }
 
-        LanguagePack lang = LanguagePack.of(p.inputs().locale().toLanguageTag());
+        LanguagePack lang = LanguagePack.of(p.language());
         List<Place> places = new ArrayList<>();
         double[] home = around(centre, 0.3, 4.0, r);
         places.add(new Place(lang.text("place.home"), home[0], home[1], PlaceKind.HOME));

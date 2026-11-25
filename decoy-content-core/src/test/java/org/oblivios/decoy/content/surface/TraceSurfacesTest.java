@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
@@ -38,7 +39,7 @@ class TraceSurfacesTest {
     }
 
     private static SurfaceContext ctx(long n, String currentSsid) {
-        Persona p = Persona.derive(Seed.of(n, 1), new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL")));
+        Persona p = Persona.derive(Seed.of(n, 1), PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(29 - i), 60 + i * 5, 10, 8, 1_000_000L));

@@ -38,7 +38,7 @@ public final class LanguagePack {
     public static LanguagePack of(String tag) {
         String language = tag == null ? "" : Locale.forLanguageTag(tag.trim()).getLanguage();
         if (!AVAILABLE.contains(language)) {
-            throw new IllegalArgumentException("no language data for " + (tag == null ? "" : tag.trim()));
+            throw new IllegalArgumentException("no language data for " + (language.isEmpty() && tag != null ? tag.trim() : language));
         }
         return CACHE.computeIfAbsent(language, l -> new LanguagePack(l, read(DIR + l + ".properties")));
     }
