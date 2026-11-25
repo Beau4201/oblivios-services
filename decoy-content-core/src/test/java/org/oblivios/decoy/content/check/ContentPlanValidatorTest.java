@@ -20,7 +20,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.persona.PersonaProfile;
+import org.oblivios.decoy.content.persona.PersonaProfile.Fact;
+import org.oblivios.decoy.content.pool.FilledConversation;
+import org.oblivios.decoy.content.style.StyleBook;
+import org.oblivios.decoy.content.style.StyleVector;
+import org.oblivios.decoy.content.style.StyleVector.Register;
+import org.oblivios.decoy.content.surface.Relation;
 import org.oblivios.decoy.content.pool.PoolConversation;
 import org.oblivios.decoy.content.pool.TestPool;
 import org.oblivios.decoy.content.pool.TestPool.AcceptAllJudge;
@@ -347,6 +354,118 @@ class ContentPlanValidatorTest {
         List<MailMessage> messages = new ArrayList<>(p.mail().messages());
         messages.add(0, new MailMessage("ING", "Old", "old", p.timeline().phoneStart().minus(Duration.ofDays(30))));
         assertOnly("R-MAIL-AGE", with(p, null, null, null, null, new MailPlan(messages, p.mail().refusedNotice())));
+    }
+
+    /** A seed whose persona has one-to-one conversations and a reserve; with the random test pool some personas get none. */
+    private static final long WITH_CONVERSATIONS = 6;
+
+    /** A copy of {@code p} with other conversations, reserve and style book; null keeps the original. */
+    private static ContentPlan withPool(ContentPlan p, List<FilledConversation> conversations, List<FilledConversation> reserve, StyleBook styles) {
+        return new ContentPlan(p.persona(), p.timeline(), p.people(), p.calendar(), p.travel(), p.device(), p.network(), p.usage(), p.apps(),
+                p.browser(), p.vault(), p.traces(), p.media(), p.mail(), styles != null ? styles : p.styles(),
+                conversations != null ? conversations : p.conversations(), reserve != null ? reserve : p.reserve(), p.warnings());
+    }
+
+    private static List<FilledConversation> replaced(List<FilledConversation> in, int at, FilledConversation with) {
+        List<FilledConversation> out = new ArrayList<>(in);
+        out.set(at, with);
+        return out;
+    }
+
+    /** The conversation with one message of the persona's side, or of the other side, replaced by the body. */
+    private static FilledConversation said(FilledConversation c, boolean incoming, String body) {
+        List<SmsMessage> messages = new ArrayList<>(c.messages());
+        for (int i = 0; i < messages.size(); i++) {
+            SmsMessage m = messages.get(i);
+            if (m.incoming() == incoming) {
+                messages.set(i, new SmsMessage(m.at(), m.incoming(), body, m.read(), m.from()));
+                return new FilledConversation(c.poolId(), c.situation(), c.group(), c.contactIds(), c.requires(), messages, c.rewritten());
+            }
+        }
+        throw new AssertionError("no such message in " + c.poolId());
+    }
+
+    private static FilledConversation requiring(FilledConversation c, Set<Fact> requires, boolean rewritten) {
+        return new FilledConversation(c.poolId(), c.situation(), c.group(), c.contactIds(), requires, c.messages(), rewritten);
+    }
+
+    @Test
+    void unfilledSlotIsAViolation() {
+        ContentPlan p = plan(WITH_CONVERSATIONS);
+        List<SmsThread> threads = new ArrayList<>(p.people().threads());
+        SmsThread t = threads.get(0);
+        List<SmsMessage> messages = new ArrayList<>(t.messages());
+        SmsMessage m = messages.get(0);
+        messages.set(0, new SmsMessage(m.at(), m.incoming(), "see you at {PLACE_CAFE}", m.read(), m.from()));
+        threads.set(0, new SmsThread(t.address(), t.title(), t.senderKind(), messages, t.members()));
+        assertOnly("R-SLOT", with(p, withPeople(p.people(), null, threads), null, null, null, null));
+        FilledConversation held = said(p.reserve().get(0), true, "{TIME} then");
+        assertOnly("R-SLOT", withPool(p, null, replaced(p.reserve(), 0, held), null));
+    }
+
+    @Test
+    void presumedFactMissingIsAViolation() {
+        ContentPlan p = plan(WITH_CONVERSATIONS);
+        Fact missing = java.util.Arrays.stream(Fact.values()).filter(f -> !p.persona().facts().contains(f)).findFirst().orElseThrow();
+        FilledConversation c = requiring(p.conversations().get(0), Set.of(missing), true);
+        assertOnly("R-REQUIRES", withPool(p, replaced(p.conversations(), 0, c), null, null));
+        FilledConversation held = requiring(p.reserve().get(0), Set.of(missing), true);
+        assertOnly("R-REQUIRES", withPool(p, null, replaced(p.reserve(), 0, held), null));
+    }
+
+    @Test
+    void streetWordFromAFormalPersonaIsAViolation() {
+        ContentPlan p = plan(WITH_CONVERSATIONS);
+        FilledConversation c = p.conversations().stream().filter(x -> x.group() == null).findFirst().orElseThrow();
+        int at = p.conversations().indexOf(c);
+        Relation relation = p.people().contacts().stream().filter(x -> x.id().equals(c.contactIds().get(0))).findFirst().orElseThrow().relation();
+        String word = LanguagePack.of(p.persona().language()).list("register.STREET.words").get(0);
+        List<FilledConversation> street = replaced(p.conversations(), at, said(c, false, "Ok " + word.toUpperCase(Locale.ROOT) + "!"));
+        for (Register formal : List.of(Register.FORMAL, Register.NEUTRAL)) {
+            assertOnly("R-REGISTER", withPool(p, street, null, towards(p, relation, formal)));
+        }
+        assertTrue(ContentPlanValidator.check(withPool(p, street, null, towards(p, relation, Register.STREET))).isEmpty());
+        // what the contact writes is the contact's own, and a word inside another word is not that word
+        for (FilledConversation harmless : List.of(said(c, true, word), said(c, false, "x" + word + "x"))) {
+            ContentPlan q = withPool(p, replaced(p.conversations(), at, harmless), null, towards(p, relation, Register.FORMAL));
+            assertEquals(List.of(), ContentPlanValidator.check(q));
+        }
+    }
+
+    private static StyleBook towards(ContentPlan p, Relation relation, Register register) {
+        Map<Relation, StyleVector> towards = new HashMap<>();
+        p.styles().personaTowards().forEach((r, style) -> towards.put(r, style.withRegister(Register.STREET)));
+        towards.put(relation, p.styles().persona().withRegister(register));
+        return new StyleBook(p.styles().persona().withRegister(Register.STREET), towards, p.styles().contacts());
+    }
+
+    @Test
+    void unrewrittenConversationIsAViolation() {
+        ContentPlan p = plan(WITH_CONVERSATIONS);
+        FilledConversation c = requiring(p.conversations().get(0), p.conversations().get(0).requires(), false);
+        assertOnly("R-UNREWRITTEN", withPool(p, replaced(p.conversations(), 0, c), null, null));
+        FilledConversation held = requiring(p.reserve().get(0), p.reserve().get(0).requires(), false);
+        assertOnly("R-UNREWRITTEN", withPool(p, null, replaced(p.reserve(), 0, held), null));
+    }
+
+    private static ContentPlan withGroup(ContentPlan p, List<String> members, boolean incoming, String from) {
+        List<SmsThread> threads = new ArrayList<>(p.people().threads());
+        threads.add(new SmsThread("a;b", "a, b", null,
+                List.of(new SmsMessage(NOW.minus(Duration.ofDays(3)), incoming, "hello", true, from)), members));
+        return with(p, withPeople(p.people(), null, threads), null, null, null, null);
+    }
+
+    @Test
+    void groupMemberWhoIsNoContactIsAViolation() {
+        ContentPlan p = plan(WITH_CONVERSATIONS);
+        String a = p.people().contacts().get(0).id();
+        String b = p.people().contacts().get(1).id();
+        String outsider = p.people().contacts().get(2).id();
+        assertTrue(ContentPlanValidator.check(withGroup(p, List.of(a, b), true, b)).isEmpty());
+        assertTrue(ContentPlanValidator.check(withGroup(p, List.of(a, b), false, null)).isEmpty());
+        assertOnly("R-GROUP-MEMBER", withGroup(p, List.of(a, "nobody"), true, a));
+        assertOnly("R-GROUP-MEMBER", withGroup(p, List.of(a, b), true, outsider));
+        assertOnly("R-GROUP-MEMBER", withGroup(p, List.of(a, b), true, null));
     }
 
     @Test

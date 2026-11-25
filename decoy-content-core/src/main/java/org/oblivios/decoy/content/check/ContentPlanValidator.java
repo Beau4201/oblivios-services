@@ -7,30 +7,43 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.plan.ContentPlan;
 import org.oblivios.decoy.content.story.Place;
+import org.oblivios.decoy.content.style.StyleVector;
 import org.oblivios.decoy.content.surface.CalEvent;
 import org.oblivios.decoy.content.surface.CalendarSurface;
 import org.oblivios.decoy.content.surface.Contact;
 import org.oblivios.decoy.content.surface.MediaItem;
+import org.oblivios.decoy.content.surface.Relation;
+import org.oblivios.decoy.content.surface.SmsMessage;
+import org.oblivios.decoy.content.surface.SmsThread;
 import org.oblivios.decoy.content.surface.Trip;
 import org.oblivios.decoy.content.surface.WifiNetwork;
 
 /**
  * The contradiction checker: reads a plan the way an examiner reads the decoy and reports every place where two
  * surfaces disagree. The rules are {@code R-PHOTO-PLACE}, {@code R-CALL-CONTACT}, {@code R-SMS-SENDER},
- * {@code R-BIRTHDAY}, {@code R-WIFI-PLACE}, {@code R-FUTURE} and {@code R-MAIL-AGE}. An empty list is a clean plan.
+ * {@code R-BIRTHDAY}, {@code R-WIFI-PLACE}, {@code R-FUTURE}, {@code R-MAIL-AGE} and, for the pool conversations,
+ * {@code R-SLOT}, {@code R-REQUIRES}, {@code R-REGISTER}, {@code R-UNREWRITTEN} and {@code R-GROUP-MEMBER}. An empty
+ * list is a clean plan.
  */
 public final class ContentPlanValidator {
     /** A photo counts as taken at a place when its tag lies within this distance of it; the generator jitters by about 22 m. */
     private static final double PLACE_RADIUS_METRES = 250;
+    private static final Pattern NOT_A_LETTER = Pattern.compile("[^\\p{L}]+");
 
     private ContentPlanValidator() {}
 
@@ -43,7 +56,72 @@ public final class ContentPlanValidator {
         wifiPlace(p, v);
         future(p, v);
         mailAge(p, v);
+        slot(p, v);
+        conversations(p, v);
+        groupMember(p, v);
         return v;
+    }
+
+    private static void slot(ContentPlan p, List<Violation> v) {
+        Stream.concat(p.people().threads().stream().flatMap(t -> t.messages().stream()),
+                p.reserve().stream().flatMap(c -> c.messages().stream())).forEach(m -> {
+            if (m.body().contains("{")) {
+                v.add(new Violation("R-SLOT", "message at " + m.at() + " holds a slot that was not filled: " + m.body()));
+            }
+        });
+    }
+
+    /** The reserve counts as well: the roll-forward writes it later with no further check. */
+    private static void conversations(ContentPlan p, List<Violation> v) {
+        Set<String> street = Set.copyOf(LanguagePack.of(p.persona().language()).list("register.STREET.words"));
+        Map<String, Relation> relations = new HashMap<>();
+        p.people().contacts().forEach(c -> relations.put(c.id(), c.relation()));
+        Stream.concat(p.conversations().stream(), p.reserve().stream()).forEach(c -> {
+            if (!c.rewritten()) {
+                v.add(new Violation("R-UNREWRITTEN", "conversation " + c.poolId() + " was not rewritten"));
+            }
+            if (!p.persona().facts().containsAll(c.requires())) {
+                v.add(new Violation("R-REQUIRES", "conversation " + c.poolId() + " presumes " + c.requires()
+                        + ", and the persona does not have all of it"));
+            }
+            // a group is written in the persona's own style, as the picker matched it
+            Relation relation = c.group() == null ? relations.get(c.contactIds().get(0)) : null;
+            StyleVector own = relation == null ? p.styles().persona()
+                    : p.styles().personaTowards().getOrDefault(relation, p.styles().persona());
+            if (own.register() != StyleVector.Register.FORMAL && own.register() != StyleVector.Register.NEUTRAL) {
+                return;
+            }
+            c.messages().stream().filter(m -> !m.incoming()).forEach(m -> {
+                for (String word : NOT_A_LETTER.split(m.body().toLowerCase(Locale.ROOT))) {
+                    if (street.contains(word)) {
+                        v.add(new Violation("R-REGISTER", "conversation " + c.poolId() + ": the persona writes " + own.register()
+                                + " there, and says '" + word + "'"));
+                    }
+                }
+            });
+        });
+    }
+
+    private static void groupMember(ContentPlan p, List<Violation> v) {
+        Set<String> ids = new HashSet<>();
+        p.people().contacts().forEach(c -> ids.add(c.id()));
+        for (SmsThread t : p.people().threads()) {
+            for (String member : t.members()) {
+                if (!ids.contains(member)) {
+                    v.add(new Violation("R-GROUP-MEMBER", "group " + t.title() + " holds " + member + ", which is no contact"));
+                }
+            }
+            if (t.members().isEmpty()) {
+                continue;
+            }
+            for (SmsMessage m : t.messages()) {
+                // an immutable list refuses a null in contains, so the missing sender is tested first
+                if (m.incoming() && (m.from() == null || !t.members().contains(m.from()))) {
+                    v.add(new Violation("R-GROUP-MEMBER", "group " + t.title() + " has a message at " + m.at() + " from "
+                            + m.from() + ", which is no member"));
+                }
+            }
+        }
     }
 
     private static void photoPlace(ContentPlan p, List<Violation> v) {
