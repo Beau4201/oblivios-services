@@ -155,6 +155,16 @@ public final class DataPack implements CountryPack {
     }
 
     @Override
+    public List<String> givenNames() {
+        return given;
+    }
+
+    @Override
+    public List<String> familyNames() {
+        return family;
+    }
+
+    @Override
     public String givenName(RandomGenerator r) {
         return given.get(r.nextInt(given.size()));
     }

@@ -8,6 +8,7 @@ import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,6 +30,16 @@ public final class Packs {
 
     public static CountryPack neutral() {
         return load(NEUTRAL).orElseThrow(() -> new IllegalStateException("the neutral country pack is missing"));
+    }
+
+    /** Every pack that has a data file, in the order of the index. */
+    public static List<CountryPack> all() {
+        Properties index = properties("index");
+        if (index == null) {
+            throw new IllegalStateException("the index of the country packs is missing");
+        }
+        return Arrays.stream(index.getProperty("available", "").split("\\|")).map(String::trim).filter(c -> !c.isEmpty())
+                .map(c -> load(c).orElseThrow(() -> new IllegalStateException("the index names " + c + ", which has no file"))).toList();
     }
 
     /** The pack of a country code (ISO 3166-1 alpha-2), or empty when there is no data file for it. */

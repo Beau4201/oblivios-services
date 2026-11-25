@@ -20,6 +20,11 @@ public interface CountryPack {
 
     String familyName(RandomGenerator r);
 
+    /** Every given name of the pack; the gate of the conversation pool keeps them out of the pool. */
+    List<String> givenNames();
+
+    List<String> familyNames();
+
     /** A number from a verified free or fictional block; throws when the pack has none. */
     PhoneNumber mobileNumber(RandomGenerator r) throws NoVerifiedRange;
 

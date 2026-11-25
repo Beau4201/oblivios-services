@@ -197,6 +197,20 @@ class CountryPackTest {
     }
 
     @Test
+    void everyPackFileIsListedWithItsNames() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Path.of(Packs.class.getResource("/org/oblivios/decoy/content/data/country/XX.properties").toURI())
+                .getParent();
+        java.util.Set<String> files = new java.util.TreeSet<>();
+        try (java.util.stream.Stream<java.nio.file.Path> list = java.nio.file.Files.list(dir)) {
+            list.map(f -> f.getFileName().toString()).filter(f -> f.matches("[A-Z]{2}\\.properties")).forEach(f -> files.add(f.substring(0, 2)));
+        }
+        assertEquals(files, new java.util.TreeSet<>(Packs.all().stream().map(CountryPack::code).toList()));
+        assertTrue(nl().givenNames().contains("Sanne"));
+        assertTrue(nl().familyNames().contains("de Jong"));
+        assertTrue(Packs.neutral().givenNames().contains("Alex"));
+    }
+
+    @Test
     void everyPackInheritsTheGlobalSenders() {
         assertEquals(Packs.load("XX").get().senders(SenderKind.GLOBAL), nl().senders(SenderKind.GLOBAL));
         assertFalse(nl().senders(SenderKind.GLOBAL).isEmpty());
