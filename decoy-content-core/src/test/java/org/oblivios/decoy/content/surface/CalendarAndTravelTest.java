@@ -83,7 +83,7 @@ class CalendarAndTravelTest {
                 }
                 boolean found = s.calendar().events().stream().anyMatch(e -> !e.yearly()
                         && e.start().equals(h.atStartOfDay(ZoneOffset.UTC).toInstant())
-                        && e.title().equals(nl().holidayName(h)));
+                        && e.title().equals(nl().holidayName(h).orElseThrow()));
                 assertTrue(found, "no event for the holiday " + h);
             }
         }

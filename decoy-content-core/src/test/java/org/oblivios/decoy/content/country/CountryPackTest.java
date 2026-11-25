@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.oblivios.decoy.content.country;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -12,9 +13,9 @@ import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SplittableRandom;
-import java.util.random.RandomGenerator;
 import org.junit.jupiter.api.Test;
 
 class CountryPackTest {
@@ -32,7 +33,7 @@ class CountryPackTest {
         long national = Long.parseLong(e164.substring(3)); // 6xxxxxxxx, the leading 0 dropped
         for (String block : ACM_FREE_BLOCKS) {
             String[] ends = block.split(" t/m ");
-            long from = Long.parseLong(ends[0].replace("-", "")) ; // 0625780000
+            long from = Long.parseLong(ends[0].replace("-", "")); // 0625780000
             long to = Long.parseLong(ends[1].replace("-", ""));
             if (national >= from && national <= to) {
                 return true;
@@ -41,15 +42,16 @@ class CountryPackTest {
         return false;
     }
 
-    /** A pack whose numbers have no verified range, as for a country the register was not read for. */
-    private static final class NoRangePack implements CountryPack {
-        public String code() { return "ZZ"; }
-        public String givenName(RandomGenerator r) { return "Zed"; }
-        public String familyName(RandomGenerator r) { return "Zeta"; }
-        public PhoneNumber mobileNumber(RandomGenerator r) throws NoVerifiedRange { throw new NoVerifiedRange("none"); }
-        public List<Sender> senders(SenderKind kind) { return List.of(new Sender("ZedBank", kind)); }
-        public List<LocalDate> publicHolidays(int year) { return List.of(); }
-        public List<String> homeWifiPatterns() { return List.of("ZED-####"); }
+    private static CountryPack nl() {
+        return Packs.load("NL").orElseThrow();
+    }
+
+    private static DataPack pack(String... keyValues) {
+        Properties p = new Properties();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            p.setProperty(keyValues[i], keyValues[i + 1]);
+        }
+        return new DataPack(p);
     }
 
     @Test
@@ -61,7 +63,8 @@ class CountryPackTest {
 
     @Test
     void countryWithoutVerifiedRangeFallsBackToNeutral() {
-        PackChoice c = Packs.forDevice(List.of(new NoRangePack()), "ZZ", ZoneId.of("UTC"), Locale.ROOT);
+        CountryPack noRange = pack("code", "ZZ", "given", "Zed", "family", "Zeta", "senders.BANK", "ZedBank");
+        PackChoice c = Packs.forDevice(List.of(noRange), "ZZ", ZoneId.of("UTC"), Locale.ROOT);
         assertTrue(c.fellBack());
         assertSame(Packs.neutral(), c.pack());
     }
@@ -75,7 +78,7 @@ class CountryPackTest {
 
     @Test
     void noPackMixing() {
-        List<CountryPack> all = List.of(Packs.neutral(), Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack());
+        List<CountryPack> all = List.of(Packs.neutral(), nl());
         for (SenderKind kind : SenderKind.values()) {
             if (kind == SenderKind.GLOBAL) {
                 continue;
@@ -106,8 +109,13 @@ class CountryPackTest {
     }
 
     @Test
-    void dutchNumbersAreInVerifiedRange() throws NoVerifiedRange {
-        CountryPack nl = Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack();
+    void neutralHasNoVerifiedRange() {
+        assertThrows(NoVerifiedRange.class, () -> Packs.load("XX").get().mobileNumber(new SplittableRandom(2)));
+    }
+
+    @Test
+    void nlNumbersAreInVerifiedRange() throws NoVerifiedRange {
+        CountryPack nl = nl();
         SplittableRandom r = new SplittableRandom(42);
         Set<String> distinct = new HashSet<>();
         for (int i = 0; i < 5000; i++) {
@@ -119,8 +127,8 @@ class CountryPackTest {
     }
 
     @Test
-    void dutchNumbersSpreadOverAllVerifiedBlocks() throws NoVerifiedRange {
-        CountryPack nl = Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack();
+    void nlNumbersSpreadOverAllVerifiedBlocks() throws NoVerifiedRange {
+        CountryPack nl = nl();
         SplittableRandom r = new SplittableRandom(7);
         Set<String> prefixes = new HashSet<>();
         for (int i = 0; i < 20000; i++) {
@@ -130,14 +138,30 @@ class CountryPackTest {
     }
 
     @Test
-    void dutchHolidaysInclude27April2026() {
-        CountryPack nl = Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack();
-        assertTrue(nl.publicHolidays(2026).contains(LocalDate.of(2026, 4, 27)));
+    void blocksAreParsedInclusive() throws NoVerifiedRange {
+        CountryPack p = pack("code", "ZZ", "mobile.prefix", "+31", "mobile.blocks", "600000000-600000001");
+        SplittableRandom r = new SplittableRandom(5);
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < 200; i++) {
+            seen.add(p.mobileNumber(r).e164());
+        }
+        assertEquals(Set.of("+31600000000", "+31600000001"), seen);
     }
 
     @Test
-    void dutchHolidaysFollowEaster2026() {
-        List<LocalDate> h = Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack().publicHolidays(2026);
+    void unknownKeyIsRejected() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> pack("code", "ZZ", "colour", "blue"));
+        assertTrue(e.getMessage().contains("colour"), e.getMessage());
+    }
+
+    @Test
+    void nlHolidaysInclude27April2026() {
+        assertTrue(nl().publicHolidays(2026).contains(LocalDate.of(2026, 4, 27)));
+    }
+
+    @Test
+    void nlHolidaysFollowEaster2026() {
+        List<LocalDate> h = nl().publicHolidays(2026);
         assertTrue(h.contains(LocalDate.of(2026, 4, 3)), "Good Friday");
         assertTrue(h.contains(LocalDate.of(2026, 4, 6)), "Easter Monday");
         assertTrue(h.contains(LocalDate.of(2026, 5, 14)), "Ascension");
@@ -146,15 +170,59 @@ class CountryPackTest {
     }
 
     @Test
-    void kingsDayMovesToTheSaturdayWhenTheTwentySeventhIsASunday() {
-        List<LocalDate> h = Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack().publicHolidays(2025);
+    void sundayBackRuleMovesToTheSaturday() {
+        List<LocalDate> h = nl().publicHolidays(2025);
         assertTrue(h.contains(LocalDate.of(2025, 4, 26)));
         assertFalse(h.contains(LocalDate.of(2025, 4, 27)));
     }
 
     @Test
+    void holidayNameIsEmptyForAnOrdinaryDay() {
+        assertTrue(nl().holidayName(LocalDate.of(2026, 3, 10)).isEmpty());
+        assertTrue(nl().holidayName(LocalDate.of(2026, 4, 27)).isPresent());
+    }
+
+    @Test
+    void cityLookupIgnoresCaseAndSpaces() {
+        double[] plain = nl().city("den haag").orElseThrow();
+        assertArrayEquals(plain, nl().city(" Den Haag ").orElseThrow());
+        assertTrue(nl().city("Atlantis").isEmpty());
+        assertTrue(nl().city(null).isEmpty());
+    }
+
+    @Test
+    void neutralHasNoCapital() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Packs.neutral().capital());
+        assertEquals("no place data for country XX", e.getMessage());
+    }
+
+    @Test
+    void everyPackInheritsTheGlobalSenders() {
+        assertEquals(Packs.load("XX").get().senders(SenderKind.GLOBAL), nl().senders(SenderKind.GLOBAL));
+        assertFalse(nl().senders(SenderKind.GLOBAL).isEmpty());
+    }
+
+    @Test
+    void mmsGroupRangeIsRead() {
+        assertArrayEquals(new int[] {0, 2}, nl().mmsGroups());
+        assertArrayEquals(new int[] {0, 1}, Packs.neutral().mmsGroups());
+    }
+
+    @Test
+    void amountUsesThePattern() {
+        assertTrue(nl().amount(12).contains("12"));
+        assertEquals("12", Packs.neutral().amount(12));
+    }
+
+    @Test
+    void packLanguageIsRead() {
+        assertEquals("nl", nl().language());
+        assertEquals("", Packs.neutral().language());
+    }
+
+    @Test
     void namesVaryAcrossDraws() {
-        CountryPack nl = Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack();
+        CountryPack nl = nl();
         SplittableRandom r = new SplittableRandom(3);
         Set<String> given = new HashSet<>();
         Set<String> family = new HashSet<>();
@@ -168,7 +236,7 @@ class CountryPackTest {
 
     @Test
     void homeWifiPatternsExist() {
-        assertFalse(Packs.forDevice("NL", ZoneId.of("UTC"), Locale.ROOT).pack().homeWifiPatterns().isEmpty());
+        assertFalse(nl().homeWifiPatterns().isEmpty());
         assertFalse(Packs.neutral().homeWifiPatterns().isEmpty());
     }
 }

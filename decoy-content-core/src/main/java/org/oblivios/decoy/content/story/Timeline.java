@@ -36,14 +36,14 @@ public final class Timeline {
         this.warnings = List.copyOf(warnings);
     }
 
-    /** Throws {@link IllegalArgumentException} for a country that has no place data (see {@code PlaceBook}). */
+    /** Throws {@link IllegalArgumentException} for a country pack that has no place data ({@link CountryPack#capital}). */
     public static Timeline generate(Persona p, VolumeModel v, CountryPack c, Instant now, Seed s) {
         RandomGenerator r = s.stream("timeline");
         List<String> warnings = new ArrayList<>();
 
-        double[] centre = PlaceBook.city(p.inputs().countryCode(), p.inputs().city()).orElse(null);
+        double[] centre = c.city(p.inputs().city()).orElse(null);
         if (centre == null) {
-            centre = PlaceBook.capital(p.inputs().countryCode());
+            centre = c.capital();
             warnings.add("city '" + p.inputs().city() + "' has no place data: the capital is used");
         }
 

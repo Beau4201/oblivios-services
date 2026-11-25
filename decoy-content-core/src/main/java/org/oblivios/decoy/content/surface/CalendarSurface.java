@@ -58,7 +58,7 @@ public final class CalendarSurface {
         for (int year = startDate.getYear(); year <= horizonDate.getYear(); year++) {
             for (LocalDate h : c.publicHolidays(year)) {
                 if (!h.isBefore(startDate) && !h.isAfter(horizonDate)) {
-                    events.add(new CalEvent(c.holidayName(h), h.atStartOfDay(ZoneOffset.UTC).toInstant(), false));
+                    events.add(new CalEvent(c.holidayName(h).orElse("Public holiday"), h.atStartOfDay(ZoneOffset.UTC).toInstant(), false));
                 }
             }
         }
