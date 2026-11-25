@@ -67,6 +67,30 @@ class PeopleSurfaceTest {
         return new Setup(p, t, PeopleSurface.generate(p, t, nl(), Seed.of(n, 4)));
     }
 
+    @Test
+    void customerNumberIsOneNumberPerOperatorThread() {
+        // a customer number belongs to the customer: it never changes between the messages of one operator
+        Pattern customer = Pattern.compile("Klantnummer (\\d+)");
+        boolean checkedAThreadWithTwo = false;
+        for (long n = 0; n < 30; n++) {
+            for (SmsThread t : setup(n).people().threads()) {
+                if (t.senderKind() != SenderKind.OPERATOR) {
+                    continue;
+                }
+                List<String> numbers = new ArrayList<>();
+                t.messages().forEach(m -> {
+                    java.util.regex.Matcher found = customer.matcher(m.body());
+                    if (found.find()) {
+                        numbers.add(found.group(1));
+                    }
+                });
+                assertEquals(1, new HashSet<>(numbers).size() + (numbers.isEmpty() ? 1 : 0), "customer numbers of " + t.title() + ": " + numbers);
+                checkedAThreadWithTwo |= numbers.size() >= 2;
+            }
+        }
+        assertTrue(checkedAThreadWithTwo, "no operator thread with two customer numbers: the check is vacuous");
+    }
+
     private static Set<String> contactNumbers(People p) {
         Set<String> out = new HashSet<>();
         p.contacts().forEach(c -> out.add(c.number()));

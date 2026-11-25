@@ -143,26 +143,27 @@ public final class PeopleSurface {
         List<SmsMessage> msgs = new ArrayList<>();
         int n = 3 + r.nextInt(10);
         boolean wantsCode = kind == SenderKind.BANK || kind == SenderKind.OPERATOR || kind == SenderKind.GLOBAL;
+        int customer = 10_000_000 + r.nextInt(90_000_000); // one customer number per operator, as in life
         for (int k = 0; k < n; k++) {
             boolean code = wantsCode && withCode && (k == 0 || r.nextInt(100) < 50);
             msgs.add(new SmsMessage(Events.randomInstant(r, t.phoneStart(), t.now(), zone, earliest, latest), true,
-                    serviceText(kind, dutch, code, r), true));
+                    serviceText(kind, dutch, code, customer, r), true));
         }
         msgs.sort(Comparator.comparing(SmsMessage::at));
         return new SmsThread(sender.name(), sender.name(), kind, msgs);
     }
 
-    private static String serviceText(SenderKind kind, boolean dutch, boolean code, RandomGenerator r) {
+    private static String serviceText(SenderKind kind, boolean dutch, boolean code, int customer, RandomGenerator r) {
         int six = 100000 + r.nextInt(900000);
         if (code) {
             return dutch ? "Uw verificatiecode is " + six + ". Deel deze code nooit met anderen."
                     : "Your verification code is " + six + ". Never share it with anyone.";
         }
-        // every text carries its own reference: a thread of one sentence repeated is the same on every phone and on no real one
+        // a transaction text carries its own reference: a thread of one sentence repeated is the same on every phone and on no real one
         int ref = 10_000_000 + r.nextInt(90_000_000);
         return switch (kind) {
             case BANK -> dutch ? "Uw betaling met referentie " + ref + " is geaccepteerd." : "Your payment with reference " + ref + " was accepted.";
-            case OPERATOR -> dutch ? "Uw tegoed is bijna op. Klantnummer " + ref + "." : "Your balance is running low. Customer number " + ref + ".";
+            case OPERATOR -> dutch ? "Uw tegoed is bijna op. Klantnummer " + customer + "." : "Your balance is running low. Customer number " + customer + ".";
             case PARCEL -> dutch ? "Uw pakket " + ref + " wordt vandaag bezorgd." : "Your parcel " + ref + " is out for delivery today.";
             case SHOP -> dutch ? "Uw bestelling " + ref + " is verzonden." : "Your order " + ref + " has shipped.";
             case GLOBAL -> dutch ? "Nieuwe aanmelding op uw account. Referentie " + ref + "." : "New sign-in to your account. Reference " + ref + ".";
