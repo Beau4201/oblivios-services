@@ -27,8 +27,6 @@ import org.oblivios.decoy.content.story.Timeline;
 
 /** Contacts, call log, SMS threads and voicemail, all of one life story. */
 public final class PeopleSurface {
-    /** Indices into the language's {@code contact.groups} (family, friends, work, other), weighted by repetition. */
-    private static final int[] GROUP_WEIGHTS = {0, 1, 1, 2, 2, 3, 3, 3};
     private PeopleSurface() {}
 
     /** Throws {@link IllegalArgumentException} when the pack has no verified number range: no number is invented. */
@@ -49,7 +47,9 @@ public final class PeopleSurface {
         Set<String> used = new HashSet<>();
         String own = freshNumber(c, r, used);
 
-        int count = Math.min(400, 70 + (int) (Math.abs(r.nextGaussian()) * 90));
+        // the circle comes first, so the favourites are the closest people
+        List<Circle.Member> circle = Circle.build(p, s);
+        int count = circle.size();
         String[] ids = new String[count];
         String[] names = new String[count];
         String[] numbers = new String[count];
@@ -59,12 +59,13 @@ public final class PeopleSurface {
         PhotoKind[] photos = new PhotoKind[count];
         int favourites = r.nextInt(7);
         for (int i = 0; i < count; i++) {
+            Circle.Member m = circle.get(i);
             ids[i] = "c" + i;
             names[i] = r.nextInt(100) < 25 ? c.givenName(r) : c.givenName(r) + " " + c.familyName(r);
             numbers[i] = freshNumber(c, r, used);
             favourite[i] = i < favourites;
-            groups[i] = groupNames.get(GROUP_WEIGHTS[r.nextInt(GROUP_WEIGHTS.length)]);
-            birthdays[i] = r.nextInt(100) < 40 ? LocalDate.of(1955 + r.nextInt(55), 1 + r.nextInt(12), 1 + r.nextInt(28)) : null;
+            groups[i] = groupNames.get(m.relation().groupIndex());
+            birthdays[i] = r.nextInt(100) < 40 ? LocalDate.of(m.birthYear(), 1 + r.nextInt(12), 1 + r.nextInt(28)) : null;
             photos[i] = r.nextInt(100) < 15 ? PhotoKind.INITIALS : PhotoKind.NONE;
         }
 
@@ -131,7 +132,9 @@ public final class PeopleSurface {
             Instant a = lastCall.get(numbers[i]);
             Instant b = lastSms.get(numbers[i]);
             Instant last = a == null ? b : b == null ? a : a.isAfter(b) ? a : b;
-            contacts.add(new Contact(ids[i], names[i], numbers[i], favourite[i], groups[i], birthdays[i], last, photos[i]));
+            Circle.Member m = circle.get(i);
+            contacts.add(new Contact(ids[i], names[i], numbers[i], favourite[i], groups[i], birthdays[i], last, photos[i],
+                    m.relation(), m.birthYear(), m.gender(), m.origin()));
         }
         return new People(own, contacts, calls, threads, voicemails);
     }

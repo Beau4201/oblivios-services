@@ -24,6 +24,7 @@ import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.MonthCount;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
@@ -96,7 +97,8 @@ class PeopleSurfaceTest {
     @Test
     void customerNumberIsOneNumberPerOperatorThread() {
         // a customer number belongs to the customer: it never changes between the messages of one operator
-        Pattern customer = Pattern.compile("Klantnummer (\\d+)");
+        String[] around = LanguagePack.of("nl").text("sms.service.OPERATOR").split("\\{customer}", -1);
+        Pattern customer = Pattern.compile(Pattern.quote(around[0]) + "(\\d+)" + Pattern.quote(around[1]));
         boolean checkedAThreadWithTwo = false;
         for (long n = 0; n < 30; n++) {
             for (SmsThread t : setup(n).people().threads()) {
@@ -283,5 +285,241 @@ class PeopleSurfaceTest {
     @Test
     void sameSeedSamePeople() {
         assertEquals(setup(5).people(), setup(5).people());
+    }
+
+    // --- the circle: relation, age and gender of every contact ---
+
+    private static final int YEAR = 2026;
+
+    private static Setup setup(long n, java.util.function.UnaryOperator<PersonaProfile.Builder> f) {
+        PersonaInputs in = new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
+        Persona p = Persona.derive(Seed.of(n, 1), f.apply(PersonaProfile.builder(in)).build(), YEAR);
+        List<MonthCount> months = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(11 - i), 60, 10, 8, 1_000_000L));
+        }
+        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), nl(), NOW, Seed.of(n, 3));
+        return new Setup(p, t, PeopleSurface.generate(p, t, nl(), Seed.of(n, 4)));
+    }
+
+    private static List<Contact> of(Setup s, Relation r) {
+        return s.people().contacts().stream().filter(c -> c.relation() == r).toList();
+    }
+
+    private static int ageOf(Contact c) {
+        return YEAR - c.birthYear();
+    }
+
+    @Test
+    void parentsAre25To35YearsOlder() {
+        boolean seen = false;
+        for (long n = 0; n < 40; n++) {
+            Setup s = setup(n, b -> b.birthYear(YEAR - 30).parentsAlive(true));
+            for (Contact c : of(s, Relation.PARENT)) {
+                int gap = ageOf(c) - s.persona().age();
+                assertTrue(gap >= 25 && gap <= 35, "parent " + gap + " years older");
+                seen = true;
+            }
+        }
+        assertTrue(seen, "no parent drawn");
+    }
+
+    @Test
+    void noParentsWhenParentsAreNotAlive() {
+        for (long n = 0; n < 20; n++) {
+            Setup s = setup(n, b -> b.parentsAlive(false).housing(PersonaProfile.Housing.RENT));
+            assertTrue(of(s, Relation.PARENT).isEmpty());
+            assertTrue(of(s, Relation.STEP_PARENT).isEmpty());
+        }
+    }
+
+    @Test
+    void partnerOnlyWithAPartnerOrMarriage() {
+        for (long n = 0; n < 20; n++) {
+            assertEquals(1, of(setup(n, b -> b.relationship(PersonaProfile.Relationship.MARRIED).household(2)), Relation.PARTNER).size());
+            assertEquals(1, of(setup(n, b -> b.relationship(PersonaProfile.Relationship.PARTNER)), Relation.PARTNER).size());
+            assertTrue(of(setup(n, b -> b.relationship(PersonaProfile.Relationship.SINGLE)), Relation.PARTNER).isEmpty());
+            assertTrue(of(setup(n, b -> b.relationship(PersonaProfile.Relationship.DIVORCED)), Relation.PARTNER).isEmpty());
+        }
+    }
+
+    @Test
+    void colleaguesOnlyWithAJob() {
+        boolean seen = false;
+        for (long n = 0; n < 20; n++) {
+            for (PersonaProfile.JobKind job : PersonaProfile.JobKind.values()) {
+                Setup s = setup(n, b -> b.birthYear(YEAR - 40).job(job).childAges(List.of()));
+                List<Contact> colleagues = of(s, Relation.COLLEAGUE);
+                boolean working = job == PersonaProfile.JobKind.OFFICE || job == PersonaProfile.JobKind.SHIFT
+                        || job == PersonaProfile.JobKind.SELF_EMPLOYED;
+                if (!working) {
+                    assertTrue(colleagues.isEmpty(), job + " has colleagues");
+                }
+                for (Contact c : colleagues) {
+                    assertTrue(ageOf(c) >= 20 && ageOf(c) <= 65, "colleague of " + ageOf(c));
+                    seen = true;
+                }
+            }
+        }
+        assertTrue(seen);
+    }
+
+    @Test
+    void friendsComeFromTheChosenGroups() {
+        Set<PersonaProfile.FriendGroup> chosen = Set.of(PersonaProfile.FriendGroup.SPORT, PersonaProfile.FriendGroup.MUSIC);
+        for (long n = 0; n < 20; n++) {
+            Setup s = setup(n, b -> b.friendGroups(chosen));
+            for (Relation r : List.of(Relation.FRIEND, Relation.BEST_FRIEND, Relation.OLD_FRIEND)) {
+                for (Contact c : of(s, r)) {
+                    assertTrue(chosen.contains(c.origin()), r + " from " + c.origin());
+                }
+            }
+            assertTrue(of(s, Relation.BEST_FRIEND).size() <= 1);
+            s.people().contacts().stream().filter(c -> c.relation() != Relation.FRIEND && c.relation() != Relation.BEST_FRIEND
+                    && c.relation() != Relation.OLD_FRIEND).forEach(c -> assertEquals(null, c.origin(), c.relation().name()));
+        }
+    }
+
+    @Test
+    void schoolFriendsAreWithinTwoYears() {
+        boolean seen = false;
+        for (long n = 0; n < 20; n++) {
+            Setup s = setup(n, b -> b.friendGroups(Set.of(PersonaProfile.FriendGroup.SCHOOL, PersonaProfile.FriendGroup.WORK)));
+            for (Contact c : s.people().contacts()) {
+                if (c.origin() == PersonaProfile.FriendGroup.SCHOOL) {
+                    assertTrue(Math.abs(ageOf(c) - s.persona().age()) <= 2, "school friend " + ageOf(c) + " for " + s.persona().age());
+                    seen = true;
+                } else if (c.origin() == PersonaProfile.FriendGroup.WORK) {
+                    assertTrue(Math.abs(ageOf(c) - s.persona().age()) <= 8);
+                }
+            }
+        }
+        assertTrue(seen);
+    }
+
+    @Test
+    void circleSizeOrdersFriendCounts() {
+        double[] mean = new double[3];
+        for (PersonaProfile.CircleSize size : PersonaProfile.CircleSize.values()) {
+            int total = 0;
+            for (long n = 0; n < 50; n++) {
+                Setup s = setup(n, b -> b.circle(size));
+                total += of(s, Relation.FRIEND).size() + of(s, Relation.BEST_FRIEND).size() + of(s, Relation.OLD_FRIEND).size();
+            }
+            mean[size.ordinal()] = total / 50.0;
+        }
+        assertTrue(mean[0] < mean[1] && mean[1] < mean[2], java.util.Arrays.toString(mean));
+    }
+
+    @Test
+    void familyRelationsGetTheFamilyGroup() {
+        List<String> groups = LanguagePack.of("nl").list("contact.groups");
+        Set<Relation> family = Set.of(Relation.PARTNER, Relation.PARENT, Relation.STEP_PARENT, Relation.GRANDPARENT, Relation.SIBLING,
+                Relation.CHILD, Relation.IN_LAW, Relation.RELATIVE);
+        Set<Relation> friends = Set.of(Relation.BEST_FRIEND, Relation.FRIEND, Relation.OLD_FRIEND, Relation.HOUSEMATE);
+        Set<Relation> work = Set.of(Relation.COLLEAGUE, Relation.MANAGER, Relation.REPORT, Relation.CLIENT);
+        for (long n = 0; n < 10; n++) {
+            for (Contact c : setup(n).people().contacts()) {
+                int want = family.contains(c.relation()) ? 0 : friends.contains(c.relation()) ? 1 : work.contains(c.relation()) ? 2 : 3;
+                assertEquals(groups.get(want), c.group(), c.relation().name());
+            }
+        }
+    }
+
+    @Test
+    void exOnlyFromTwenty() {
+        for (long n = 0; n < 30; n++) {
+            assertTrue(of(setup(n, b -> b.birthYear(YEAR - 18).relationship(PersonaProfile.Relationship.SINGLE)), Relation.EX_PARTNER).isEmpty());
+            assertEquals(1, of(setup(n, b -> b.birthYear(YEAR - 40).relationship(PersonaProfile.Relationship.DIVORCED)), Relation.EX_PARTNER).size());
+        }
+    }
+
+    @Test
+    void dateOnlyWhenSingleOrDivorced() {
+        boolean seen = false;
+        for (long n = 0; n < 30; n++) {
+            assertTrue(of(setup(n, b -> b.relationship(PersonaProfile.Relationship.MARRIED).household(2)), Relation.DATE).isEmpty());
+            assertTrue(of(setup(n, b -> b.birthYear(YEAR - 55).relationship(PersonaProfile.Relationship.SINGLE)), Relation.DATE).isEmpty());
+            seen |= !of(setup(n, b -> b.birthYear(YEAR - 30).relationship(PersonaProfile.Relationship.SINGLE)), Relation.DATE).isEmpty();
+        }
+        assertTrue(seen, "a single persona of 30 never has a date");
+    }
+
+    @Test
+    void inLawsOnlyWithAPartner() {
+        boolean seen = false;
+        for (long n = 0; n < 20; n++) {
+            assertTrue(of(setup(n, b -> b.relationship(PersonaProfile.Relationship.SINGLE)), Relation.IN_LAW).isEmpty());
+            seen |= !of(setup(n, b -> b.relationship(PersonaProfile.Relationship.MARRIED).household(2)), Relation.IN_LAW).isEmpty();
+        }
+        assertTrue(seen);
+    }
+
+    @Test
+    void housematesOnlyInAHouseShare() {
+        for (long n = 0; n < 20; n++) {
+            assertTrue(of(setup(n, b -> b.housing(PersonaProfile.Housing.OWN)), Relation.HOUSEMATE).isEmpty());
+            assertFalse(of(setup(n, b -> b.housing(PersonaProfile.Housing.HOUSE_SHARE).household(4)), Relation.HOUSEMATE).isEmpty());
+        }
+    }
+
+    @Test
+    void teachersAndClassmatesOnlyForPupilsAndStudents() {
+        for (long n = 0; n < 20; n++) {
+            Setup office = setup(n, b -> b.birthYear(YEAR - 40).job(PersonaProfile.JobKind.OFFICE));
+            assertTrue(of(office, Relation.TEACHER).isEmpty() && of(office, Relation.CLASSMATE).isEmpty());
+            Setup student = setup(n, b -> b.birthYear(YEAR - 20).job(PersonaProfile.JobKind.STUDENT));
+            assertFalse(of(student, Relation.CLASSMATE).isEmpty());
+            for (Contact c : of(student, Relation.CLASSMATE)) {
+                assertTrue(Math.abs(ageOf(c) - 20) <= 2);
+            }
+        }
+    }
+
+    @Test
+    void landlordOnlyWhenRenting() {
+        for (long n = 0; n < 20; n++) {
+            assertTrue(of(setup(n, b -> b.housing(PersonaProfile.Housing.OWN)), Relation.LANDLORD).isEmpty());
+            assertTrue(of(setup(n, b -> b.housing(PersonaProfile.Housing.RENT)), Relation.TENANT).isEmpty());
+            assertEquals(1, of(setup(n, b -> b.housing(PersonaProfile.Housing.RENT)), Relation.LANDLORD).size());
+        }
+    }
+
+    @Test
+    void childminderOnlyWithAChildUnderTwelve() {
+        boolean seen = false;
+        for (long n = 0; n < 30; n++) {
+            Setup teen = setup(n, b -> b.birthYear(YEAR - 45).childAges(List.of(14, 17)));
+            assertTrue(of(teen, Relation.CHILDMINDER).isEmpty());
+            assertTrue(of(teen, Relation.PARENT_OF_FRIEND).isEmpty());
+            seen |= !of(setup(n, b -> b.birthYear(YEAR - 35).childAges(List.of(5))), Relation.CHILDMINDER).isEmpty();
+        }
+        assertTrue(seen);
+    }
+
+    @Test
+    void childrenWithAPhoneAreTenOrOlder() {
+        for (long n = 0; n < 10; n++) {
+            Setup s = setup(n, b -> b.birthYear(YEAR - 45).childAges(List.of(3, 11, 16)));
+            List<Contact> children = of(s, Relation.CHILD);
+            assertEquals(2, children.size());
+            for (Contact c : children) {
+                assertTrue(ageOf(c) >= 10);
+            }
+        }
+    }
+
+    @Test
+    void grandparentsAreAtMost95() {
+        boolean seen = false;
+        for (long n = 0; n < 60; n++) {
+            Setup s = setup(n, b -> b.birthYear(YEAR - 30).parentsAlive(true));
+            for (Contact c : of(s, Relation.GRANDPARENT)) {
+                assertTrue(ageOf(c) <= 95, "grandparent of " + ageOf(c));
+                seen = true;
+            }
+            assertTrue(of(setup(n, b -> b.birthYear(YEAR - 40)), Relation.GRANDPARENT).isEmpty());
+        }
+        assertTrue(seen);
     }
 }

@@ -290,7 +290,8 @@ class ContentPlanValidatorTest {
         planted.put("voicemail", swap(p, new People(pe.ownNumber(), pe.contacts(), pe.calls(), pe.threads(), plus(pe.voicemails(), new Voicemail(number, late, 5)))));
         Contact c0 = pe.contacts().get(0);
         List<Contact> contacts = new ArrayList<>(pe.contacts());
-        contacts.set(0, new Contact(c0.id(), c0.name(), c0.number(), c0.favourite(), c0.group(), c0.birthday(), late, c0.photo()));
+        contacts.set(0, new Contact(c0.id(), c0.name(), c0.number(), c0.favourite(), c0.group(), c0.birthday(), late, c0.photo(),
+                c0.relation(), c0.birthYear(), c0.gender(), c0.origin()));
         planted.put("last contact", swap(p, new People(pe.ownNumber(), contacts, pe.calls(), pe.threads(), pe.voicemails())));
         planted.put("note", swap(p, new CalendarPlan(p.calendar().events(), p.calendar().alarms(), plus(p.calendar().notes(), new Note("x", late, false)))));
         planted.put("trip", swap(p, new TravelPlan(plus(p.travel().trips(), new Trip("tx", List.of(p.timeline().places().get(0)), false, late, late.plus(Duration.ofDays(1)))),
