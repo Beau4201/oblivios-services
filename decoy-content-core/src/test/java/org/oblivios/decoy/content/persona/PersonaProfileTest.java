@@ -117,6 +117,16 @@ class PersonaProfileTest {
     }
 
     @Test
+    void anOpenGenderIsFemaleOrMale() {
+        // owner, 2026-11-25: no third value, since no conversation of the pool could fit it
+        java.util.Set<String> seen = new java.util.TreeSet<>();
+        for (long n = 0; n < 1000; n++) {
+            seen.add(derive(n, open()).gender().name());
+        }
+        assertEquals(java.util.Set.of("FEMALE", "MALE"), seen);
+    }
+
+    @Test
     void childrenAreAtLeast16YearsYoungerThanThePersona() {
         boolean anyChild = false;
         for (long n = 0; n < 1000; n++) {

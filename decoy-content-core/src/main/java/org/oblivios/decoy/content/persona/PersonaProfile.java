@@ -16,7 +16,7 @@ public record PersonaProfile(PersonaInputs inputs, Gender gender, Integer birthY
         List<Integer> siblingAges, Set<FriendGroup> friendGroups, CircleSize circle, Set<String> interests, Set<String> holidays,
         Texting texting, Boolean voiceNotes, StyleVector style) {
 
-    public enum Gender { FEMALE, MALE, OTHER }
+    public enum Gender { FEMALE, MALE }
 
     public enum JobKind { OFFICE, SHIFT, STUDENT, PUPIL, SELF_EMPLOYED, RETIRED, JOB_SEEKER, CARER, NONE }
 

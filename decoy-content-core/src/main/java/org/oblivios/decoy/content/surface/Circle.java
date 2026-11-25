@@ -254,7 +254,6 @@ final class Circle {
         return switch (own) {
             case FEMALE -> same ? Gender.FEMALE : Gender.MALE;
             case MALE -> same ? Gender.MALE : Gender.FEMALE;
-            case OTHER -> gender(r);
         };
     }
 }

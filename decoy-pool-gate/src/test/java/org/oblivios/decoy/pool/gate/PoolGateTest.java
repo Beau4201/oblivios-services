@@ -130,7 +130,7 @@ class PoolGateTest {
     @Test
     void theWrittenPoolKeepsEveryLabel() throws IOException {
         String group = "#conv id=g sit=weekend-plans lang=nl group=FRIENDS rel=-/FRIEND/BEST_FRIEND age=20-30/25-35/20-22 "
-                + "gender=FEMALE/MALE/OTHER reg=CASUAL/STREET/NEUTRAL topics=weekend,food requires=DOG,CAR mix=en\n";
+                + "gender=FEMALE/MALE/FEMALE reg=CASUAL/STREET/NEUTRAL topics=weekend,food requires=DOG,CAR mix=en\n";
         StringBuilder sb = new StringBuilder(group);
         List<String> t = texts("nl", 9);
         for (int i = 0; i < t.size(); i++) {

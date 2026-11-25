@@ -263,7 +263,7 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
     }
 
     private static Gender drawGender(RandomGenerator r) {
-        return pick(r, new int[] {49, 49, 2}, Gender.values());
+        return pick(r, new int[] {50, 50}, Gender.values());
     }
 
     private static Set<Pet> drawPets(RandomGenerator r) {
