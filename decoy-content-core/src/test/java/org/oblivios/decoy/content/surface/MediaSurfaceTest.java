@@ -297,6 +297,33 @@ class MediaSurfaceTest {
     }
 
     @Test
+    void whichChosenPhotosAreDroppedIsRandomNotTheLastOnes() {
+        Setup s = setup(5, YearMonth.of(2026, 10), 5000);
+        long capacity = s.volume().months().stream().mapToLong(s.volume()::targetCamera).sum();
+        int highest = s.plan().items().stream().filter(i -> i.kind() == MediaKind.CAMERA_CHOSEN)
+                .mapToInt(i -> Integer.parseInt(i.sourceId().replaceAll("\\D+", ""))).max().orElse(0);
+        assertTrue(highest > capacity + 500, "kept photos stop at " + highest + " of capacity " + capacity + ": the first ones are kept, not a random subset");
+    }
+
+    @Test
+    void copiesAreSpreadOverTheWholeGallery() {
+        for (long n = 0; n < 5; n++) {
+            List<MediaItem> items = setup(n).plan().items();
+            List<MediaItem> pool = items.stream().filter(i -> i.kind() == MediaKind.CAMERA_FILL || i.kind() == MediaKind.CAMERA_CHOSEN
+                    || i.kind() == MediaKind.SAVED).sorted(java.util.Comparator.comparing(MediaItem::taken)).toList();
+            java.util.Set<String> originals = items.stream().filter(i -> i.copyOf() != null).map(MediaItem::copyOf).collect(Collectors.toSet());
+            List<Double> ranks = new ArrayList<>();
+            for (int k = 0; k < pool.size(); k++) {
+                if (originals.contains(pool.get(k).name())) {
+                    ranks.add((double) k / pool.size());
+                }
+            }
+            double mean = ranks.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+            assertTrue(ranks.size() > 20 && mean > 0.35 && mean < 0.65, "mean position of the copied photos " + mean + " over " + ranks.size());
+        }
+    }
+
+    @Test
     void everyBoardingPassTripHasItsScreenshot() {
         for (long n = 0; n < 20; n++) {
             Setup s = setup(n);

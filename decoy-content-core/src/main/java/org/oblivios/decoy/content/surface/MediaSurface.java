@@ -10,7 +10,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -127,7 +126,7 @@ public final class MediaSurface {
         private void placeChosen(List<ChosenPhoto> chosen, Map<YearMonth, Integer> cap) {
             RandomGenerator r = seed.stream("media-chosen");
             List<ChosenPhoto> order = new ArrayList<>(chosen);
-            Collections.shuffle(order, r);
+            Shuffle.inPlace(order, r);
             int dropped = 0;
             for (ChosenPhoto photo : order) {
                 int total = cap.values().stream().mapToInt(Integer::intValue).sum();
@@ -280,7 +279,7 @@ public final class MediaSurface {
             long total = items.stream().filter(i -> i.kind() != MediaKind.DOCUMENT).count();
             int n = (int) Math.min(pool.size(), Math.round(total * (0.08 + 0.04 * r.nextDouble())));
             List<MediaItem> order = new ArrayList<>(pool);
-            Collections.shuffle(order, r);
+            Shuffle.inPlace(order, r);
             for (MediaItem o : order.subList(0, n)) {
                 int dot = o.name().lastIndexOf('.');
                 items.add(new MediaItem(MediaKind.COPY, unique(o.name().substring(0, dot) + "-edited", o.name().substring(dot)), o.taken(),
