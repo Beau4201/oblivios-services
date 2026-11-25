@@ -34,7 +34,7 @@ public final class RollForward {
         RandomGenerator r = fresh.stream("rollforward");
         ZoneId zone = snapshot.persona().inputs().zone();
         boolean dutch = "nl".equals(snapshot.persona().inputs().locale().getLanguage());
-        List<String> phrases = PeopleSurface.phrases(dutch);
+        List<String> firstNames = snapshot.contacts().stream().map(c -> c.name().split(" ")[0]).distinct().toList();
         double gapDays = Duration.between(latest, now).toMinutes() / 1440.0;
         int calls = (int) Math.min(MAX_CALLS, Math.round(gapDays * CALLS_PER_DAY * (0.8 + 0.4 * r.nextDouble())));
         int sms = (int) Math.min(MAX_SMS, Math.round(gapDays * SMS_PER_DAY * (0.8 + 0.4 * r.nextDouble())));
@@ -56,7 +56,7 @@ public final class RollForward {
                 continue;
             }
             events.add(new RollForwardEvent("SMS", when,
-                    contact(snapshot, r).id() + "|" + (r.nextBoolean() ? "IN" : "OUT") + "|" + phrases.get(r.nextInt(phrases.size()))));
+                    contact(snapshot, r).id() + "|" + (r.nextBoolean() ? "IN" : "OUT") + "|" + SmsText.message(dutch, r, firstNames, List.of())));
         }
         events.sort(Comparator.comparing(RollForwardEvent::when).thenComparing(RollForwardEvent::kind).thenComparing(RollForwardEvent::detail));
         return new RollForwardPlan(events);

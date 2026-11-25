@@ -20,24 +20,14 @@ import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.NoVerifiedRange;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.story.Place;
+import org.oblivios.decoy.content.story.PlaceKind;
 import org.oblivios.decoy.content.story.Timeline;
 
 /** Contacts, call log, SMS threads and voicemail, all of one life story. */
 public final class PeopleSurface {
     private static final List<String> GROUPS = List.of("Family", "Friends", "Friends", "Work", "Work", "Other", "Other", "Other");
-    private static final List<String> PHRASES_NL = List.of("Ok", "Top, tot straks", "Ben onderweg", "Kun je me bellen?",
-            "Dankjewel!", "Is goed", "Hoe laat?", "Haha ja", "Tot morgen", "Sorry, later!", "Ik ben er over tien minuten",
-            "Heb je het gezien?", "Lekker bezig", "Morgen dan?", "Doen we");
-    private static final List<String> PHRASES_EN = List.of("Ok", "See you soon", "On my way", "Can you call me?", "Thanks!",
-            "Sounds good", "What time?", "Haha yes", "Tomorrow then", "Sorry, later!", "Be there in ten minutes",
-            "Did you see that?", "Nice one", "Tomorrow?", "Deal");
-
     private PeopleSurface() {}
-
-    /** The short messages of the story's language; the roll-forward draws from the same lists. */
-    static List<String> phrases(boolean dutch) {
-        return dutch ? PHRASES_NL : PHRASES_EN;
-    }
 
     /** Throws {@link IllegalArgumentException} when the pack has no verified number range: no number is invented. */
     public static People generate(Persona p, Timeline t, CountryPack c, Seed s) {
@@ -52,7 +42,6 @@ public final class PeopleSurface {
         RandomGenerator r = s.stream("people");
         ZoneId zone = p.inputs().zone();
         boolean dutch = "nl".equals(p.inputs().locale().getLanguage());
-        List<String> phrases = dutch ? PHRASES_NL : PHRASES_EN;
         Set<String> used = new HashSet<>();
         String own = freshNumber(c, r, used);
 
@@ -74,6 +63,11 @@ public final class PeopleSurface {
             birthdays[i] = r.nextInt(100) < 40 ? LocalDate.of(1955 + r.nextInt(55), 1 + r.nextInt(12), 1 + r.nextInt(28)) : null;
             photos[i] = r.nextInt(100) < 15 ? PhotoKind.INITIALS : PhotoKind.NONE;
         }
+
+        // the slots of a message: first names of the contacts and the cafes and shops of the story
+        List<String> firstNames = java.util.Arrays.stream(names).map(n -> n.split(" ")[0]).distinct().toList();
+        List<String> placeNames = t.places().stream().filter(place -> place.kind() == PlaceKind.CAFE || place.kind() == PlaceKind.SHOP)
+                .map(Place::name).distinct().toList();
 
         LocalTime earliest = t.wakeTime();
         LocalTime latest = LocalTime.of(23, 30);
@@ -97,7 +91,7 @@ public final class PeopleSurface {
                 int n = 2 + r.nextInt(29);
                 for (int k = 0; k < n; k++) {
                     msgs.add(new SmsMessage(Events.randomInstant(r, t.phoneStart(), t.now(), zone, earliest, latest),
-                            r.nextBoolean(), phrases.get(r.nextInt(phrases.size())), true));
+                            r.nextBoolean(), SmsText.message(dutch, r, firstNames, placeNames), true));
                 }
                 msgs.sort(Comparator.comparing(SmsMessage::at));
                 threads.add(new SmsThread(numbers[i], names[i], null, msgs));

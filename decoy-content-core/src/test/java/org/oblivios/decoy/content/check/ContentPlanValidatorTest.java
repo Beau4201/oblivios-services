@@ -375,8 +375,16 @@ class ContentPlanValidatorTest {
         Map<String, Integer> numbers = new HashMap<>();
         Map<String, Integer> fileNames = new HashMap<>();
         Map<String, Integer> conversations = new HashMap<>();
+        Map<String, Integer> sentences = new HashMap<>();
+        List<Set<String>> sentencesOfPlan = new ArrayList<>();
         for (long n = 0; n < 50; n++) {
             ContentPlan p = plan(n + 100);
+            // sentences of four words or more between the owner and a contact; a short reply ("Ok") is universal by nature
+            Set<String> longTexts = p.people().threads().stream().filter(t -> t.senderKind() == null)
+                    .flatMap(t -> t.messages().stream()).map(SmsMessage::body)
+                    .filter(b -> b.trim().split("\\s+").length >= 4).collect(Collectors.toSet());
+            longTexts.forEach(x -> sentences.merge(x, 1, Integer::sum));
+            sentencesOfPlan.add(longTexts);
             Set<String> nums = new HashSet<>();
             p.people().contacts().forEach(c -> nums.add(c.number()));
             nums.add(p.people().ownNumber());
@@ -394,6 +402,12 @@ class ContentPlanValidatorTest {
         assertTrue(maxCount(numbers) <= 5, "a number in " + maxCount(numbers) + " of 50 plans");
         assertTrue(maxCount(fileNames) <= 5, "a file name in " + maxCount(fileNames) + " of 50 plans");
         assertTrue(maxCount(conversations) <= 5, "a conversation in " + maxCount(conversations) + " of 50 plans");
+        // no finite generator keeps every sentence under 10 percent of the plans; what counts is how much of a plan is
+        // made of sentences that many other plans share
+        for (Set<String> own : sentencesOfPlan) {
+            long shared = own.stream().filter(x -> sentences.get(x) > 10).count();
+            assertTrue(own.isEmpty() || (double) shared / own.size() < 0.05, shared + " of " + own.size() + " sentences are shared by more than 10 of 50 plans");
+        }
     }
 
     private static int maxCount(Map<String, Integer> m) {

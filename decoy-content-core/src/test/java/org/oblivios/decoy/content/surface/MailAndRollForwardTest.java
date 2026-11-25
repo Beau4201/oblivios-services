@@ -235,6 +235,20 @@ class MailAndRollForwardTest {
     }
 
     @Test
+    void rollForwardMessagesNameTheContactsOfTheStory() {
+        Setup s = setup(1);
+        Set<String> firstNames = s.people().contacts().stream().map(c -> c.name().split(" ")[0]).collect(Collectors.toSet());
+        boolean named = false;
+        for (long n = 0; n < 20; n++) {
+            RollForwardPlan plan = RollForward.plan(snapshot(s, NOW.minus(Duration.ofDays(90))), NOW, Seed.of(n, 5));
+            for (RollForwardEvent e : plan.events()) {
+                named |= e.kind().equals("SMS") && firstNames.stream().anyMatch(f -> e.detail().split("\\|", 3)[2].contains(" " + f));
+            }
+        }
+        assertTrue(named, "no roll-forward message names a contact");
+    }
+
+    @Test
     void rollForwardIsDeterministicPerFreshSeed() {
         Setup s = setup(1);
         ContentSnapshot snap = snapshot(s, NOW.minus(Duration.ofDays(45)));

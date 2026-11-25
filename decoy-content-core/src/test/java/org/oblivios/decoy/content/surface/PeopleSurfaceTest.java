@@ -68,6 +68,31 @@ class PeopleSurfaceTest {
     }
 
     @Test
+    void messagesNameTheContactsAndPlacesOfTheStory() {
+        // a message refers to a person and a place that exist elsewhere in the decoy
+        boolean namesAContact = false;
+        boolean namesAPlace = false;
+        for (long n = 0; n < 10; n++) {
+            Setup s = setup(n);
+            Set<String> firstNames = new HashSet<>();
+            s.people().contacts().forEach(c -> firstNames.add(c.name().split(" ")[0]));
+            Set<String> places = new HashSet<>();
+            s.timeline().places().forEach(p -> places.add(p.name()));
+            for (SmsThread t : s.people().threads()) {
+                if (t.senderKind() != null) {
+                    continue;
+                }
+                for (SmsMessage m : t.messages()) {
+                    namesAContact |= firstNames.stream().anyMatch(f -> m.body().contains(" " + f));
+                    namesAPlace |= places.stream().anyMatch(m.body()::contains);
+                }
+            }
+        }
+        assertTrue(namesAContact, "no message names a contact");
+        assertTrue(namesAPlace, "no message names a place of the story");
+    }
+
+    @Test
     void customerNumberIsOneNumberPerOperatorThread() {
         // a customer number belongs to the customer: it never changes between the messages of one operator
         Pattern customer = Pattern.compile("Klantnummer (\\d+)");
