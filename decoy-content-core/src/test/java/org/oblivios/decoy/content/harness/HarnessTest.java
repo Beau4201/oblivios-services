@@ -6,10 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.check.Checks;
 import org.oblivios.decoy.content.check.ContentPlanValidator;
 import org.oblivios.decoy.content.harness.PlanHarness.Config;
 import org.oblivios.decoy.content.harness.PlanHarness.Report;
@@ -33,6 +36,17 @@ class HarnessTest {
             forty = PlanHarness.run(new Config(PersonaClass.all("nl", "NL"), 40, POOL, PlanHarness.NOW, false));
         }
         return forty;
+    }
+
+    /** A rule that no set names is held by no test of this class. */
+    @Test
+    void everyRuleIsInExactlyOneSet() {
+        Set<String> both = new HashSet<>(MUST_PASS);
+        both.retainAll(KNOWN_FAILING);
+        assertEquals(Set.of(), both, "in both sets");
+        Set<String> listed = new HashSet<>(MUST_PASS);
+        listed.addAll(KNOWN_FAILING);
+        assertEquals(new TreeSet<>(Checks.ids()), new TreeSet<>(listed));
     }
 
     @Test
