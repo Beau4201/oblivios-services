@@ -13,3 +13,11 @@ dependencies {
 }
 
 tasks.test { useJUnitPlatform() }
+
+// The checkers over many plans: ./gradlew :decoy-content-core:harness --args="--seeds 300 --pool <file> --out <tsv> [--audit]"
+tasks.register<JavaExec>("harness") {
+    description = "Runs both checkers of the decoy generator over many plans (PlanHarness)."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("org.oblivios.decoy.content.harness.PlanHarness")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) })
+}
