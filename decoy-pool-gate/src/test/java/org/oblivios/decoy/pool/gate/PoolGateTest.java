@@ -183,6 +183,17 @@ class PoolGateTest {
     }
 
     @Test
+    void aFamilyNameThatStartsASentenceIsLeftToTheJudge() throws IOException {
+        // the Dutch round of 2026-11-26 lost 8 conversations this way: "Lang geleden" is "long ago", "Bakker" the shop
+        Result r = gate(withLine("start", 1, "Lang. Veel vergaderd") + withLine("after", 2, "Hoe is het met je? Lang geleden")
+                + withLine("shop", 3, "Bakker had er nog maar 4") + withLine("inside", 4, "ik heb Bakker gisteren gesproken")
+                + withLine("given", 5, "Sanne komt ook") + withLine("again", 6, "Lang geleden dat ik Lang zag")
+                + withLine("next", 7, "Lang verhaal. Ik zag Lang daar"));
+        assertEquals(List.of("start", "after", "shop"), r.ids(), r.out());
+        assertEquals(4, r.count("entities"), r.out());
+    }
+
+    @Test
     void contactDataIsAnEntity() throws IOException {
         // the reader refuses these as well; the scan holds them for a conversation that did not come through the reader
         PoolConversation good;
