@@ -15,7 +15,9 @@ import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.check.Checks;
 import org.oblivios.decoy.content.check.PhoneViews;
+import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
+import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.harness.HarnessTest;
 import org.oblivios.decoy.content.harness.PlanHarness;
 import org.oblivios.decoy.content.plan.ContentPlan;
@@ -32,7 +34,8 @@ class QuestionEffectTest {
 
     private static Persona derive(PersonaProfile p) {
         PersonaInputs in = p.inputs();
-        return Persona.derive(Draws.of(Seed.of(9, 9)), p, TODAY, Packs.forDevice(in.countryCode(), in.zone(), in.locale()).pack());
+        CountryPack pack = Packs.forDevice(in.countryCode(), in.zone(), in.locale()).pack();
+        return Persona.derive(Draws.of(Seed.of(9, 9)), p, TODAY, pack, DataSet.of(pack.code()));
     }
 
     @Test

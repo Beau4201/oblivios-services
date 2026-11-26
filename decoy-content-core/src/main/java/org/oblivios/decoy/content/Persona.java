@@ -17,6 +17,10 @@ import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.data.CityRef;
+import org.oblivios.decoy.content.data.DataSet;
+import org.oblivios.decoy.content.data.NameData;
+import org.oblivios.decoy.content.data.PlaceData;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.persona.ActivityAnswer;
 import org.oblivios.decoy.content.persona.ChildAnswer;
@@ -103,9 +107,9 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
     /**
      * Throws {@link IllegalArgumentException} whose message starts with the field when the profile contradicts itself or
      * names what the country pack does not hold, and {@code no language data for <tag>} when the persona's language has
-     * no data.
+     * no data. An unknown city is refused with the nearest names, never replaced.
      */
-    public static Persona derive(Draws d, PersonaProfile p, LocalDate today, CountryPack pack) {
+    public static Persona derive(Draws d, PersonaProfile p, LocalDate today, CountryPack pack, DataSet data) {
         PersonaInputs in = p.inputs();
 
         List<String> languages = p.languages();
@@ -115,9 +119,8 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
             throw new IllegalArgumentException("languages: a given list must name at least one language");
         }
         LanguagePack.of(languages.get(0)); // refuses a language without data, never replaces it
-        if (pack.city(in.city()).isEmpty()) {
-            throw new IllegalArgumentException("city: no place data for '" + in.city() + "' in country " + in.countryCode());
-        }
+        CityRef city = PlaceData.require(pack.code(), in.city());
+        data.places(); // records the version of the places the city was read from
         check(p, today, pack);
 
         int birthYear = p.birthYear() != null ? p.birthYear() : drawBirthYear(d.stream("persona.birthYear"), p, today.getYear());
@@ -161,8 +164,11 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
 
         Gender gender = p.gender() != null ? p.gender() : drawGender(d.stream("persona.gender"));
         String nationality = p.nationality() != null ? p.nationality().toUpperCase(Locale.ROOT) : in.countryCode().toUpperCase(Locale.ROOT);
-        // shortcut: an open background is the country, upgrade when the population figures of the city are data (plan Task 7)
-        String background = (p.background() != null ? p.background() : in.countryCode()).toUpperCase(Locale.ROOT);
+        // an open background is one with name data, as the people of this age and sex in the city have them: a country
+        // counts only as a whole package (ADR-348), so no open answer leads to a refusal
+        String background = p.background() != null ? p.background().toUpperCase(Locale.ROOT)
+                : data.population().background(city.municipality(), age, gender, NameData.backgrounds(),
+                        d.stream("persona.background"));
         String mix = p.mixLanguage() != null ? p.mixLanguage() : "";
         String jobField = p.jobField() != null ? p.jobField() : "";
         List<PetAnswer> pets = p.pets() != null
@@ -174,7 +180,8 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         List<ActivityAnswer> activities = p.activities() != null ? p.activities() : drawActivities(d, friends);
         CircleSize circle = p.circle() != null ? p.circle() : pick(d.stream("persona.circle"), new int[] {30, 50, 20}, CircleSize.values());
         Set<String> interests = p.interests() != null ? p.interests() : Set.of();
-        Set<String> holidays = p.holidays() != null ? p.holidays() : Set.of();
+        Set<String> kept = data.holidays().kept(background);
+        Set<String> holidays = p.holidays() != null ? p.holidays() : kept;
         String bank = p.bank() != null ? p.bank() : oneOf(d.stream("persona.bank"), names(pack.senders(SenderKind.BANK)));
         String operator = p.operator() != null ? p.operator()
                 : oneOf(d.stream("persona.operator"), names(pack.senders(SenderKind.OPERATOR)));

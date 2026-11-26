@@ -183,20 +183,6 @@ class CountryPackTest {
     }
 
     @Test
-    void cityLookupIgnoresCaseAndSpaces() {
-        double[] plain = nl().city("den haag").orElseThrow();
-        assertArrayEquals(plain, nl().city(" Den Haag ").orElseThrow());
-        assertTrue(nl().city("Atlantis").isEmpty());
-        assertTrue(nl().city(null).isEmpty());
-    }
-
-    @Test
-    void neutralHasNoCapital() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Packs.neutral().capital());
-        assertEquals("no place data for country XX", e.getMessage());
-    }
-
-    @Test
     void everyPackFileIsListedWithItsFamilyRules() throws Exception {
         java.nio.file.Path dir = java.nio.file.Path.of(Packs.class.getResource("/org/oblivios/decoy/content/data/country/XX.properties").toURI())
                 .getParent();

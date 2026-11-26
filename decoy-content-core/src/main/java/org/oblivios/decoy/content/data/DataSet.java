@@ -34,6 +34,25 @@ public final class DataSet {
         return family;
     }
 
+    /** The places of the set's country; throws {@link IllegalArgumentException} for a country without them. */
+    public PlaceData places() {
+        PlaceData data = PlaceData.load(pack.code());
+        versions.put("places/" + pack.code(), data.version());
+        return data;
+    }
+
+    public PopulationData population() {
+        PopulationData data = PopulationData.load(pack.code());
+        versions.put("population/" + pack.code(), data.version());
+        return data;
+    }
+
+    public HolidayData holidays() {
+        HolidayData data = HolidayData.load(pack.code());
+        versions.put("holidays/" + pack.code(), data.version());
+        return data;
+    }
+
     /** The version of each data file that was read through this set. */
     public Map<String, String> versions() {
         return Map.copyOf(versions);

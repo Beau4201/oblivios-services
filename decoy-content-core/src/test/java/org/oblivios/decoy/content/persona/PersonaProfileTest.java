@@ -24,6 +24,8 @@ import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
+import org.oblivios.decoy.content.data.DataSet;
+import org.oblivios.decoy.content.data.HolidayData;
 import org.oblivios.decoy.content.persona.ChildAnswer.Custody;
 import org.oblivios.decoy.content.persona.PersonaProfile.ActivityKind;
 import org.oblivios.decoy.content.persona.PersonaProfile.Fact;
@@ -56,7 +58,7 @@ class PersonaProfileTest {
     }
 
     private static Persona derive(long n, PersonaProfile p) {
-        return Persona.derive(Draws.of(Seed.of(n, 1)), p, TODAY, nl());
+        return Persona.derive(Draws.of(Seed.of(n, 1)), p, TODAY, nl(), DataSet.of("NL"));
     }
 
     /** The open profile with answers given, by builder. */
@@ -171,7 +173,15 @@ class PersonaProfileTest {
     void unknownCityIsRefused() {
         PersonaInputs atlantis = new PersonaInputs("Sanne", "de Vries", "atlantis", "NL", ZONE, Locale.forLanguageTag("nl-NL"));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> derive(1, PersonaProfile.open(atlantis)));
-        assertTrue(e.getMessage().contains("city"), e.getMessage());
+        assertTrue(e.getMessage().startsWith("city: unknown 'atlantis', did you mean: "), e.getMessage());
+    }
+
+    @Test
+    void openHolidaysAreTheOnesTheBackgroundKeeps() {
+        Persona p = derive(1, open());
+        assertEquals(HolidayData.load("NL").kept("NL"), p.holidays());
+        assertFalse(p.holidays().isEmpty());
+        assertEquals(Set.of(), derive(1, with(b -> b.holidays(Set.of()))).holidays(), "an empty answer keeps none");
     }
 
     @Test

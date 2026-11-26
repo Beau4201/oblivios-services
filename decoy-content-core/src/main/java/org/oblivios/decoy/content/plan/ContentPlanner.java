@@ -72,11 +72,11 @@ public final class ContentPlanner {
         Instant now = setup.now();
         Draws draws = Draws.of(seed);
         CountryPack pack = Packs.forDevice(in.countryCode(), in.zone(), in.locale()).pack();
-        Persona persona = Persona.derive(draws, profile, now.atZone(in.zone()).toLocalDate(), pack);
+        DataSet data = DataSet.of(pack.code());
+        Persona persona = Persona.derive(draws, profile, now.atZone(in.zone()).toLocalDate(), pack, data);
         if (pool.stream().noneMatch(c -> c.language().equals(persona.language()))) {
             throw new IllegalArgumentException("no conversation pool for " + persona.language());
         }
-        DataSet data = DataSet.of(pack.code());
         try {
             data.names(persona.background());
         } catch (IllegalArgumentException e) {

@@ -15,7 +15,9 @@ import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.data.CityRef;
 import org.oblivios.decoy.content.data.NameData;
+import org.oblivios.decoy.content.data.PlaceData;
 import org.oblivios.decoy.content.lang.LanguagePack;
 
 /** The one timeline behind every surface: where the owner lives and works, when the day starts, and since when the phone exists. */
@@ -44,8 +46,9 @@ public final class Timeline {
         RandomGenerator r = s.stream("timeline");
         List<String> warnings = new ArrayList<>();
 
-        double[] centre = c.city(p.inputs().city()).orElseThrow(
-                () -> new IllegalArgumentException("city: no place data for '" + p.inputs().city() + "' in country " + c.code()));
+        // shortcut: places lie around the city's middle until the world draws them from where people live (plan Task 9)
+        CityRef city = PlaceData.require(c.code(), p.inputs().city());
+        double[] centre = {city.lat(), city.lon()};
 
         LanguagePack lang = LanguagePack.of(p.language());
         List<Place> places = new ArrayList<>();

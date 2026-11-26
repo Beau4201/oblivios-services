@@ -4,9 +4,7 @@ package org.oblivios.decoy.content.country;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -20,7 +18,7 @@ import java.util.random.RandomGenerator;
 public final class DataPack implements CountryPack {
     private static final Set<String> KEYS = Set.of(
             "code", "language", "family.child", "family.married", "mobile.prefix", "mobile.blocks", "senders.BANK", "senders.PARCEL",
-            "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "supermarkets", "senders.GLOBAL", "holidays", "wifi", "cities", "capital", "amount",
+            "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "supermarkets", "senders.GLOBAL", "holidays", "wifi", "amount",
             "mms.groups", "sites.GLOBAL", "sites.LOCAL", "trips.domestic", "trips.abroad");
 
     private final String code;
@@ -34,8 +32,6 @@ public final class DataPack implements CountryPack {
     private final List<String> supermarkets;
     private final List<HolidayRule> holidays;
     private final List<String> wifi;
-    private final Map<String, double[]> cities = new HashMap<>();
-    private final String capital;
     private final String amount;
     private final int[] mmsGroups;
     private final List<String> sites;
@@ -82,18 +78,11 @@ public final class DataPack implements CountryPack {
         }
         holidays = List.copyOf(rules);
         wifi = list(p, "wifi");
-        for (City c : cities(p, "cities")) {
-            cities.put(key(c.name()), new double[] {c.lat(), c.lon()});
-        }
         List<String> allSites = new ArrayList<>(list(p, "sites.GLOBAL"));
         allSites.addAll(list(p, "sites.LOCAL"));
         sites = List.copyOf(allSites);
         domesticTrips = cities(p, "trips.domestic");
         abroadTrips = cities(p, "trips.abroad");
-        capital = key(p.getProperty("capital", ""));
-        if (!capital.isEmpty() && !cities.containsKey(capital)) {
-            throw new IllegalStateException("capital '" + capital + "' of pack " + code + " is not in its cities");
-        }
         amount = p.getProperty("amount", "{n}").trim();
         if (!amount.contains("{n}")) {
             throw new IllegalStateException("amount pattern of pack " + code + " has no {n}");
@@ -164,10 +153,6 @@ public final class DataPack implements CountryPack {
         } catch (NumberFormatException e) {
             throw new IllegalStateException("bad range '" + v + "' for " + key + " in pack " + code, e);
         }
-    }
-
-    private static String key(String name) {
-        return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
     }
 
     @Override
@@ -247,20 +232,6 @@ public final class DataPack implements CountryPack {
     @Override
     public List<String> homeWifiPatterns() {
         return wifi;
-    }
-
-    @Override
-    public Optional<double[]> city(String name) {
-        double[] c = cities.get(key(name));
-        return c == null ? Optional.empty() : Optional.of(c.clone());
-    }
-
-    @Override
-    public double[] capital() {
-        if (capital.isEmpty()) {
-            throw new IllegalArgumentException("no place data for country " + code);
-        }
-        return cities.get(capital).clone();
     }
 
     @Override

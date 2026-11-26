@@ -41,12 +41,6 @@ public interface CountryPack {
     /** Templates of home Wi-Fi names; a {@code #} stands for one random digit. */
     List<String> homeWifiPatterns();
 
-    /** The centre of a city of the country, by name, ignoring case and surrounding spaces. */
-    Optional<double[]> city(String name);
-
-    /** The centre of the capital; throws {@link IllegalArgumentException} when the pack has no place data. */
-    double[] capital();
-
     /** A money amount written the country's way. */
     String amount(int value);
 

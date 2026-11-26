@@ -6,7 +6,9 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
+import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.persona.ChildAnswer;
 import org.oblivios.decoy.content.persona.ParentAnswer;
 import org.oblivios.decoy.content.persona.PersonaProfile;
@@ -23,9 +25,17 @@ public final class TestSetup {
 
     /** A persona of {@code p} on 26 November of {@code year}, with the pack of its inputs. */
     public static Persona derive(Seed seed, PersonaProfile p, int year) {
+        return derive(seed, p, year, DataSet.of(pack(p).code()));
+    }
+
+    /** As {@link #derive(Seed, PersonaProfile, int)}, with the data set the test reads versions from. */
+    public static Persona derive(Seed seed, PersonaProfile p, int year, DataSet data) {
+        return Persona.derive(Draws.of(seed), p, LocalDate.of(year, 11, 26), pack(p), data);
+    }
+
+    private static CountryPack pack(PersonaProfile p) {
         PersonaInputs in = p.inputs();
-        return Persona.derive(Draws.of(seed), p, LocalDate.of(year, 11, 26),
-                Packs.forDevice(in.countryCode(), in.zone(), in.locale()).pack());
+        return Packs.forDevice(in.countryCode(), in.zone(), in.locale()).pack();
     }
 
     /** A device as a test sees it; no value of it was read on a phone. */

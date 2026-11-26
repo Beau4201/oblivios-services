@@ -1,0 +1,345 @@
+# source: CBS gebiedsindelingen (PDOK), CBS 100 metre squares and 86247NED, Rijksoverheid school holiday regions, Wikidata names; tools/decoy-content/places_cbs.py
+# licence: CC BY 4.0 (CBS, PDOK); CC0 (Rijksoverheid, Wikidata)
+# version: CBS squares 2025 v1, municipalities 2026, read 2026-11-26
+GM0014	Groningen	53.21829	6.57366	noord	
+GM0034	Almere	52.37213	5.23376	noord	
+GM0037	Stadskanaal	52.98355	6.97678	noord	
+GM0047	Veendam	53.09908	6.86903	noord	
+GM0050	Zeewolde	52.33530	5.52732	midden	
+GM0059	Achtkarspelen	53.21187	6.14686	noord	
+GM0060	Ameland	53.44481	5.69046	noord	
+GM0072	Harlingen	53.16934	5.43282	noord	
+GM0074	Heerenveen	52.96588	5.94163	noord	
+GM0080	Leeuwarden	53.19559	5.80093	noord	
+GM0085	Ooststellingwerf	52.99247	6.29494	noord	
+GM0086	Opsterland	53.05409	6.08444	noord	
+GM0088	Schiermonnikoog	53.47863	6.16363	noord	
+GM0090	Smallingerland	53.10980	6.08534	noord	
+GM0093	Terschelling	53.37594	5.25574	noord	
+GM0096	Vlieland	53.29652	5.06851	noord	
+GM0098	Weststellingwerf	52.87562	6.02069	noord	
+GM0106	Assen	53.00279	6.55586	noord	
+GM0109	Coevorden	52.71848	6.75402	noord	
+GM0114	Emmen	52.75234	6.92543	noord	
+GM0118	Hoogeveen	52.71851	6.49056	noord	
+GM0119	Meppel	52.69755	6.19120	noord	
+GM0141	Almelo	52.35549	6.66061	noord	
+GM0147	Borne	52.30141	6.75437	noord	
+GM0148	Dalfsen	52.52614	6.28092	noord	
+GM0150	Deventer	52.25990	6.18328	noord	
+GM0153	Enschede	52.21524	6.89221	noord	
+GM0158	Haaksbergen	52.16045	6.73982	noord	
+GM0160	Hardenberg	52.57479	6.57548	noord	
+GM0163	Hellendoorn	52.37359	6.46728	noord	
+GM0164	Hengelo	52.27207	6.80329	noord	Hengelo (O.)
+GM0166	Kampen	52.55348	5.92022	noord	
+GM0168	Losser	52.26584	7.00820	noord	
+GM0171	Noordoostpolder	52.70958	5.75491	noord	
+GM0173	Oldenzaal	52.31465	6.92051	noord	
+GM0175	Ommen	52.52043	6.42962	noord	
+GM0177	Raalte	52.39230	6.27087	noord	
+GM0180	Staphorst	52.63899	6.21082	noord	
+GM0183	Tubbergen	52.40454	6.77519	noord	
+GM0184	Urk	52.66409	5.61706	noord	
+GM0189	Wierden	52.33822	6.59262	noord	
+GM0193	Zwolle	52.51484	6.09064	noord	
+GM0197	Aalten	51.90266	6.55331	midden	
+GM0200	Apeldoorn	52.20720	5.97166	midden	
+GM0202	Arnhem	51.97205	5.90020	zuid	
+GM0203	Barneveld	52.15364	5.59397	midden	
+GM0209	Beuningen	51.86111	5.76247	zuid	
+GM0213	Brummen	52.10223	6.10019	midden	
+GM0214	Buren	51.94080	5.42284	midden	
+GM0216	Culemborg	51.95238	5.22356	midden	
+GM0221	Doesburg	52.00763	6.13656	zuid	
+GM0222	Doetinchem	51.96077	6.28273	midden	
+GM0225	Druten	51.88397	5.61161	zuid	
+GM0226	Duiven	51.94453	6.01478	zuid	
+GM0228	Ede	52.04117	5.65758	midden	
+GM0230	Elburg	52.43156	5.84523	midden	
+GM0232	Epe	52.32042	5.97756	midden	
+GM0233	Ermelo	52.29921	5.61663	midden	
+GM0243	Harderwijk	52.33964	5.62418	midden	
+GM0244	Hattem	52.47457	6.06056	noord	
+GM0246	Heerde	52.40272	6.05212	midden	
+GM0252	Heumen	51.77722	5.84727	zuid	
+GM0262	Lochem	52.16807	6.32489	midden	
+GM0263	Maasdriel	51.76910	5.30100	zuid	
+GM0267	Nijkerk	52.20952	5.46987	midden	
+GM0268	Nijmegen	51.83476	5.84205	zuid	
+GM0269	Oldebroek	52.45437	5.97199	midden	
+GM0273	Putten	52.25699	5.60031	midden	
+GM0274	Renkum	51.98325	5.79261	zuid	
+GM0275	Rheden	52.01632	6.03473	zuid	
+GM0277	Rozendaal	52.00322	5.96172	zuid	
+GM0279	Scherpenzeel	52.08008	5.48859	midden	
+GM0281	Tiel	51.88508	5.41698	midden	
+GM0285	Voorst	52.22894	6.10515	midden	
+GM0289	Wageningen	51.97374	5.66299	midden	
+GM0293	Westervoort	51.95372	5.97418	zuid	
+GM0294	Winterswijk	51.97369	6.72108	midden	
+GM0296	Wijchen	51.80910	5.72289	zuid	
+GM0297	Zaltbommel	51.79954	5.19657	zuid	
+GM0299	Zevenaar	51.92260	6.07699	zuid	
+GM0301	Zutphen	52.13565	6.21320	midden	
+GM0302	Nunspeet	52.36528	5.78288	midden	
+GM0303	Dronten	52.51831	5.70028	noord	
+GM0307	Amersfoort	52.17360	5.39378	midden	
+GM0308	Baarn	52.21131	5.28845	midden	
+GM0310	De Bilt	52.12849	5.18786	midden	
+GM0312	Bunnik	52.05754	5.22026	midden	
+GM0313	Bunschoten	52.24460	5.37183	midden	
+GM0317	Eemnes	52.25262	5.25760	noord	
+GM0321	Houten	52.02510	5.17230	midden	
+GM0327	Leusden	52.13135	5.43175	midden	
+GM0331	Lopik	51.97595	4.94985	midden	
+GM0335	Montfoort	52.04873	4.94331	midden	
+GM0339	Renswoude	52.07463	5.54109	midden	
+GM0340	Rhenen	51.96674	5.56255	midden	
+GM0342	Soest	52.16457	5.29001	midden	
+GM0344	Utrecht	52.09324	5.09317	midden	
+GM0345	Veenendaal	52.02428	5.55403	midden	
+GM0351	Woudenberg	52.08102	5.42149	midden	
+GM0352	Wijk bij Duurstede	51.98214	5.33116	midden	
+GM0353	IJsselstein	52.02030	5.04120	midden	
+GM0355	Zeist	52.09441	5.24055	midden	
+GM0356	Nieuwegein	52.03210	5.08337	midden	
+GM0358	Aalsmeer	52.26005	4.76690	noord	
+GM0361	Alkmaar	52.63480	4.76015	noord	
+GM0362	Amstelveen	52.29644	4.85581	noord	
+GM0363	Amsterdam	52.35952	4.89470	noord	
+GM0373	Bergen	52.66224	4.68437	noord	Bergen (NH.)
+GM0375	Beverwijk	52.48953	4.65915	noord	
+GM0376	Blaricum	52.28408	5.26044	noord	
+GM0377	Bloemendaal	52.36784	4.60388	noord	
+GM0383	Castricum	52.55708	4.68310	noord	
+GM0384	Diemen	52.33912	4.96535	noord	
+GM0385	Edam-Volendam	52.51285	5.05061	noord	
+GM0388	Enkhuizen	52.71010	5.27845	noord	
+GM0392	Haarlem	52.38247	4.64181	noord	
+GM0394	Haarlemmermeer	52.30716	4.67240	noord	
+GM0396	Heemskerk	52.50671	4.67654	noord	
+GM0397	Heemstede	52.34906	4.61889	noord	
+GM0399	Heiloo	52.59944	4.70309	noord	
+GM0400	Den Helder	52.93224	4.75439	noord	
+GM0402	Hilversum	52.22553	5.17279	noord	
+GM0405	Hoorn	52.65491	5.07021	noord	
+GM0406	Huizen	52.29665	5.25014	noord	
+GM0415	Landsmeer	52.43330	4.91446	noord	
+GM0417	Laren	52.25348	5.22831	noord	Laren (NH.)
+GM0420	Medemblik	52.72956	5.09632	noord	
+GM0431	Oostzaan	52.44032	4.87468	noord	
+GM0432	Opmeer	52.70843	4.94553	noord	
+GM0437	Ouder-Amstel	52.30392	4.92610	noord	
+GM0439	Purmerend	52.50716	4.95786	noord	
+GM0441	Schagen	52.77415	4.77001	noord	
+GM0448	Texel	53.06280	4.80470	noord	
+GM0450	Uitgeest	52.52486	4.70719	noord	
+GM0451	Uithoorn	52.24233	4.81693	noord	
+GM0453	Velsen	52.44980	4.63038	noord	
+GM0473	Zandvoort	52.37369	4.53916	noord	
+GM0479	Zaanstad	52.46335	4.80084	noord	
+GM0482	Alblasserdam	51.86754	4.65761	midden	
+GM0484	Alphen aan den Rijn	52.12186	4.64908	midden	
+GM0489	Barendrecht	51.85312	4.51995	midden	
+GM0498	Drechterland	52.67221	5.17506	noord	
+GM0502	Capelle aan den IJssel	51.93446	4.58237	midden	
+GM0503	Delft	52.00189	4.35397	midden	
+GM0505	Dordrecht	51.79848	4.68337	midden	
+GM0512	Gorinchem	51.83674	4.98022	midden	
+GM0513	Gouda	52.01708	4.71345	midden	
+GM0518	Den Haag	52.06699	4.29704	midden	's-Gravenhage
+GM0523	Hardinxveld-Giessendam	51.82631	4.84541	midden	
+GM0531	Hendrik-Ido-Ambacht	51.83956	4.64065	midden	
+GM0532	Stede Broec	52.69567	5.23115	noord	
+GM0534	Hillegom	52.29220	4.58323	midden	
+GM0537	Katwijk	52.19662	4.42259	midden	
+GM0542	Krimpen aan den IJssel	51.91663	4.60449	midden	
+GM0546	Leiden	52.15849	4.48772	midden	
+GM0547	Leiderdorp	52.16060	4.53006	midden	
+GM0553	Lisse	52.25517	4.55753	midden	
+GM0556	Maassluis	51.92806	4.24371	midden	
+GM0569	Nieuwkoop	52.17648	4.76952	midden	
+GM0575	Noordwijk	52.25091	4.46681	midden	
+GM0579	Oegstgeest	52.18444	4.47257	midden	
+GM0589	Oudewater	52.02594	4.86631	midden	
+GM0590	Papendrecht	51.83271	4.69590	midden	
+GM0597	Ridderkerk	51.87346	4.60088	midden	
+GM0599	Rotterdam	51.91573	4.47950	midden	
+GM0603	Rijswijk	52.03847	4.32397	midden	Rijswijk (ZH.)
+GM0606	Schiedam	51.92399	4.38920	midden	
+GM0610	Sliedrecht	51.82325	4.77292	midden	
+GM0613	Albrandswaard	51.85600	4.42845	midden	
+GM0622	Vlaardingen	51.91819	4.34281	midden	
+GM0626	Voorschoten	52.12943	4.45033	midden	
+GM0627	Waddinxveen	52.04094	4.64604	midden	
+GM0629	Wassenaar	52.13886	4.39462	midden	
+GM0632	Woerden	52.08808	4.89331	midden	
+GM0637	Zoetermeer	52.05881	4.49993	midden	
+GM0638	Zoeterwoude	52.12622	4.50005	midden	
+GM0642	Zwijndrecht	51.82062	4.62936	midden	
+GM0654	Borsele	51.46290	3.82078	zuid	
+GM0664	Goes	51.50512	3.88703	zuid	
+GM0668	West Maas en Waal	51.85897	5.48955	zuid	
+GM0677	Hulst	51.29585	4.05020	zuid	
+GM0678	Kapelle	51.48999	3.97105	zuid	
+GM0687	Middelburg	51.49603	3.62232	zuid	Middelburg (Z.)
+GM0703	Reimerswaal	51.44540	4.07890	zuid	
+GM0715	Terneuzen	51.30514	3.85631	zuid	
+GM0716	Tholen	51.54681	4.14518	zuid	
+GM0717	Veere	51.52333	3.52758	zuid	
+GM0718	Vlissingen	51.45761	3.57920	zuid	
+GM0736	De Ronde Venen	52.22204	4.90353	midden	
+GM0737	Tytsjerksteradiel	53.21116	5.95076	noord	Tietjerksteradeel
+GM0743	Asten	51.40272	5.75294	zuid	
+GM0744	Baarle-Nassau	51.44550	4.91899	zuid	
+GM0748	Bergen op Zoom	51.49791	4.28910	zuid	
+GM0753	Best	51.50577	5.38792	zuid	
+GM0755	Boekel	51.60336	5.68672	zuid	
+GM0757	Boxtel	51.58935	5.33165	zuid	
+GM0758	Breda	51.58955	4.77320	zuid	
+GM0762	Deurne	51.44928	5.80798	zuid	
+GM0765	Pekela	53.09215	6.98822	noord	
+GM0766	Dongen	51.63165	4.94018	zuid	
+GM0770	Eersel	51.38080	5.31179	zuid	
+GM0772	Eindhoven	51.45001	5.47136	zuid	
+GM0777	Etten-Leur	51.57532	4.64500	zuid	
+GM0779	Geertruidenberg	51.69789	4.87154	zuid	
+GM0784	Gilze en Rijen	51.57589	4.93063	zuid	
+GM0785	Goirle	51.52508	5.05794	zuid	
+GM0794	Helmond	51.47668	5.65998	zuid	
+GM0796	's-Hertogenbosch	51.70889	5.31993	zuid	
+GM0797	Heusden	51.69701	5.16084	zuid	
+GM0798	Hilvarenbeek	51.48395	5.14750	zuid	
+GM0809	Loon op Zand	51.65266	5.03968	zuid	
+GM0820	Nuenen, Gerwen en Nederwetten	51.47149	5.55200	zuid	
+GM0823	Oirschot	51.49944	5.29431	zuid	
+GM0824	Oisterwijk	51.57662	5.19462	zuid	
+GM0826	Oosterhout	51.64209	4.85628	zuid	
+GM0828	Oss	51.76995	5.52846	zuid	
+GM0840	Rucphen	51.53980	4.57495	zuid	
+GM0845	Sint-Michielsgestel	51.65767	5.37348	zuid	
+GM0847	Someren	51.38127	5.71255	zuid	
+GM0848	Son en Breugel	51.51920	5.49166	zuid	
+GM0851	Steenbergen	51.59445	4.32718	zuid	
+GM0852	Waterland	52.45077	5.02754	noord	
+GM0855	Tilburg	51.57005	5.06772	zuid	
+GM0858	Valkenswaard	51.35294	5.44965	zuid	
+GM0861	Veldhoven	51.41948	5.39655	zuid	
+GM0865	Vught	51.64864	5.27812	zuid	
+GM0866	Waalre	51.39428	5.46407	zuid	
+GM0867	Waalwijk	51.68235	5.04813	zuid	
+GM0873	Woensdrecht	51.40940	4.34154	zuid	
+GM0879	Zundert	51.48105	4.66238	zuid	
+GM0880	Wormerland	52.49850	4.82099	noord	
+GM0882	Landgraaf	50.90354	6.02904	zuid	
+GM0888	Beek	50.94051	5.80903	zuid	Beek (L.)
+GM0889	Beesel	51.28082	6.07446	zuid	
+GM0893	Bergen	51.60180	6.06200	zuid	Bergen (L.)
+GM0899	Brunssum	50.94253	5.96413	zuid	
+GM0907	Gennep	51.69844	5.97665	zuid	
+GM0917	Heerlen	50.89937	5.96644	zuid	
+GM0928	Kerkrade	50.86835	6.05270	zuid	
+GM0935	Maastricht	50.84828	5.69318	zuid	
+GM0938	Meerssen	50.90025	5.75181	zuid	
+GM0944	Mook en Middelaar	51.75640	5.88181	zuid	
+GM0946	Nederweert	51.28674	5.76205	zuid	
+GM0957	Roermond	51.19402	6.00306	zuid	
+GM0965	Simpelveld	50.82912	5.99395	zuid	
+GM0971	Stein	50.96851	5.76943	zuid	Stein (L.)
+GM0981	Vaals	50.77511	6.00742	zuid	
+GM0983	Venlo	51.36660	6.15617	zuid	
+GM0984	Venray	51.52401	5.98447	zuid	
+GM0986	Voerendaal	50.87622	5.92211	zuid	
+GM0988	Weert	51.24555	5.70872	zuid	
+GM0994	Valkenburg aan de Geul	50.86584	5.82398	zuid	
+GM0995	Lelystad	52.50791	5.47337	noord	
+GM1507	Horst aan de Maas	51.44715	6.06834	zuid	
+GM1509	Oude IJsselstreek	51.90508	6.38915	midden	
+GM1525	Teylingen	52.22064	4.50549	midden	
+GM1581	Utrechtse Heuvelrug	52.03877	5.34858	midden	
+GM1586	Oost Gelre	52.00936	6.58085	midden	
+GM1598	Koggenland	52.64550	4.93878	noord	
+GM1621	Lansingerland	51.99492	4.49100	midden	
+GM1640	Leudal	51.23131	5.91622	zuid	
+GM1641	Maasgouw	51.16043	5.88539	zuid	
+GM1652	Gemert-Bakel	51.54127	5.71081	zuid	
+GM1655	Halderberge	51.58617	4.52362	zuid	
+GM1658	Heeze-Leende	51.36989	5.57030	zuid	
+GM1659	Laarbeek	51.52530	5.62280	zuid	
+GM1667	Reusel-De Mierden	51.37071	5.15815	zuid	
+GM1669	Roerdalen	51.14096	6.00949	zuid	
+GM1674	Roosendaal	51.52541	4.45416	zuid	
+GM1676	Schouwen-Duiveland	51.66021	3.92381	zuid	
+GM1680	Aa en Hunze	53.01344	6.73944	noord	
+GM1681	Borger-Odoorn	52.91905	6.89116	noord	
+GM1690	De Wolden	52.69810	6.35838	noord	
+GM1695	Noord-Beveland	51.56748	3.77678	zuid	
+GM1696	Wijdemeren	52.23257	5.09811	noord	
+GM1699	Noordenveld	53.12797	6.42925	noord	
+GM1700	Twenterand	52.44603	6.59850	noord	
+GM1701	Westerveld	52.83090	6.26933	noord	
+GM1705	Lingewaard	51.91168	5.93148	zuid	
+GM1706	Cranendonck	51.28088	5.58571	zuid	
+GM1708	Steenwijkerland	52.77475	6.05925	noord	
+GM1709	Moerdijk	51.65373	4.54256	zuid	
+GM1711	Echt-Susteren	51.08403	5.88313	zuid	
+GM1714	Sluis	51.33050	3.50099	zuid	
+GM1719	Drimmelen	51.67399	4.76338	zuid	
+GM1721	Bernheze	51.69984	5.52245	zuid	
+GM1723	Alphen-Chaam	51.48942	4.88686	zuid	
+GM1724	Bergeijk	51.31970	5.35493	zuid	
+GM1728	Bladel	51.37353	5.22994	zuid	
+GM1729	Gulpen-Wittem	50.81157	5.90575	zuid	
+GM1730	Tynaarlo	53.11285	6.60364	noord	
+GM1731	Midden-Drenthe	52.88175	6.52588	noord	
+GM1734	Overbetuwe	51.92120	5.80222	zuid	
+GM1735	Hof van Twente	52.23740	6.60745	noord	
+GM1740	Neder-Betuwe	51.91635	5.59869	midden	
+GM1742	Rijssen-Holten	52.30054	6.49336	noord	
+GM1771	Geldrop-Mierlo	51.42562	5.57628	zuid	
+GM1773	Olst-Wijhe	52.35826	6.12192	noord	
+GM1774	Dinkelland	52.36300	6.93540	noord	
+GM1783	Westland	52.00417	4.21409	midden	
+GM1842	Midden-Delfland	51.97362	4.30950	midden	
+GM1859	Berkelland	52.11198	6.56607	midden	
+GM1876	Bronckhorst	52.04784	6.29759	midden	
+GM1883	Sittard-Geleen	50.99159	5.84796	zuid	
+GM1884	Kaag en Braassem	52.19995	4.63316	midden	
+GM1891	Dantumadiel	53.26930	6.00398	noord	Dantumadeel
+GM1892	Zuidplas	51.99130	4.61338	midden	
+GM1894	Peel en Maas	51.33424	6.00495	zuid	
+GM1895	Oldambt	53.16522	7.03430	noord	
+GM1896	Zwartewaterland	52.61288	6.07744	noord	
+GM1900	Súdwest-Fryslân	53.02539	5.59959	noord	
+GM1901	Bodegraven-Reeuwijk	52.07124	4.75493	midden	
+GM1903	Eijsden-Margraten	50.80134	5.76238	zuid	
+GM1904	Stichtse Vecht	52.15596	5.02115	midden	
+GM1911	Hollands Kroon	52.83763	4.89081	noord	
+GM1916	Leidschendam-Voorburg	52.08211	4.37983	midden	
+GM1924	Goeree-Overflakkee	51.74873	4.11357	midden	
+GM1926	Pijnacker-Nootdorp	52.01953	4.42058	midden	
+GM1930	Nissewaard	51.83981	4.32286	midden	
+GM1931	Krimpenerwaard	51.93547	4.74667	midden	
+GM1940	De Fryske Marren	52.91633	5.73732	noord	De Friese Meren
+GM1942	Gooise Meren	52.28572	5.15345	noord	
+GM1945	Berg en Dal	51.80727	5.96212	zuid	
+GM1948	Meierijstad	51.60638	5.50052	zuid	
+GM1949	Waadhoeke	53.22218	5.59457	noord	
+GM1950	Westerwolde	52.96392	7.09664	noord	
+GM1952	Midden-Groningen	53.17195	6.78776	noord	
+GM1954	Beekdaelen	50.93656	5.89578	zuid	
+GM1955	Montferland	51.91379	6.19168	midden	
+GM1959	Altena	51.77652	4.98076	midden	
+GM1960	West Betuwe	51.87957	5.22092	midden	
+GM1961	Vijfheerenlanden	51.94310	5.07961	midden	
+GM1963	Hoeksche Waard	51.78891	4.46901	midden	
+GM1966	Het Hogeland	53.35615	6.53541	noord	
+GM1969	Westerkwartier	53.19962	6.35167	noord	
+GM1970	Noardeast-Fryslân	53.31958	6.01220	noord	
+GM1978	Molenlanden	51.88013	4.82298	midden	
+GM1979	Eemsdelta	53.32562	6.86330	noord	
+GM1980	Dijk en Waard	52.67017	4.82321	noord	
+GM1982	Land van Cuijk	51.68635	5.86659	zuid	
+GM1991	Maashorst	51.67449	5.63370	zuid	
+GM1992	Voorne aan Zee	51.85696	4.14680	midden	

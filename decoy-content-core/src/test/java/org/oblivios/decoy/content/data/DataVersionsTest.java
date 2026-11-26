@@ -21,7 +21,10 @@ class DataVersionsTest {
     void aPlanNamesTheVersionOfEveryDataFileItRead() {
         ContentPlan p = PlanHarness.plan(profile().background("NL").build(), Seed.of(1, 2));
         assertEquals(NameData.load("NL").version(), p.dataVersions().get("names/NL"));
-        assertEquals(Set.of("names/NL", "pool"), p.dataVersions().keySet());
+        // a given background draws none from the population figures
+        assertEquals(Set.of("names/NL", "places/NL", "holidays/NL", "pool"), p.dataVersions().keySet());
+        assertEquals(PlaceData.load("NL").version(), p.dataVersions().get("places/NL"));
+        assertTrue(PlanHarness.plan(profile().build(), Seed.of(1, 2)).dataVersions().containsKey("population/NL"));
         assertTrue(p.dataVersions().get("pool").matches("sha256:[0-9a-f]{16}"), p.dataVersions().get("pool"));
         assertEquals(p.dataVersions(), PlanHarness.plan(profile().background("NL").build(), Seed.of(3, 4)).dataVersions());
     }
