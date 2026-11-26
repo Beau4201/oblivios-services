@@ -3,6 +3,7 @@ package org.oblivios.decoy.content.country;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.random.RandomGenerator;
 
@@ -16,14 +17,10 @@ public interface CountryPack {
     /** The language of the country's service texts (BCP 47 tag); empty when the pack has none, as the neutral pack. */
     String language();
 
-    String givenName(RandomGenerator r);
+    /** The weight of each form of a child's family name, empty when the pack has no family rules. */
+    Map<NameForm.Child, Integer> childNameForms();
 
-    String familyName(RandomGenerator r);
-
-    /** Every given name of the pack; the gate of the conversation pool keeps them out of the pool. */
-    List<String> givenNames();
-
-    List<String> familyNames();
+    Map<NameForm.Married, Integer> marriedNameForms();
 
     /** A number from a verified free or fictional block; throws when the pack has none. */
     PhoneNumber mobileNumber(RandomGenerator r) throws NoVerifiedRange;

@@ -19,14 +19,14 @@ import java.util.random.RandomGenerator;
  */
 public final class DataPack implements CountryPack {
     private static final Set<String> KEYS = Set.of(
-            "code", "language", "given", "family", "mobile.prefix", "mobile.blocks", "senders.BANK", "senders.PARCEL",
+            "code", "language", "family.child", "family.married", "mobile.prefix", "mobile.blocks", "senders.BANK", "senders.PARCEL",
             "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "supermarkets", "senders.GLOBAL", "holidays", "wifi", "cities", "capital", "amount",
             "mms.groups", "sites.GLOBAL", "sites.LOCAL", "trips.domestic", "trips.abroad");
 
     private final String code;
     private final String language;
-    private final List<String> given;
-    private final List<String> family;
+    private final Map<NameForm.Child, Integer> childForms;
+    private final Map<NameForm.Married, Integer> marriedForms;
     private final String mobilePrefix;
     private final long[][] blocks;
     private final Map<SenderKind, List<Sender>> senders = new EnumMap<>(SenderKind.class);
@@ -53,8 +53,8 @@ public final class DataPack implements CountryPack {
             throw new IllegalStateException("country pack without a code");
         }
         language = p.getProperty("language", "").trim();
-        given = list(p, "given");
-        family = list(p, "family");
+        childForms = weights(p, "family.child", NameForm.Child.class);
+        marriedForms = weights(p, "family.married", NameForm.Married.class);
         mobilePrefix = p.getProperty("mobile.prefix", "").trim();
         List<String> blockList = list(p, "mobile.blocks");
         blocks = new long[blockList.size()][];
@@ -113,6 +113,23 @@ public final class DataPack implements CountryPack {
         return List.copyOf(out);
     }
 
+    /** Entries {@code <form>:<weight above 0>}, in the order of the forms. */
+    private <E extends Enum<E>> Map<E, Integer> weights(Properties p, String key, Class<E> forms) {
+        Map<E, Integer> out = new EnumMap<>(forms);
+        for (String entry : list(p, key)) {
+            String[] t = entry.split(":", -1);
+            try {
+                int weight = Integer.parseInt(t.length == 2 ? t[1].trim() : "");
+                if (weight < 1 || out.put(Enum.valueOf(forms, t[0].trim()), weight) != null) {
+                    throw new IllegalArgumentException("a weight below 1 or a form twice");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalStateException(key + " entry is not '<form>:<weight>' in pack " + code + ": '" + entry + "'", e);
+            }
+        }
+        return java.util.Collections.unmodifiableMap(out);
+    }
+
     /** Entries {@code <name> <lat> <lon>}; the name may hold spaces. */
     private List<City> cities(Properties p, String key) {
         List<City> out = new ArrayList<>();
@@ -164,23 +181,13 @@ public final class DataPack implements CountryPack {
     }
 
     @Override
-    public List<String> givenNames() {
-        return given;
+    public Map<NameForm.Child, Integer> childNameForms() {
+        return childForms;
     }
 
     @Override
-    public List<String> familyNames() {
-        return family;
-    }
-
-    @Override
-    public String givenName(RandomGenerator r) {
-        return given.get(r.nextInt(given.size()));
-    }
-
-    @Override
-    public String familyName(RandomGenerator r) {
-        return family.get(r.nextInt(family.size()));
+    public Map<NameForm.Married, Integer> marriedNameForms() {
+        return marriedForms;
     }
 
     @Override

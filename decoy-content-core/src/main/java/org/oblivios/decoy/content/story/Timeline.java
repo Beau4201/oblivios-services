@@ -15,6 +15,7 @@ import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.data.NameData;
 import org.oblivios.decoy.content.lang.LanguagePack;
 
 /** The one timeline behind every surface: where the owner lives and works, when the day starts, and since when the phone exists. */
@@ -54,7 +55,8 @@ public final class Timeline {
         places.add(new Place(lang.text("place.work"), work[0], work[1], PlaceKind.WORK));
         for (int i = 0; i < 2; i++) {
             double[] cafe = around(home, 0.3, 3.0, r);
-            places.add(new Place(lang.format("place.cafe", Map.of("name", c.familyName(r))), cafe[0], cafe[1], PlaceKind.CAFE));
+            String name = NameData.load(p.background()).family(p.gender(), r);
+            places.add(new Place(lang.format("place.cafe", Map.of("name", name)), cafe[0], cafe[1], PlaceKind.CAFE));
         }
         List<Sender> shops = c.senders(SenderKind.SHOP);
         for (int i = 0; i < 3; i++) {

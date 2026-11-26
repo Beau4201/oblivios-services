@@ -99,6 +99,13 @@ class PoolGateTest {
         List<String> args = new ArrayList<>(List.of(in.toString(), out.toString(), "--taxonomy",
                 dir.resolve("situations.tsv").toString(), "--min", String.valueOf(min)));
         args.addAll(List.of(more));
+        if (!args.remove("--without-names")) {
+            for (String language : List.of("nl", "en")) {
+                Path names = Files.writeString(dir.resolve("scan-names-" + language + ".txt"),
+                        "given\tSanne\ngiven\tDan\nfamily\tde Jong\nfamily\tLang\nfamily\tBakker\n");
+                args.addAll(List.of("--names", names.toString()));
+            }
+        }
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         PrintStream print = new PrintStream(bytes, true, StandardCharsets.UTF_8);
         int status = PoolGate.run(args.toArray(String[]::new), print, print);
@@ -168,7 +175,15 @@ class PoolGateTest {
     }
 
     @Test
-    void nameOfAPackOutsideASlotIsDropped() throws IOException {
+    void aLanguageWithoutANameListFailsTheRun() throws IOException {
+        Result r = gate(good("ok", 1), "--without-names");
+        assertEquals(2, r.status(), r.out());
+        assertTrue(r.out().contains("no name list for language nl"), r.out());
+        assertEquals(List.of(), r.ids(), "nothing is written unscanned");
+    }
+
+    @Test
+    void aListedNameOutsideASlotIsDropped() throws IOException {
         Result r = gate(good("ok", 1) + withLine("given", 2, "heb je Sanne al gesproken")
                 + withLine("family", 3, "die van De Jong is er ook") + withLine("slot", 4, "heb je {NAME_B} al gesproken"));
         assertEquals(List.of("ok", "slot"), r.ids());
@@ -200,14 +215,15 @@ class PoolGateTest {
         try (Reader in = new java.io.StringReader(good("ok", 2))) {
             good = PoolReader.read(in).conversations().get(0);
         }
-        assertEquals(List.of(), EntityScan.findings(good));
+        EntityScan.Names none = EntityScan.Names.of("nl", java.util.Set.of(), java.util.Set.of());
+        assertEquals(List.of(), EntityScan.findings(good, none));
         for (String reach : List.of("bel 0612345678 maar", "zie www.example", "mail me@example")) {
             List<PoolMessage> messages = new ArrayList<>(good.messages());
             PoolMessage m = messages.get(0);
             messages.set(0, new PoolMessage(m.day(), m.minute(), m.side(), reach));
             PoolConversation c = new PoolConversation(good.id(), good.situation(), good.language(), good.group(), good.sides(),
                     good.topics(), good.requires(), good.mix(), messages);
-            assertEquals(1, EntityScan.findings(c).size(), reach);
+            assertEquals(1, EntityScan.findings(c, none).size(), reach);
         }
     }
 

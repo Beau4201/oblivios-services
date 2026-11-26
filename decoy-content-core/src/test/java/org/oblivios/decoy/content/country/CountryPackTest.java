@@ -63,7 +63,7 @@ class CountryPackTest {
 
     @Test
     void countryWithoutVerifiedRangeFallsBackToNeutral() {
-        CountryPack noRange = pack("code", "ZZ", "given", "Zed", "family", "Zeta", "senders.BANK", "ZedBank");
+        CountryPack noRange = pack("code", "ZZ", "senders.BANK", "ZedBank");
         PackChoice c = Packs.forDevice(List.of(noRange), "ZZ", ZoneId.of("UTC"), Locale.ROOT);
         assertTrue(c.fellBack());
         assertSame(Packs.neutral(), c.pack());
@@ -197,7 +197,7 @@ class CountryPackTest {
     }
 
     @Test
-    void everyPackFileIsListedWithItsNames() throws Exception {
+    void everyPackFileIsListedWithItsFamilyRules() throws Exception {
         java.nio.file.Path dir = java.nio.file.Path.of(Packs.class.getResource("/org/oblivios/decoy/content/data/country/XX.properties").toURI())
                 .getParent();
         java.util.Set<String> files = new java.util.TreeSet<>();
@@ -205,9 +205,10 @@ class CountryPackTest {
             list.map(f -> f.getFileName().toString()).filter(f -> f.matches("[A-Z]{2}\\.properties")).forEach(f -> files.add(f.substring(0, 2)));
         }
         assertEquals(files, new java.util.TreeSet<>(Packs.all().stream().map(CountryPack::code).toList()));
-        assertTrue(nl().givenNames().contains("Sanne"));
-        assertTrue(nl().familyNames().contains("de Jong"));
-        assertTrue(Packs.neutral().givenNames().contains("Alex"));
+        for (CountryPack pack : Packs.all()) {
+            assertEquals(3, pack.childNameForms().size(), pack.code());
+            assertEquals(4, pack.marriedNameForms().size(), pack.code());
+        }
     }
 
     @Test
@@ -232,20 +233,6 @@ class CountryPackTest {
     void packLanguageIsRead() {
         assertEquals("nl", nl().language());
         assertEquals("", Packs.neutral().language());
-    }
-
-    @Test
-    void namesVaryAcrossDraws() {
-        CountryPack nl = nl();
-        SplittableRandom r = new SplittableRandom(3);
-        Set<String> given = new HashSet<>();
-        Set<String> family = new HashSet<>();
-        for (int i = 0; i < 400; i++) {
-            given.add(nl.givenName(r));
-            family.add(nl.familyName(r));
-        }
-        assertTrue(given.size() >= 40, "given names: " + given.size());
-        assertTrue(family.size() >= 40, "family names: " + family.size());
     }
 
     @Test

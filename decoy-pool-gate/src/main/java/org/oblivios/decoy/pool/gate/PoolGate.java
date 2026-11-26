@@ -37,8 +37,8 @@ import org.oblivios.decoy.content.pool.PoolReader;
  */
 public final class PoolGate {
     private static final double DUPLICATE = 0.5;
-    private static final String USAGE = "PoolGate <in-dir> <out-file> --taxonomy <file> --min <k> [--deny <names-file>]"
-            + " [--reject <ids-file>] [--sample <n> <sample-file>]";
+    private static final String USAGE = "PoolGate <in-dir> <out-file> --taxonomy <file> --min <k>"
+            + " --names <scan-names-<language>.txt>... [--deny <names-file>] [--reject <ids-file>] [--sample <n> <sample-file>]";
 
     private PoolGate() {}
 
@@ -46,7 +46,8 @@ public final class PoolGate {
         System.exit(run(args, System.out, System.err));
     }
 
-    private record Options(Path in, Path out, Path taxonomy, int min, Path deny, Path reject, int sample, Path sampleFile) {}
+    private record Options(Path in, Path out, Path taxonomy, int min, List<Path> names, Path deny, Path reject, int sample,
+            Path sampleFile) {}
 
     static int run(String[] args, PrintStream out, PrintStream err) {
         Options o;
@@ -66,6 +67,7 @@ public final class PoolGate {
     private static Options options(String[] args) {
         List<String> plain = new ArrayList<>();
         Path taxonomy = null;
+        List<Path> names = new ArrayList<>();
         Path deny = null;
         Path reject = null;
         Path sampleFile = null;
@@ -75,6 +77,7 @@ public final class PoolGate {
             switch (args[i]) {
                 case "--taxonomy" -> taxonomy = Path.of(args[++i]);
                 case "--min" -> min = Integer.valueOf(args[++i]);
+                case "--names" -> names.add(Path.of(args[++i]));
                 case "--deny" -> deny = Path.of(args[++i]);
                 case "--reject" -> reject = Path.of(args[++i]);
                 case "--sample" -> {
@@ -92,7 +95,7 @@ public final class PoolGate {
         if (plain.size() != 2 || taxonomy == null || min == null) {
             throw new IllegalArgumentException("an input folder, an output file, --taxonomy and --min are needed");
         }
-        return new Options(Path.of(plain.get(0)), Path.of(plain.get(1)), taxonomy, min, deny, reject, sample, sampleFile);
+        return new Options(Path.of(plain.get(0)), Path.of(plain.get(1)), taxonomy, min, names, deny, reject, sample, sampleFile);
     }
 
     private static int gate(Options o, PrintStream out) throws IOException {
@@ -107,8 +110,19 @@ public final class PoolGate {
         kept = filter(kept, "situation", dropped, out, c -> situations.contains(c.situation()) ? null : "unknown situation " + c.situation());
         kept = filter(kept, "language", dropped, out,
                 c -> LanguageCheck.isLanguage(c, c.language()) ? null : "does not read as " + c.language());
+        Map<String, EntityScan.Names> scan = new HashMap<>();
+        for (Path file : o.names()) {
+            EntityScan.Names list = EntityScan.Names.read(file);
+            scan.put(list.language(), list);
+        }
+        for (PoolConversation c : kept) {
+            if (!scan.containsKey(c.language())) {
+                out.println("no name list for language " + c.language() + ": give --names scan-names-" + c.language() + ".txt");
+                return 2;
+            }
+        }
         kept = filter(kept, "entities", dropped, out, c -> {
-            List<String> found = EntityScan.findings(c);
+            List<String> found = EntityScan.findings(c, scan.get(c.language()));
             return found.isEmpty() ? null : found.get(0);
         });
         Set<String> deny = o.deny() == null ? Set.of() : denied(o.deny());

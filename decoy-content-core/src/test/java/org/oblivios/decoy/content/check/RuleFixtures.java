@@ -163,7 +163,8 @@ public final class RuleFixtures {
                 new CalendarPlan(List.of(), List.of(), List.of()), new TravelPlan(List.of(), List.of()), b.device(),
                 new NetworkPlan(List.of(), List.of()), new UsagePlan(List.of(), Map.of()), new AppsPlan(List.of()),
                 new BrowserPlan(List.of(), List.of(), List.of()), new VaultPlan(List.of()), new TracesPlan(List.of(), Map.of()),
-                new MediaPlan(List.of(), List.of()), new MailPlan(List.of(), Optional.empty()), b.styles(), List.of(), List.of(), List.of());
+                new MediaPlan(List.of(), List.of()), new MailPlan(List.of(), Optional.empty()), b.styles(), List.of(), List.of(), List.of(),
+                b.dataVersions());
     }
 
     public static ContentPlan bare() {
@@ -217,7 +218,7 @@ public final class RuleFixtures {
             }
         }
         return new ContentPlan(persona, p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
-                traces, media, mail, styles, conversations, p.reserve(), p.warnings());
+                traces, media, mail, styles, conversations, p.reserve(), p.warnings(), p.dataVersions());
     }
 
     /** The checker inputs of one plan. */

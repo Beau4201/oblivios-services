@@ -21,6 +21,7 @@ import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.NoVerifiedRange;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.data.NameData;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.story.Timeline;
@@ -49,6 +50,7 @@ public final class PeopleSurface {
 
         // the circle comes first, so the favourites are the closest people
         List<Circle.Member> circle = Circle.build(p, s);
+        NameData nameData = NameData.load(p.background());
         int count = circle.size();
         String[] ids = new String[count];
         String[] names = new String[count];
@@ -61,7 +63,10 @@ public final class PeopleSurface {
         for (int i = 0; i < count; i++) {
             Circle.Member m = circle.get(i);
             ids[i] = "c" + i;
-            names[i] = r.nextInt(100) < 25 ? c.givenName(r) : c.givenName(r) + " " + c.familyName(r);
+            // shortcut: every contact takes a name of the persona's background, without families; the world draws the
+            // people with their backgrounds and family rules (plan Task 9)
+            String given = nameData.given(m.gender(), m.birthYear(), r);
+            names[i] = r.nextInt(100) < 25 ? given : given + " " + nameData.family(m.gender(), r);
             numbers[i] = freshNumber(c, r, used);
             favourite[i] = i < favourites;
             groups[i] = groupNames.get(m.relation().groupIndex());

@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.oblivios.decoy.content.plan;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.SetupInputs;
@@ -69,6 +76,12 @@ public final class ContentPlanner {
         if (pool.stream().noneMatch(c -> c.language().equals(persona.language()))) {
             throw new IllegalArgumentException("no conversation pool for " + persona.language());
         }
+        DataSet data = DataSet.of(pack.code());
+        try {
+            data.names(persona.background());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("background: " + e.getMessage(), e);
+        }
         VolumeModel volume = VolumeModel.fromCounts(setup.counts(), draws);
         Timeline timeline = Timeline.generate(persona, volume, pack, now, draws);
         People generated = PeopleSurface.generate(persona, timeline, pack, draws);
@@ -89,9 +102,22 @@ public final class ContentPlanner {
         warnings.addAll(timeline.warnings());
         warnings.addAll(media.warnings());
         warnings.addAll(picked.warnings());
+        Map<String, String> versions = new TreeMap<>(data.versions());
+        versions.put("pool", digest(pool));
         return new ContentPlan(persona, timeline, people, calendar, travel, DeviceSurface.generate(ctx), NetworkSurface.generate(ctx),
                 UsageSurface.generate(ctx), AppsSurface.generate(ctx), BrowserSurface.generate(ctx), VaultSurface.generate(ctx),
                 TracesSurface.generate(ctx), media, MailSurface.generate(persona, timeline, pack, setup.probe(), draws), styles,
-                conversations, picked.reserve(), warnings);
+                conversations, picked.reserve(), warnings, versions);
+    }
+
+    /** A pool has no version of its own, so what it holds names it. */
+    private static String digest(List<PoolConversation> pool) {
+        try {
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            pool.forEach(c -> sha.update(c.toString().getBytes(StandardCharsets.UTF_8)));
+            return String.format("sha256:%016x", ByteBuffer.wrap(sha.digest()).getLong());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is missing", e);
+        }
     }
 }
