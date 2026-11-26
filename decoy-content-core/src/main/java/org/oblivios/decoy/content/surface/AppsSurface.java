@@ -16,7 +16,7 @@ public final class AppsSurface {
     private AppsSurface() {}
 
     public static AppsPlan generate(SurfaceContext ctx) {
-        RandomGenerator r = ctx.seed().stream("apps");
+        RandomGenerator r = ctx.draws().stream("apps");
         ZoneId zone = ctx.timeline().zone();
         LocalDate day = LocalDate.ofInstant(ctx.now(), zone);
         Instant dayStart = day.atStartOfDay(zone).toInstant();

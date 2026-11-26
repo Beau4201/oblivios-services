@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.PersonaInputs;
+import org.oblivios.decoy.content.TestSetup;
 import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.persona.PersonaProfile.Housing;
 import org.oblivios.decoy.content.persona.PersonaProfile.JobKind;
@@ -72,8 +73,8 @@ public record PersonaClass(JobKind job, Relationship relationship, ChildBand chi
             }
             kids.sort(null);
         }
-        return PersonaProfile.builder(in).job(job).relationship(relationship).housing(housing).childAges(kids).birthYear(birthYear)
-                .languages(List.of(language)).build();
+        return PersonaProfile.builder(in).job(job).relationship(relationship).housing(housing)
+                .children(TestSetup.aged(kids.toArray(Integer[]::new))).birthYear(birthYear).languages(List.of(language)).build();
     }
 
     /** The class as one word, as the report writes it. */

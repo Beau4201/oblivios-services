@@ -18,7 +18,7 @@ public final class UsageSurface {
     private UsageSurface() {}
 
     public static UsagePlan generate(SurfaceContext ctx) {
-        RandomGenerator r = ctx.seed().stream("usage");
+        RandomGenerator r = ctx.draws().stream("usage");
         List<String> packages = SystemApps.usable(ctx);
         Instant windowStart = ctx.now().minus(Duration.ofDays(WINDOW_DAYS));
         if (windowStart.isBefore(ctx.timeline().phoneStart())) {

@@ -1,14 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.oblivios.decoy.content;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.Period;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.random.RandomGenerator;
+import org.oblivios.decoy.content.country.CountryPack;
+import org.oblivios.decoy.content.country.Sender;
+import org.oblivios.decoy.content.country.SenderKind;
 import org.oblivios.decoy.content.lang.LanguagePack;
+import org.oblivios.decoy.content.persona.ActivityAnswer;
+import org.oblivios.decoy.content.persona.ChildAnswer;
+import org.oblivios.decoy.content.persona.ChildAnswer.Custody;
+import org.oblivios.decoy.content.persona.ParentAnswer;
 import org.oblivios.decoy.content.persona.PersonaProfile;
+import org.oblivios.decoy.content.persona.PersonaProfile.ActivityKind;
 import org.oblivios.decoy.content.persona.PersonaProfile.CircleSize;
 import org.oblivios.decoy.content.persona.PersonaProfile.Fact;
 import org.oblivios.decoy.content.persona.PersonaProfile.FriendGroup;
@@ -20,30 +35,41 @@ import org.oblivios.decoy.content.persona.PersonaProfile.Relationship;
 import org.oblivios.decoy.content.persona.PersonaProfile.Stage;
 import org.oblivios.decoy.content.persona.PersonaProfile.Texting;
 import org.oblivios.decoy.content.persona.PersonaProfile.Transport;
+import org.oblivios.decoy.content.persona.PetAnswer;
+import org.oblivios.decoy.content.persona.SiblingAnswer;
+import org.oblivios.decoy.content.persona.TripAnswer;
+import org.oblivios.decoy.content.persona.WorkPattern;
 import org.oblivios.decoy.content.style.StyleVector;
 import org.oblivios.decoy.content.style.Styles;
 
 /**
- * The persona of one decoy: the owner's profile with every open field drawn. Each open field is drawn from its own named
- * stream of the seed after the given fields are fixed, so a field the owner gives never moves a drawn one.
+ * The persona of one decoy: the owner's profile with every open answer drawn; no field is {@code null}, and a name that
+ * is empty here is drawn by the world. Each open answer is drawn from its own named stream after the given answers are
+ * fixed, so an answer the owner gives never moves a drawn one that does not depend on it.
  */
-public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String nationality, List<String> languages,
-        String mixLanguage, JobKind job, String jobField, Relationship relationship, List<Integer> childAges, int household,
-        Housing housing, Set<Pet> pets, Transport transport, boolean parentsAlive, boolean parentsTogether,
-        List<Integer> siblingAges, Set<FriendGroup> friendGroups, CircleSize circle, Set<String> interests, Set<String> holidays,
-        Texting texting, boolean voiceNotes, StyleVector style, int year) {
+public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, String nationality, List<String> languages,
+        String mixLanguage, String background, JobKind job, String jobField, WorkPattern work, Relationship relationship,
+        boolean partnerAtHome, List<ChildAnswer> children, int household, Housing housing, List<PetAnswer> pets,
+        Transport transport, List<ParentAnswer> parents, boolean parentsTogether, List<SiblingAnswer> siblings,
+        Set<FriendGroup> friendGroups, List<ActivityAnswer> activities, CircleSize circle, Set<String> interests,
+        Set<String> holidays, String bank, String operator, String supermarket, Texting texting, boolean voiceNotes,
+        StyleVector style, List<TripAnswer> trips, LocalDate today) {
 
     private static final int MIN_AGE = 16;
+    private static final int MAX_AGE = 100;
     private static final int MAX_DRAWN_AGE = 70;
 
     public Persona {
         languages = List.copyOf(languages);
-        childAges = List.copyOf(childAges);
-        pets = Set.copyOf(pets);
-        siblingAges = List.copyOf(siblingAges);
+        children = List.copyOf(children);
+        pets = List.copyOf(pets);
+        parents = List.copyOf(parents);
+        siblings = List.copyOf(siblings);
         friendGroups = Set.copyOf(friendGroups);
+        activities = List.copyOf(activities);
         interests = Set.copyOf(interests);
         holidays = Set.copyOf(holidays);
+        trips = List.copyOf(trips);
     }
 
     /** The language of the persona's own texts: the first of its languages. */
@@ -51,16 +77,35 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
         return languages.get(0);
     }
 
-    /** The age the persona reaches in {@link #year}, the year its ages (children, siblings) refer to. */
+    public int birthYear() {
+        return birthDate.getYear();
+    }
+
+    /** The age on {@link #today}. */
     public int age() {
-        return year - birthYear;
+        return age(today);
+    }
+
+    /** The age on {@code on}: a year older from each birthday. */
+    public int age(LocalDate on) {
+        return Period.between(birthDate, on).getYears();
+    }
+
+    /** The ages of the children, in the order of {@link #children}. */
+    public List<Integer> childAges() {
+        return children.stream().map(ChildAnswer::age).toList();
+    }
+
+    public boolean parentsAlive() {
+        return parents.stream().anyMatch(ParentAnswer::alive);
     }
 
     /**
-     * Throws {@link IllegalArgumentException} whose message names the field when the profile contradicts itself, and
-     * {@code no language data for <tag>} when the persona's language has no data.
+     * Throws {@link IllegalArgumentException} whose message starts with the field when the profile contradicts itself or
+     * names what the country pack does not hold, and {@code no language data for <tag>} when the persona's language has
+     * no data.
      */
-    public static Persona derive(Seed seed, PersonaProfile p, int currentYear) {
+    public static Persona derive(Draws d, PersonaProfile p, LocalDate today, CountryPack pack) {
         PersonaInputs in = p.inputs();
 
         List<String> languages = p.languages();
@@ -70,73 +115,295 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
             throw new IllegalArgumentException("languages: a given list must name at least one language");
         }
         LanguagePack.of(languages.get(0)); // refuses a language without data, never replaces it
+        if (pack.city(in.city()).isEmpty()) {
+            throw new IllegalArgumentException("city: no place data for '" + in.city() + "' in country " + in.countryCode());
+        }
+        check(p, today, pack);
 
-        if (p.birthYear() != null) {
-            int age = currentYear - p.birthYear();
-            if (age < MIN_AGE || age > 100) {
-                throw new IllegalArgumentException("birthYear: an age of " + age + " is outside 16 to 100");
-            }
+        int birthYear = p.birthYear() != null ? p.birthYear() : drawBirthYear(d.stream("persona.birthYear"), p, today.getYear());
+        LocalDate birthDate = drawBirthDate(d.stream("persona.birthDate"), p, birthYear, today);
+        int age = Period.between(birthDate, today).getYears();
+        JobKind job = p.job() != null ? p.job() : drawJob(d.stream("persona.job"), age);
+        if (p.job() == null && p.work() != null && !works(job)) {
+            job = JobKind.OFFICE; // a given work pattern says that the persona works or studies
         }
-        if (p.childAges() != null && p.childAges().stream().anyMatch(c -> c < 0)) {
-            throw new IllegalArgumentException("childAges: a child age is negative");
+        WorkPattern work = work(d, p, job);
+        Relationship rel = p.relationship() != null ? p.relationship() : drawRelationship(d.stream("persona.relationship"), age, p);
+        boolean couple = rel == Relationship.PARTNER || rel == Relationship.MARRIED;
+        if (Boolean.TRUE.equals(p.partnerAtHome()) && !couple) {
+            throw new IllegalArgumentException("partnerAtHome: no partner to share the home, relationship " + rel);
         }
-        if (p.siblingAges() != null && p.siblingAges().stream().anyMatch(c -> c < 0)) {
-            throw new IllegalArgumentException("siblingAges: a sibling age is negative");
-        }
-        if (p.household() != null && p.household() < 1) {
-            throw new IllegalArgumentException("household: at least the persona lives in it");
-        }
-
-        int birthYear = p.birthYear() != null ? p.birthYear() : drawBirthYear(seed.stream("persona.birthYear"), p, currentYear);
-        int age = currentYear - birthYear;
-        JobKind job = p.job() != null ? p.job() : drawJob(seed.stream("persona.job"), age);
-        Relationship rel = p.relationship() != null ? p.relationship() : drawRelationship(seed.stream("persona.relationship"), age, p.household());
-        List<Integer> children = p.childAges() != null ? p.childAges() : drawChildren(seed.stream("persona.childAges"), age);
-        Housing housing = p.housing() != null ? p.housing() : drawHousing(seed.stream("persona.housing"), age, job, p);
-        boolean parentsAlive = p.parentsAlive() != null ? p.parentsAlive()
-                : housing == Housing.WITH_PARENTS || drawParentsAlive(seed.stream("persona.parentsAlive"), age);
+        boolean partnerAtHome = p.partnerAtHome() != null ? p.partnerAtHome()
+                : rel == Relationship.MARRIED || (rel == Relationship.PARTNER && (p.household() == null || p.household() > 1)
+                        && d.stream("persona.partnerAtHome").nextInt(100) < 60);
+        List<ChildAnswer> children = children(d, p, age);
+        Housing housing = p.housing() != null ? p.housing() : drawHousing(d.stream("persona.housing"), age, job, p);
+        List<ParentAnswer> parents = parents(d, p, age, housing);
+        boolean anyParent = parents.stream().anyMatch(ParentAnswer::alive);
+        boolean bothParents = parents.size() == 2 && parents.stream().allMatch(ParentAnswer::alive);
         boolean parentsTogether = p.parentsTogether() != null ? p.parentsTogether()
-                : parentsAlive && seed.stream("persona.parentsTogether").nextInt(100) < 70;
+                : bothParents && d.stream("persona.parentsTogether").nextInt(100) < 70;
         int household = p.household() != null ? p.household()
-                : drawHousehold(seed.stream("persona.household"), rel, children, housing);
+                : drawHousehold(d.stream("persona.household"), partnerAtHome, children, housing);
 
-        for (int c : children) {
-            if (c > age - MIN_AGE) {
-                throw new IllegalArgumentException("childAges: a child of " + c + " for a persona of " + age
-                        + " (a parent is at least 16 years older)");
-            }
-        }
-        if (rel == Relationship.MARRIED && household < 2) {
-            throw new IllegalArgumentException("household: a married persona lives with the partner, household " + household);
+        if (partnerAtHome && household < 2) {
+            throw new IllegalArgumentException("household: a persona whose partner is at home does not live alone, household " + household);
         }
         if ((housing == Housing.WITH_PARENTS || housing == Housing.HOUSE_SHARE) && household < 2) {
             throw new IllegalArgumentException("household: housing " + housing + " with a household of " + household);
         }
-        if (housing == Housing.WITH_PARENTS && !parentsAlive) {
+        if (housing == Housing.WITH_PARENTS && !anyParent) {
             throw new IllegalArgumentException("housing: living with parents who are not alive");
         }
-        if (parentsTogether && !parentsAlive) {
-            throw new IllegalArgumentException("parentsTogether: parents together who are not alive");
+        if (parentsTogether && !bothParents) {
+            throw new IllegalArgumentException("parentsTogether: parents together who are not both alive");
         }
 
-        Gender gender = p.gender() != null ? p.gender() : drawGender(seed.stream("persona.gender"));
+        Gender gender = p.gender() != null ? p.gender() : drawGender(d.stream("persona.gender"));
         String nationality = p.nationality() != null ? p.nationality().toUpperCase(Locale.ROOT) : in.countryCode().toUpperCase(Locale.ROOT);
+        // shortcut: an open background is the country, upgrade when the population figures of the city are data (plan Task 7)
+        String background = (p.background() != null ? p.background() : in.countryCode()).toUpperCase(Locale.ROOT);
         String mix = p.mixLanguage() != null ? p.mixLanguage() : "";
         String jobField = p.jobField() != null ? p.jobField() : "";
-        Set<Pet> pets = p.pets() != null ? p.pets() : drawPets(seed.stream("persona.pets"));
-        Transport transport = p.transport() != null ? p.transport() : drawTransport(seed.stream("persona.transport"), age);
-        List<Integer> siblings = p.siblingAges() != null ? p.siblingAges() : drawSiblings(seed.stream("persona.siblingAges"), age);
-        Set<FriendGroup> friends = p.friendGroups() != null ? p.friendGroups() : drawFriendGroups(seed.stream("persona.friendGroups"), age, job);
-        CircleSize circle = p.circle() != null ? p.circle() : pick(seed.stream("persona.circle"), new int[] {30, 50, 20}, CircleSize.values());
+        List<PetAnswer> pets = p.pets() != null
+                ? p.pets().stream().map(a -> new PetAnswer(a.kind(), Objects.requireNonNullElse(a.name(), ""))).toList()
+                : drawPets(d.stream("persona.pets"));
+        Transport transport = p.transport() != null ? p.transport() : drawTransport(d.stream("persona.transport"), age);
+        List<SiblingAnswer> siblings = siblings(d, p, age);
+        Set<FriendGroup> friends = p.friendGroups() != null ? p.friendGroups() : drawFriendGroups(d.stream("persona.friendGroups"), age, job);
+        List<ActivityAnswer> activities = p.activities() != null ? p.activities() : drawActivities(d, friends);
+        CircleSize circle = p.circle() != null ? p.circle() : pick(d.stream("persona.circle"), new int[] {30, 50, 20}, CircleSize.values());
         Set<String> interests = p.interests() != null ? p.interests() : Set.of();
         Set<String> holidays = p.holidays() != null ? p.holidays() : Set.of();
+        String bank = p.bank() != null ? p.bank() : oneOf(d.stream("persona.bank"), names(pack.senders(SenderKind.BANK)));
+        String operator = p.operator() != null ? p.operator()
+                : oneOf(d.stream("persona.operator"), names(pack.senders(SenderKind.OPERATOR)));
+        String supermarket = p.supermarket() != null ? p.supermarket() : oneOf(d.stream("persona.supermarket"), pack.supermarkets());
         Texting texting = p.texting() != null ? p.texting()
-                : pick(seed.stream("persona.texting"), age < 30 ? new int[] {15, 45, 40} : new int[] {30, 50, 20}, Texting.values());
-        boolean voice = p.voiceNotes() != null ? p.voiceNotes() : seed.stream("persona.voiceNotes").nextInt(100) < (age < 35 ? 60 : 35);
-        StyleVector style = p.style() != null ? p.style() : Styles.ageBand(age, seed.stream("persona.style"));
+                : pick(d.stream("persona.texting"), age < 30 ? new int[] {15, 45, 40} : new int[] {30, 50, 20}, Texting.values());
+        boolean voice = p.voiceNotes() != null ? p.voiceNotes() : d.stream("persona.voiceNotes").nextInt(100) < (age < 35 ? 60 : 35);
+        StyleVector style = p.style() != null ? p.style() : Styles.ageBand(age, d.stream("persona.style"));
+        List<TripAnswer> trips = p.trips() != null ? p.trips() : List.of(); // no trip is invented
 
-        return new Persona(in, gender, birthYear, nationality, languages, mix, job, jobField, rel, children, household, housing, pets,
-                transport, parentsAlive, parentsTogether, siblings, friends, circle, interests, holidays, texting, voice, style, currentYear);
+        return new Persona(in, gender, birthDate, nationality, languages, mix, background, job, jobField, work, rel, partnerAtHome,
+                children, household, housing, pets, transport, parents, parentsTogether, siblings, friends, activities, circle,
+                interests, holidays, bank, operator, supermarket, texting, voice, style, trips, today);
+    }
+
+    /** The refusals that need no drawn value. */
+    private static void check(PersonaProfile p, LocalDate today, CountryPack pack) {
+        if (p.birthYear() != null) {
+            int age = today.getYear() - p.birthYear();
+            if (age < MIN_AGE || age > MAX_AGE) {
+                throw new IllegalArgumentException("birthYear: an age of " + age + " is outside 16 to 100");
+            }
+        }
+        if (p.children() != null) {
+            for (ChildAnswer c : p.children()) {
+                if (c.age() != null && c.age() < 0) {
+                    throw new IllegalArgumentException("children: a child age is negative");
+                }
+                if (c.custody() == Custody.SHARED && (c.daysWithPersona() == null || c.daysWithPersona().isEmpty())) {
+                    throw new IllegalArgumentException("children: a child in shared custody needs the days with the persona");
+                }
+            }
+        }
+        if (p.siblings() != null && p.siblings().stream().anyMatch(s -> s.age() != null && s.age() < 0)) {
+            throw new IllegalArgumentException("siblings: a sibling age is negative");
+        }
+        if (p.household() != null && p.household() < 1) {
+            throw new IllegalArgumentException("household: at least the persona lives in it");
+        }
+        if (p.pets() != null && p.pets().stream().anyMatch(a -> a.kind() == null)) {
+            throw new IllegalArgumentException("pets: a pet needs a kind");
+        }
+        if (p.parents() != null && p.parents().size() > 2) {
+            throw new IllegalArgumentException("parents: at most two");
+        }
+        if (p.activities() != null && p.activities().stream()
+                .anyMatch(a -> a.kind() == null || a.day() == null || a.start() == null || a.minutes() <= 0)) {
+            throw new IllegalArgumentException("activities: an activity needs a kind, a day, a start and a duration above 0");
+        }
+        if (p.trips() != null) {
+            YearMonth last = YearMonth.from(today);
+            for (TripAnswer t : p.trips()) {
+                if (t.month() == null || t.month().isBefore(last.minusMonths(12)) || t.month().isAfter(last)) {
+                    throw new IllegalArgumentException("trips: a trip lies in the twelve months before today, not in " + t.month());
+                }
+                if (t.days() < 1 || t.country() == null || t.country().isBlank() || t.mode() == null) {
+                    throw new IllegalArgumentException("trips: a trip needs at least 1 day, a country and a means of travel");
+                }
+            }
+        }
+        listed("bank", p.bank(), names(pack.senders(SenderKind.BANK)), pack);
+        listed("operator", p.operator(), names(pack.senders(SenderKind.OPERATOR)), pack);
+        listed("supermarket", p.supermarket(), pack.supermarkets(), pack);
+    }
+
+    private static void listed(String field, String given, List<String> known, CountryPack pack) {
+        if (given != null && !known.contains(given)) {
+            throw new IllegalArgumentException(field + ": '" + given + "' is not one of country " + pack.code());
+        }
+    }
+
+    private static List<String> names(List<Sender> senders) {
+        return senders.stream().map(Sender::name).toList();
+    }
+
+    /** Uniform over the list; empty for a pack that holds none. */
+    private static String oneOf(RandomGenerator r, List<String> values) {
+        return values.isEmpty() ? "" : values.get(r.nextInt(values.size()));
+    }
+
+    /**
+     * A day of the birth year, such that the persona is at least 16, and 16 years older than every given child, today.
+     */
+    private static LocalDate drawBirthDate(RandomGenerator r, PersonaProfile p, int birthYear, LocalDate today) {
+        int minAge = MIN_AGE;
+        if (p.children() != null) {
+            for (ChildAnswer c : p.children()) {
+                if (c.age() != null) {
+                    refuseTooOld(c.age(), today.getYear() - birthYear);
+                    minAge = Math.max(minAge, c.age() + MIN_AGE);
+                }
+            }
+        }
+        LocalDate first = LocalDate.of(birthYear, 1, 1);
+        LocalDate last = LocalDate.of(birthYear, 12, 31);
+        LocalDate latest = today.minusYears(minAge);
+        if (latest.isBefore(last)) {
+            last = latest;
+        }
+        return first.plusDays(r.nextInt((int) ChronoUnit.DAYS.between(first, last) + 1));
+    }
+
+    private static void refuseTooOld(int child, int age) {
+        if (child > age - MIN_AGE) {
+            throw new IllegalArgumentException("children: a child of " + child + " for a persona of " + age
+                    + " (a parent is at least 16 years older)");
+        }
+    }
+
+    private static boolean works(JobKind job) {
+        return job != JobKind.RETIRED && job != JobKind.NONE && job != JobKind.JOB_SEEKER;
+    }
+
+    /** The given pattern, or one for the job; {@code [assumption]} until the routine has sourced spreads. */
+    private static WorkPattern work(Draws d, PersonaProfile p, JobKind job) {
+        WorkPattern given = p.work();
+        if (!works(job)) {
+            if (given != null) {
+                throw new IllegalArgumentException("work: a persona that is " + job + " has no work pattern");
+            }
+            return WorkPattern.NONE;
+        }
+        if (given != null) {
+            if (given.days() == null || given.days().isEmpty()) {
+                throw new IllegalArgumentException("work: a work pattern needs at least one day");
+            }
+            if (given.start() == null || given.end() == null || given.start().equals(given.end())) {
+                throw new IllegalArgumentException("work: a work pattern needs a start and a different end");
+            }
+            return given;
+        }
+        Set<DayOfWeek> week = EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY);
+        return switch (job) {
+            case SHIFT -> shift(d.stream("persona.work"));
+            case SELF_EMPLOYED -> new WorkPattern(week, LocalTime.of(9, 0), LocalTime.of(17, 30), false);
+            case STUDENT -> new WorkPattern(EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.THURSDAY), LocalTime.of(9, 0),
+                    LocalTime.of(16, 0), false);
+            case PUPIL -> new WorkPattern(week, LocalTime.of(8, 30), LocalTime.of(15, 0), false);
+            case CARER -> new WorkPattern(week, LocalTime.of(9, 0), LocalTime.of(15, 0), false);
+            default -> new WorkPattern(week, LocalTime.of(8, 30), LocalTime.of(17, 0), false);
+        };
+    }
+
+    /** Five days in a row from any day, early, late or night; half of the shift workers rotate. */
+    private static WorkPattern shift(RandomGenerator r) {
+        DayOfWeek first = DayOfWeek.of(1 + r.nextInt(7));
+        Set<DayOfWeek> days = EnumSet.noneOf(DayOfWeek.class);
+        for (int i = 0; i < 5; i++) {
+            days.add(first.plus(i));
+        }
+        LocalTime start = new LocalTime[] {LocalTime.of(7, 0), LocalTime.of(14, 0), LocalTime.of(22, 0)}[r.nextInt(3)];
+        return new WorkPattern(days, start, start.plusHours(8).plusMinutes(30), r.nextBoolean());
+    }
+
+    private static List<ChildAnswer> children(Draws d, PersonaProfile p, int age) {
+        List<ChildAnswer> out = new ArrayList<>();
+        if (p.children() == null) {
+            RandomGenerator genders = d.stream("persona.childGenders");
+            for (int c : drawChildAges(d.stream("persona.childAges"), age)) {
+                out.add(new ChildAnswer(c, drawGender(genders), "", Custody.HOME, Set.of()));
+            }
+            return out;
+        }
+        for (int i = 0; i < p.children().size(); i++) {
+            ChildAnswer a = p.children().get(i);
+            String item = "persona.children." + i;
+            int years = a.age() != null ? a.age()
+                    : d.stream(item + ".age").nextInt(Math.max(0, Math.min(age - 18, 45)) + 1);
+            refuseTooOld(years, age);
+            out.add(new ChildAnswer(years, a.gender() != null ? a.gender() : drawGender(d.stream(item + ".gender")),
+                    Objects.requireNonNullElse(a.givenName(), ""), Objects.requireNonNullElse(a.custody(), Custody.HOME),
+                    Objects.requireNonNullElse(a.daysWithPersona(), Set.of())));
+        }
+        return out;
+    }
+
+    /** An open list is a mother and a father; whether they live is one draw, as old as the persona. */
+    private static List<ParentAnswer> parents(Draws d, PersonaProfile p, int age, Housing housing) {
+        List<ParentAnswer> given = p.parents() != null ? p.parents()
+                : List.of(new ParentAnswer(Gender.FEMALE, null, null), new ParentAnswer(Gender.MALE, null, null));
+        boolean alive = housing == Housing.WITH_PARENTS || Boolean.TRUE.equals(p.parentsTogether())
+                || drawParentsAlive(d.stream("persona.parentsAlive"), age);
+        List<ParentAnswer> out = new ArrayList<>();
+        for (int i = 0; i < given.size(); i++) {
+            ParentAnswer a = given.get(i);
+            Gender gender = a.gender() != null ? a.gender() : drawGender(d.stream("persona.parents." + i + ".gender"));
+            out.add(new ParentAnswer(gender, a.alive() != null ? a.alive() : alive, Objects.requireNonNullElse(a.calledAs(), "")));
+        }
+        return out;
+    }
+
+    private static List<SiblingAnswer> siblings(Draws d, PersonaProfile p, int age) {
+        List<SiblingAnswer> out = new ArrayList<>();
+        if (p.siblings() == null) {
+            RandomGenerator genders = d.stream("persona.siblingGenders");
+            for (int years : drawSiblingAges(d.stream("persona.siblingAges"), age)) {
+                out.add(new SiblingAnswer(years, drawGender(genders), ""));
+            }
+            return out;
+        }
+        for (int i = 0; i < p.siblings().size(); i++) {
+            SiblingAnswer a = p.siblings().get(i);
+            String item = "persona.siblings." + i;
+            out.add(new SiblingAnswer(a.age() != null ? a.age() : drawSiblingAge(d.stream(item + ".age"), age),
+                    a.gender() != null ? a.gender() : drawGender(d.stream(item + ".gender")),
+                    Objects.requireNonNullElse(a.calledAs(), "")));
+        }
+        return out;
+    }
+
+    /** One weekly activity for each friend group that meets for one; days and hours are {@code [assumption]}. */
+    private static List<ActivityAnswer> drawActivities(Draws d, Set<FriendGroup> groups) {
+        List<ActivityAnswer> out = new ArrayList<>();
+        for (FriendGroup g : FriendGroup.values()) {
+            ActivityKind kind = switch (g) {
+                case SPORT -> ActivityKind.TEAM_SPORT;
+                case MUSIC -> ActivityKind.MUSIC;
+                case FAITH -> ActivityKind.FAITH;
+                case GAMING -> ActivityKind.GAMING;
+                default -> null;
+            };
+            if (kind == null || !groups.contains(g)) {
+                continue;
+            }
+            RandomGenerator r = d.stream("persona.activities." + g);
+            out.add(kind == ActivityKind.FAITH ? new ActivityAnswer(kind, DayOfWeek.SUNDAY, LocalTime.of(10, 0), 90, g)
+                    : new ActivityAnswer(kind, DayOfWeek.of(1 + r.nextInt(4)), LocalTime.of(19 + r.nextInt(2), 0), 90, g));
+        }
+        return out;
     }
 
     private static int drawBirthYear(RandomGenerator r, PersonaProfile p, int currentYear) {
@@ -149,16 +416,18 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
         } else if (p.job() == JobKind.RETIRED) {
             lo = 58;
         }
-        if (p.childAges() != null) {
-            for (int c : p.childAges()) {
-                lo = Math.max(lo, c + MIN_AGE);
+        if (p.children() != null) {
+            for (ChildAnswer c : p.children()) {
+                if (c.age() != null) {
+                    lo = Math.max(lo, c.age() + MIN_AGE);
+                }
             }
         }
         if (p.job() == null && lo > hi - 10) {
-            hi = Math.min(100, Math.max(hi, lo + 10)); // an older child widens the open range up to 100
+            hi = Math.min(MAX_AGE, Math.max(hi, lo + 10)); // an older child widens the open range up to 100
         }
         if (lo > hi) {
-            throw new IllegalArgumentException("childAges: the children need a persona of at least " + lo
+            throw new IllegalArgumentException("children: the children need a persona of at least " + lo
                     + ", the job " + p.job() + " allows at most " + hi);
         }
         return currentYear - (lo + r.nextInt(hi - lo + 1));
@@ -183,7 +452,7 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
                 JobKind.CARER, JobKind.NONE, JobKind.OFFICE});
     }
 
-    private static Relationship drawRelationship(RandomGenerator r, int age, Integer givenHousehold) {
+    private static Relationship drawRelationship(RandomGenerator r, int age, PersonaProfile p) {
         int[] w;
         if (age < 20) {
             w = new int[] {70, 30, 0, 0};
@@ -194,13 +463,20 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
         } else {
             w = new int[] {15, 15, 50, 20};
         }
-        if (givenHousehold != null && givenHousehold < 2) {
+        if (p.household() != null && p.household() < 2 && !Boolean.FALSE.equals(p.partnerAtHome())) {
             w[2] = 0; // a married persona lives with the partner
+        }
+        if (Boolean.TRUE.equals(p.partnerAtHome())) {
+            w[0] = 0;
+            w[3] = 0;
+            if (w[1] + w[2] == 0) {
+                w[1] = 100;
+            }
         }
         return pick(r, w, Relationship.values());
     }
 
-    private static List<Integer> drawChildren(RandomGenerator r, int age) {
+    private static List<Integer> drawChildAges(RandomGenerator r, int age) {
         int chance = age < 22 ? 0 : age < 30 ? 25 : age < 45 ? 65 : 75;
         List<Integer> out = new ArrayList<>();
         if (r.nextInt(100) >= chance) {
@@ -230,7 +506,7 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
             w[2] = 0;
             w[3] = 0;
         }
-        if (Boolean.FALSE.equals(p.parentsAlive())) {
+        if (p.parents() != null && p.parents().stream().allMatch(a -> Boolean.FALSE.equals(a.alive()))) {
             w[2] = 0;
         }
         if (w[0] + w[1] + w[2] + w[3] == 0) {
@@ -244,13 +520,10 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
         return r.nextInt(100) < chance;
     }
 
-    private static int drawHousehold(RandomGenerator r, Relationship rel, List<Integer> children, Housing housing) {
-        int n = 1;
-        if (rel == Relationship.MARRIED || (rel == Relationship.PARTNER && r.nextInt(100) < 60)) {
-            n++;
-        }
-        for (int c : children) {
-            if (c < 18 || (c < 25 && r.nextBoolean())) {
+    private static int drawHousehold(RandomGenerator r, boolean partnerAtHome, List<ChildAnswer> children, Housing housing) {
+        int n = partnerAtHome ? 2 : 1;
+        for (ChildAnswer c : children) {
+            if (c.custody() != Custody.ELSEWHERE && (c.age() < 18 || (c.age() < 25 && r.nextBoolean()))) {
                 n++;
             }
         }
@@ -266,16 +539,16 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
         return pick(r, new int[] {50, 50}, Gender.values());
     }
 
-    private static Set<Pet> drawPets(RandomGenerator r) {
-        Set<Pet> out = EnumSet.noneOf(Pet.class);
+    private static List<PetAnswer> drawPets(RandomGenerator r) {
+        List<PetAnswer> out = new ArrayList<>();
         if (r.nextInt(100) < 20) {
-            out.add(Pet.DOG);
+            out.add(new PetAnswer(Pet.DOG, ""));
         }
         if (r.nextInt(100) < 20) {
-            out.add(Pet.CAT);
+            out.add(new PetAnswer(Pet.CAT, ""));
         }
         if (r.nextInt(100) < 8) {
-            out.add(Pet.OTHER);
+            out.add(new PetAnswer(Pet.OTHER, ""));
         }
         return out;
     }
@@ -285,13 +558,17 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
         return pick(r, w, Transport.values());
     }
 
-    private static List<Integer> drawSiblings(RandomGenerator r, int age) {
+    private static List<Integer> drawSiblingAges(RandomGenerator r, int age) {
         int count = pick(r, new int[] {20, 40, 30, 10}, new Integer[] {0, 1, 2, 3});
         List<Integer> out = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            out.add(Math.max(1, age + r.nextInt(17) - 8));
+            out.add(drawSiblingAge(r, age));
         }
         return out;
+    }
+
+    private static int drawSiblingAge(RandomGenerator r, int age) {
+        return Math.max(1, age + r.nextInt(17) - 8);
     }
 
     private static Set<FriendGroup> drawFriendGroups(RandomGenerator r, int age, JobKind job) {
@@ -341,24 +618,22 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
     /** What a conversation may presume about this persona. */
     public Set<Fact> facts() {
         Set<Fact> f = EnumSet.noneOf(Fact.class);
-        if (pets.contains(Pet.DOG)) {
-            f.add(Fact.DOG);
-        }
-        if (pets.contains(Pet.CAT)) {
-            f.add(Fact.CAT);
-        }
-        if (pets.contains(Pet.OTHER)) {
-            f.add(Fact.OTHER_PET);
+        for (PetAnswer pet : pets) {
+            f.add(switch (pet.kind()) {
+                case DOG -> Fact.DOG;
+                case CAT -> Fact.CAT;
+                case OTHER -> Fact.OTHER_PET;
+            });
         }
         if (transport == Transport.CAR) {
             f.add(Fact.CAR);
         } else if (transport == Transport.BIKE) {
             f.add(Fact.BIKE);
         }
-        if (!childAges.isEmpty()) {
+        if (!children.isEmpty()) {
             f.add(Fact.CHILDREN);
         }
-        for (int c : childAges) {
+        for (int c : childAges()) {
             if (c < 4) {
                 f.add(Fact.YOUNG_CHILDREN);
             } else if (c <= 12) {
@@ -367,7 +642,7 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
                 f.add(Fact.TEEN_CHILDREN);
             }
         }
-        boolean minorChild = childAges.stream().anyMatch(c -> c < 18);
+        boolean minorChild = children.stream().anyMatch(c -> c.age() < 18 && c.custody() != Custody.ELSEWHERE);
         if (minorChild && (relationship == Relationship.SINGLE || relationship == Relationship.DIVORCED)) {
             f.add(Fact.SINGLE_PARENT);
         }
@@ -398,7 +673,7 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
             case HOUSE_SHARE -> f.add(Fact.HOUSE_SHARE);
             case WITH_PARENTS -> f.add(Fact.WITH_PARENTS);
         }
-        if (parentsAlive) {
+        if (parentsAlive()) {
             f.add(Fact.PARENTS_ALIVE);
         }
         if (friendGroups.contains(FriendGroup.SPORT)) {
@@ -423,7 +698,7 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
         return !mixLanguage.isEmpty() || !nationality.equalsIgnoreCase(inputs.countryCode());
     }
 
-    /** The life stages of this persona in its {@link #year}. A worker under 25 is a young worker; from 25 on the job gives the stage. */
+    /** The life stages of this persona {@link #today}. A worker under 25 is a young worker; from 25 on the job gives the stage. */
     public Set<Stage> stages() {
         Set<Fact> f = facts();
         Set<Stage> s = EnumSet.noneOf(Stage.class);

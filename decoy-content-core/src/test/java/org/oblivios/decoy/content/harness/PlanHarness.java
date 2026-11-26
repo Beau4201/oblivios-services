@@ -24,6 +24,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.TestSetup;
+import org.oblivios.decoy.content.pool.TestPool;
+import org.oblivios.decoy.content.review.ReviewEdits;
 import org.oblivios.decoy.content.check.Checks;
 import org.oblivios.decoy.content.check.PhoneViews;
 import org.oblivios.decoy.content.check.Violation;
@@ -49,7 +52,6 @@ import org.oblivios.decoy.content.surface.ServerProbe;
 public final class PlanHarness {
     public static final Instant NOW = Instant.parse("2026-11-26T12:00:00Z");
     /** The inputs of the audit: the owner, and the city and zone of each country the harness knows. */
-    static final String OWNER = "Sanne de Vries";
     private static final Map<String, String[]> PLACES = Map.of("NL", new String[] {"utrecht", "Europe/Amsterdam"});
     private static final int EXAMPLES = 3;
 
@@ -93,7 +95,7 @@ public final class PlanHarness {
         if (place == null) {
             throw new IllegalArgumentException("country: the harness has no city for " + country);
         }
-        return new PersonaInputs(OWNER, place[0], country, ZoneId.of(place[1]), Locale.forLanguageTag(language + "-" + country));
+        return new PersonaInputs("Sanne", "de Vries", place[0], country, ZoneId.of(place[1]), Locale.forLanguageTag(language + "-" + country));
     }
 
     /** 30 months ending 2026-10, each 90 camera photos, 10 screenshots and 8 saved images, as the audit. */
@@ -114,6 +116,17 @@ public final class PlanHarness {
         return new DeviceCameraProfile(4080, 3072, List.of(table), "PXL_\\d{8}_\\d{9}\\.jpg", "'PXL_'yyyyMMdd_HHmmssSSS'.jpg'", true);
     }
 
+    /** One plan of {@code profile} as the harness builds it, over a test pool of the seed's own. */
+    public static ContentPlan plan(PersonaProfile profile, Seed seed) {
+        return build(profile, seed, TestPool.random(5000, Seed.of(17, 17)), NOW);
+    }
+
+    private static ContentPlan build(PersonaProfile profile, Seed seed, List<PoolConversation> pool, Instant now) {
+        return ContentPlanner.build(profile,
+                TestSetup.inputs(counts(), List.of(), List.of(), "AndroidWifi", camera(), ServerProbe.HONOURED, now), ReviewEdits.none(),
+                seed, pool, new IdentityRewriter(), new AcceptAllJudge());
+    }
+
     public static Report run(Config c) {
         Map<String, Integer> byRule = new TreeMap<>();
         Map<PersonaClass, int[]> classes = new LinkedHashMap<>();
@@ -132,8 +145,7 @@ public final class PlanHarness {
             int[] count = cls == null ? null : classes.computeIfAbsent(cls, k -> new int[2]);
             ContentPlan p;
             try {
-                p = ContentPlanner.build(profile, counts(), List.of(), List.of(), "AndroidWifi", camera(), ServerProbe.HONOURED, c.now(), seed,
-                        c.pool(), new IdentityRewriter(), new AcceptAllJudge());
+                p = build(profile, seed, c.pool(), c.now());
             } catch (IllegalArgumentException e) {
                 refused++;
                 if (count != null) {

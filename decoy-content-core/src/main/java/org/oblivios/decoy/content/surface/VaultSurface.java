@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.random.RandomGenerator;
+import org.oblivios.decoy.content.PersonaInputs;
 
 /**
  * Logins for some of the sites the browser history shows. The apps the owner signs in to by hand fill the vault
@@ -16,9 +17,10 @@ public final class VaultSurface {
     private VaultSurface() {}
 
     public static VaultPlan generate(SurfaceContext ctx) {
-        RandomGenerator r = ctx.seed().stream("vault");
+        RandomGenerator r = ctx.draws().stream("vault");
         List<String> top = BrowserSurface.generate(ctx).bookmarks();
-        String[] name = ctx.persona().inputs().ownerName().toLowerCase(Locale.ROOT).split("\\s+");
+        PersonaInputs in = ctx.persona().inputs();
+        String[] name = (in.givenName() + " " + in.familyName()).toLowerCase(Locale.ROOT).split("\\s+");
         String handle = name[0] + (name.length > 1 ? "." + name[name.length - 1] : "");
         List<VaultEntry> entries = new ArrayList<>();
         int count = Math.max(1, Math.min(top.size(), 2 + r.nextInt(4)));

@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
@@ -38,7 +38,7 @@ public final class MailSurface {
         return APPEND.withZone(zone).format(when);
     }
 
-    public static MailPlan generate(Persona p, Timeline t, CountryPack c, ServerProbe probe, Seed s) {
+    public static MailPlan generate(Persona p, Timeline t, CountryPack c, ServerProbe probe, Draws s) {
         if (probe == ServerProbe.IGNORED) {
             return new MailPlan(List.of(), Optional.of("The mail server ignores the date of an appended message, so a mailbox of old mail "
                     + "cannot be built here: every message would carry today's date, which is a tell. Use another address, or skip the mailbox step."));
@@ -64,7 +64,7 @@ public final class MailSurface {
         if (!start.isBefore(end)) {
             end = start.plus(Duration.ofDays(30));
         }
-        String first = p.inputs().ownerName().split(" ")[0];
+        String first = p.inputs().givenName().split(" ")[0];
         int count = 25 + r.nextInt(120);
         List<MailMessage> messages = new ArrayList<>();
         for (int i = 0; i < count; i++) {

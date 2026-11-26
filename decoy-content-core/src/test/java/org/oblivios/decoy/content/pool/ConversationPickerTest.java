@@ -76,19 +76,19 @@ class ConversationPickerTest {
     }
 
     private static Setup setup(long n, UnaryOperator<PersonaProfile.Builder> f, CountryPack pack) {
-        PersonaInputs in = new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
-        Persona p = Persona.derive(Seed.of(n, 1), f.apply(PersonaProfile.builder(in)).build(), YEAR);
+        PersonaInputs in = new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1), f.apply(PersonaProfile.builder(in)).build(), YEAR);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(11 - i), 60, 10, 8, 1_000_000L));
         }
-        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), pack, NOW, Seed.of(n, 3));
-        People people = PeopleSurface.generate(p, t, pack, Seed.of(n, 4));
-        return new Setup(p, t, people, Styles.book(p, people, Seed.of(n, 5)), pack);
+        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2))), pack, NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
+        People people = PeopleSurface.generate(p, t, pack, org.oblivios.decoy.content.Draws.of(Seed.of(n, 4)));
+        return new Setup(p, t, people, Styles.book(p, people, org.oblivios.decoy.content.Draws.of(Seed.of(n, 5))), pack);
     }
 
     private static Picked pick(Setup s, List<PoolConversation> pool, long n, Judge judge) {
-        return ConversationPicker.pick(s.persona(), s.people(), s.styles(), s.timeline(), s.pack(), pool, Seed.of(n, 6),
+        return ConversationPicker.pick(s.persona(), s.people(), s.styles(), s.timeline(), s.pack(), pool, org.oblivios.decoy.content.Draws.of(Seed.of(n, 6)),
                 new IdentityRewriter(), judge);
     }
 
@@ -225,7 +225,7 @@ class ConversationPickerTest {
                 assertTrue(s.persona().facts().containsAll(f.requires()));
             }
         }
-        Setup s = setup(3, b -> b.relationship(PersonaProfile.Relationship.MARRIED).household(2).pets(Set.of()));
+        Setup s = setup(3, b -> b.relationship(PersonaProfile.Relationship.MARRIED).household(2).pets(List.of()));
         Contact partner = contact(s, Relation.PARTNER);
         List<PoolConversation> dogs = fitting(s, partner, 5, Set.of(Fact.DOG), null, "dog-");
         assertTrue(all(pick(s, dogs, 3)).isEmpty(), "a conversation about a dog for a persona without one");
@@ -289,7 +289,7 @@ class ConversationPickerTest {
         Setup s = setup(6, b -> b.relationship(PersonaProfile.Relationship.MARRIED).household(2));
         Contact partner = contact(s, Relation.PARTNER);
         Picked p = pick(s, fitting(s, partner, 3, Set.of(), "hi {NAME_B} it is {NAME_A}", "names-"), 6);
-        String own = s.persona().inputs().ownerName().split(" ")[0];
+        String own = s.persona().inputs().givenName();
         String first = partner.name().split(" ")[0];
         boolean seen = false;
         for (FilledConversation f : p.byContact().get(partner.id())) {
@@ -349,14 +349,14 @@ class ConversationPickerTest {
         Picked p = pick(s, POOL, 7, onlyRewritten);
         assertFalse(all(p).isEmpty());
         all(p).forEach(c -> assertTrue(c.rewritten()));
-        Picked raw = ConversationPicker.pick(s.persona(), s.people(), s.styles(), s.timeline(), s.pack(), POOL, Seed.of(7, 6));
+        Picked raw = ConversationPicker.pick(s.persona(), s.people(), s.styles(), s.timeline(), s.pack(), POOL, org.oblivios.decoy.content.Draws.of(Seed.of(7, 6)));
         assertFalse(all(raw).isEmpty());
         all(raw).forEach(c -> assertFalse(c.rewritten()));
     }
 
     @Test
     void withoutPoolThePlanIsRefused() {
-        PersonaInputs in = new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
+        PersonaInputs in = new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
         List<PoolConversation> english = POOL.stream().filter(c -> c.language().equals("en")).toList();
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
@@ -364,12 +364,13 @@ class ConversationPickerTest {
         }
         DeviceCameraProfile cam = new DeviceCameraProfile(4080, 3072, List.of(new int[64]), "PXL_\\d{8}_\\d{9}\\.jpg",
                 "'PXL_'yyyyMMdd_HHmmssSSS'.jpg'", true);
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ContentPlanner.build(PersonaProfile.open(in),
-                new VolumeCounts(months), List.of(), List.of(), null, cam, ServerProbe.HONOURED, NOW, Seed.of(1, 1), english,
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ContentPlanner.build(PersonaProfile.open(in), org.oblivios.decoy.content.TestSetup.inputs(new VolumeCounts(months), List.of(), List.of(), null, cam, ServerProbe.HONOURED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(1, 1), english,
                 new IdentityRewriter(), new AcceptAllJudge()));
         assertEquals("no conversation pool for nl", e.getMessage());
-        ContentPlan ok = ContentPlanner.build(PersonaProfile.open(in), new VolumeCounts(months), List.of(), List.of(), null, cam,
-                ServerProbe.HONOURED, NOW, Seed.of(1, 1), POOL, new IdentityRewriter(), new AcceptAllJudge());
+        ContentPlan ok = ContentPlanner.build(PersonaProfile.open(in), org.oblivios.decoy.content.TestSetup.inputs(new VolumeCounts(months), List.of(), List.of(), null, cam,
+                ServerProbe.HONOURED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(1, 1), POOL, new IdentityRewriter(), new AcceptAllJudge());
         assertFalse(ok.conversations().isEmpty());
     }
 

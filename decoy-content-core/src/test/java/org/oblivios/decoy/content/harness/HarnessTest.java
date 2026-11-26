@@ -23,8 +23,8 @@ import org.oblivios.decoy.content.pool.TestPool;
  * The checkers over persona classes. {@link #MUST_PASS} holds the rules that report nothing; {@link #KNOWN_FAILING}
  * the rules the first 40-seed run reported. A task that fixes a rule moves it from the second set to the first.
  */
-class HarnessTest {
-    static final Set<String> MUST_PASS = ContentPlanValidator.RULES;
+public class HarnessTest {
+    public static final Set<String> MUST_PASS = ContentPlanValidator.RULES;
     /** Read from the first run on 2026-11-26: 32 plans built, 8 refused, each of these rules in at least one plan. */
     static final Set<String> KNOWN_FAILING = Set.of("C-CALLS", "C-CLOSENESS", "E-STALE", "F-PRESUMES", "G-CLOCK", "G-ORIGIN",
             "G-SIGNATURE", "G-SPREAD", "H-HARDWARE", "M-RAW", "N-DISTINCT", "O-PRESUMES", "S-ONE", "S-PHYSICAL", "T-AWAY");

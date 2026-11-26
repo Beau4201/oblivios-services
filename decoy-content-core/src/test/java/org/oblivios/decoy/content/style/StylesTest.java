@@ -39,16 +39,16 @@ class StylesTest {
     private record Setup(Persona persona, People people, StyleBook book) {}
 
     private static Setup setup(long n, UnaryOperator<PersonaProfile.Builder> f) {
-        PersonaInputs in = new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
-        Persona p = Persona.derive(Seed.of(n, 1), f.apply(PersonaProfile.builder(in)).build(), YEAR);
+        PersonaInputs in = new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1), f.apply(PersonaProfile.builder(in)).build(), YEAR);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(11 - i), 60, 10, 8, 1_000_000L));
         }
         CountryPack nl = Packs.load("NL").orElseThrow();
-        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), nl, NOW, Seed.of(n, 3));
-        People people = PeopleSurface.generate(p, t, nl, Seed.of(n, 4));
-        return new Setup(p, people, Styles.book(p, people, Seed.of(n, 5)));
+        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2))), nl, NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
+        People people = PeopleSurface.generate(p, t, nl, org.oblivios.decoy.content.Draws.of(Seed.of(n, 4)));
+        return new Setup(p, people, Styles.book(p, people, org.oblivios.decoy.content.Draws.of(Seed.of(n, 5))));
     }
 
     private static StyleVector style(Register r) {
@@ -150,7 +150,7 @@ class StylesTest {
 
     @Test
     void ageBandStaysNearItsCentre() {
-        var r = Seed.of(1, 1).stream("band");
+        var r = org.oblivios.decoy.content.Draws.of(Seed.of(1, 1)).stream("band");
         for (int i = 0; i < 2000; i++) {
             StyleVector young = Styles.ageBand(20, r);
             assertNotEquals(Register.STREET, young.register());

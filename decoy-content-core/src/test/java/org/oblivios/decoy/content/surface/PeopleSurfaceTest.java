@@ -59,14 +59,14 @@ class PeopleSurfaceTest {
     private record Setup(Persona persona, Timeline timeline, People people) {}
 
     private static Setup setup(long n) {
-        Persona p = Persona.derive(Seed.of(n, 1),
-                PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"))), 2026);
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1),
+                PersonaProfile.open(new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 18; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(17 - i), 60 + i * 5, 10, 8, 1_000_000L));
         }
-        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), nl(), NOW, Seed.of(n, 3));
-        return new Setup(p, t, PeopleSurface.generate(p, t, nl(), Seed.of(n, 4)));
+        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2))), nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
+        return new Setup(p, t, PeopleSurface.generate(p, t, nl(), org.oblivios.decoy.content.Draws.of(Seed.of(n, 4))));
     }
 
     @Test
@@ -267,14 +267,14 @@ class PeopleSurfaceTest {
     private static final int YEAR = 2026;
 
     private static Setup setup(long n, java.util.function.UnaryOperator<PersonaProfile.Builder> f) {
-        PersonaInputs in = new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
-        Persona p = Persona.derive(Seed.of(n, 1), f.apply(PersonaProfile.builder(in)).build(), YEAR);
+        PersonaInputs in = new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1), f.apply(PersonaProfile.builder(in)).build(), YEAR);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(11 - i), 60, 10, 8, 1_000_000L));
         }
-        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), nl(), NOW, Seed.of(n, 3));
-        return new Setup(p, t, PeopleSurface.generate(p, t, nl(), Seed.of(n, 4)));
+        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2))), nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
+        return new Setup(p, t, PeopleSurface.generate(p, t, nl(), org.oblivios.decoy.content.Draws.of(Seed.of(n, 4))));
     }
 
     private static List<Contact> of(Setup s, Relation r) {
@@ -289,9 +289,9 @@ class PeopleSurfaceTest {
     void parentsAre25To35YearsOlder() {
         boolean seen = false;
         for (long n = 0; n < 40; n++) {
-            Setup s = setup(n, b -> b.birthYear(YEAR - 30).parentsAlive(true));
+            Setup s = setup(n, b -> b.birthYear(YEAR - 30).parents(org.oblivios.decoy.content.TestSetup.parents(true)));
             for (Contact c : of(s, Relation.PARENT)) {
-                int gap = ageOf(c) - s.persona().age();
+                int gap = ageOf(c) - (YEAR - s.persona().birthYear());
                 assertTrue(gap >= 25 && gap <= 35, "parent " + gap + " years older");
                 seen = true;
             }
@@ -302,7 +302,7 @@ class PeopleSurfaceTest {
     @Test
     void noParentsWhenParentsAreNotAlive() {
         for (long n = 0; n < 20; n++) {
-            Setup s = setup(n, b -> b.parentsAlive(false).housing(PersonaProfile.Housing.RENT));
+            Setup s = setup(n, b -> b.parents(org.oblivios.decoy.content.TestSetup.parents(false)).housing(PersonaProfile.Housing.RENT));
             assertTrue(of(s, Relation.PARENT).isEmpty());
             assertTrue(of(s, Relation.STEP_PARENT).isEmpty());
         }
@@ -323,7 +323,7 @@ class PeopleSurfaceTest {
         boolean seen = false;
         for (long n = 0; n < 20; n++) {
             for (PersonaProfile.JobKind job : PersonaProfile.JobKind.values()) {
-                Setup s = setup(n, b -> b.birthYear(YEAR - 40).job(job).childAges(List.of()));
+                Setup s = setup(n, b -> b.birthYear(YEAR - 40).job(job).children(List.of()));
                 List<Contact> colleagues = of(s, Relation.COLLEAGUE);
                 boolean working = job == PersonaProfile.JobKind.OFFICE || job == PersonaProfile.JobKind.SHIFT
                         || job == PersonaProfile.JobKind.SELF_EMPLOYED;
@@ -362,10 +362,10 @@ class PeopleSurfaceTest {
             Setup s = setup(n, b -> b.friendGroups(Set.of(PersonaProfile.FriendGroup.SCHOOL, PersonaProfile.FriendGroup.WORK)));
             for (Contact c : s.people().contacts()) {
                 if (c.origin() == PersonaProfile.FriendGroup.SCHOOL) {
-                    assertTrue(Math.abs(ageOf(c) - s.persona().age()) <= 2, "school friend " + ageOf(c) + " for " + s.persona().age());
+                    assertTrue(Math.abs(ageOf(c) - (YEAR - s.persona().birthYear())) <= 2, "school friend " + ageOf(c) + " for " + (YEAR - s.persona().birthYear()));
                     seen = true;
                 } else if (c.origin() == PersonaProfile.FriendGroup.WORK) {
-                    assertTrue(Math.abs(ageOf(c) - s.persona().age()) <= 8);
+                    assertTrue(Math.abs(ageOf(c) - (YEAR - s.persona().birthYear())) <= 8);
                 }
             }
         }
@@ -439,6 +439,15 @@ class PeopleSurfaceTest {
     }
 
     @Test
+    void aPackWithoutVerifiedNumbersMakesNoContact() {
+        Setup s = setup(1, b -> b);
+        IllegalArgumentException e = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> PeopleSurface.generate(s.persona(), s.timeline(), org.oblivios.decoy.content.country.Packs.neutral(),
+                        org.oblivios.decoy.content.Draws.of(org.oblivios.decoy.content.Seed.of(1, 4))));
+        assertTrue(e.getMessage().contains("no verified number range"), e.getMessage());
+    }
+
+    @Test
     void teachersAndClassmatesOnlyForPupilsAndStudents() {
         for (long n = 0; n < 20; n++) {
             Setup office = setup(n, b -> b.birthYear(YEAR - 40).job(PersonaProfile.JobKind.OFFICE));
@@ -464,10 +473,10 @@ class PeopleSurfaceTest {
     void childminderOnlyWithAChildUnderTwelve() {
         boolean seen = false;
         for (long n = 0; n < 30; n++) {
-            Setup teen = setup(n, b -> b.birthYear(YEAR - 45).childAges(List.of(14, 17)));
+            Setup teen = setup(n, b -> b.birthYear(YEAR - 45).children(org.oblivios.decoy.content.TestSetup.aged(14, 17)));
             assertTrue(of(teen, Relation.CHILDMINDER).isEmpty());
             assertTrue(of(teen, Relation.PARENT_OF_FRIEND).isEmpty());
-            seen |= !of(setup(n, b -> b.birthYear(YEAR - 35).childAges(List.of(5))), Relation.CHILDMINDER).isEmpty();
+            seen |= !of(setup(n, b -> b.birthYear(YEAR - 35).children(org.oblivios.decoy.content.TestSetup.aged(5))), Relation.CHILDMINDER).isEmpty();
         }
         assertTrue(seen);
     }
@@ -475,7 +484,7 @@ class PeopleSurfaceTest {
     @Test
     void childrenWithAPhoneAreTenOrOlder() {
         for (long n = 0; n < 10; n++) {
-            Setup s = setup(n, b -> b.birthYear(YEAR - 45).childAges(List.of(3, 11, 16)));
+            Setup s = setup(n, b -> b.birthYear(YEAR - 45).children(org.oblivios.decoy.content.TestSetup.aged(3, 11, 16)));
             List<Contact> children = of(s, Relation.CHILD);
             assertEquals(2, children.size());
             for (Contact c : children) {
@@ -488,7 +497,7 @@ class PeopleSurfaceTest {
     void grandparentsAreAtMost95() {
         boolean seen = false;
         for (long n = 0; n < 60; n++) {
-            Setup s = setup(n, b -> b.birthYear(YEAR - 30).parentsAlive(true));
+            Setup s = setup(n, b -> b.birthYear(YEAR - 30).parents(org.oblivios.decoy.content.TestSetup.parents(true)));
             for (Contact c : of(s, Relation.GRANDPARENT)) {
                 assertTrue(ageOf(c) <= 95, "grandparent of " + ageOf(c));
                 seen = true;

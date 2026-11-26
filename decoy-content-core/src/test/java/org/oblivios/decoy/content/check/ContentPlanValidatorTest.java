@@ -91,7 +91,7 @@ class ContentPlanValidatorTest {
     }
 
     private static PersonaInputs inputs() {
-        return new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"));
+        return new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"));
     }
 
     private static VolumeCounts counts() {
@@ -115,7 +115,8 @@ class ContentPlanValidatorTest {
     }
 
     private static ContentPlan plan(long n) {
-        return ContentPlanner.build(PersonaProfile.open(inputs()), counts(), chosen(), apps(), "AndroidWifi", CAM, ServerProbe.HONOURED, NOW, Seed.of(n, n * 31 + 7),
+        return ContentPlanner.build(PersonaProfile.open(inputs()), org.oblivios.decoy.content.TestSetup.inputs(counts(), chosen(), apps(), "AndroidWifi", CAM, ServerProbe.HONOURED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(n, n * 31 + 7),
                 // a pool per plan: with the identity rewriter a shared pool would repeat its texts, which the real rewriter prevents
                 TestPool.random(5000, Seed.of(n, 5000)), new IdentityRewriter(), new AcceptAllJudge());
     }
@@ -214,7 +215,8 @@ class ContentPlanValidatorTest {
         for (int i = 0; i < 20_000; i++) {
             many.add(new ChosenPhoto("/sdcard/DCIM/Camera/many_" + i + ".jpg", Instant.parse("2025-03-01T08:00:00Z").plusSeconds(i * 61L), Set.of()));
         }
-        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), many, apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), org.oblivios.decoy.content.TestSetup.inputs(counts(), many, apps(), null, CAM, ServerProbe.HONOURED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
         assertTrue(p.warnings().stream().anyMatch(w -> w.contains("chosen photos")), "warnings " + p.warnings());
         assertTrue(ContentPlanValidator.check(p).isEmpty());
     }
@@ -477,21 +479,26 @@ class ContentPlanValidatorTest {
     @Test
     void thinCountsStillGiveACleanPlanWithWarnings() {
         VolumeCounts thin = new VolumeCounts(List.of(new MonthCount(YearMonth.of(2026, 10), 30, 2, 1, 100_000L)));
-        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), thin, List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), org.oblivios.decoy.content.TestSetup.inputs(thin, List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
         assertFalse(p.warnings().isEmpty());
         assertTrue(ContentPlanValidator.check(p).isEmpty());
     }
 
     @Test
     void aCountryWithoutVerifiedNumbersGivesNoPlan() {
-        PersonaInputs de = new PersonaInputs("Sam Example", "Berlin", "DE", ZoneId.of("Europe/Berlin"), Locale.forLanguageTag("en-DE"));
-        assertThrows(IllegalArgumentException.class,
-                () -> ContentPlanner.build(PersonaProfile.open(de), counts(), List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge()));
+        PersonaInputs de = new PersonaInputs("Sam", "Example", "Berlin", "DE", ZoneId.of("Europe/Berlin"), Locale.forLanguageTag("en-DE"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> ContentPlanner.build(PersonaProfile.open(de), org.oblivios.decoy.content.TestSetup.inputs(counts(), List.of(), apps(), null, CAM, ServerProbe.HONOURED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge()));
+        // the neutral pack has no places either, and the city is read before any number
+        assertTrue(e.getMessage().startsWith("city: "), e.getMessage());
     }
 
     @Test
     void refusedMailboxStillGivesAPlanWithoutMail() {
-        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), counts(), List.of(), apps(), null, CAM, ServerProbe.IGNORED, NOW, Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
+        ContentPlan p = ContentPlanner.build(PersonaProfile.open(inputs()), org.oblivios.decoy.content.TestSetup.inputs(counts(), List.of(), apps(), null, CAM, ServerProbe.IGNORED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(3, 3), POOL, new IdentityRewriter(), new AcceptAllJudge());
         assertTrue(p.mail().messages().isEmpty());
         assertTrue(p.mail().refusedNotice().isPresent());
         assertTrue(ContentPlanValidator.check(p).isEmpty());

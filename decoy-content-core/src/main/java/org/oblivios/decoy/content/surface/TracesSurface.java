@@ -21,7 +21,7 @@ public final class TracesSurface {
     private TracesSurface() {}
 
     public static TracesPlan generate(SurfaceContext ctx) {
-        RandomGenerator r = ctx.seed().stream("traces");
+        RandomGenerator r = ctx.draws().stream("traces");
         UsagePlan usage = UsageSurface.generate(ctx);
         Instant first = usage.sessions().get(0).start();
         Instant from = ctx.now().minus(Duration.ofDays(3));

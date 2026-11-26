@@ -21,7 +21,7 @@ import java.util.random.RandomGenerator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.oblivios.decoy.content.Persona;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
@@ -56,11 +56,11 @@ public final class ConversationPicker {
     private ConversationPicker() {}
 
     /** Picks without rewriting or judging: every conversation is marked unrewritten, so no device takes the plan. */
-    public static Picked pick(Persona p, People people, StyleBook styles, Timeline t, CountryPack c, List<PoolConversation> pool, Seed s) {
+    public static Picked pick(Persona p, People people, StyleBook styles, Timeline t, CountryPack c, List<PoolConversation> pool, Draws s) {
         return pick(p, people, styles, t, c, pool, s, null, null);
     }
 
-    public static Picked pick(Persona p, People people, StyleBook styles, Timeline t, CountryPack c, List<PoolConversation> pool, Seed s,
+    public static Picked pick(Persona p, People people, StyleBook styles, Timeline t, CountryPack c, List<PoolConversation> pool, Draws s,
             Rewriter rewriter, Judge judge) {
         return new Run(p, people, styles, t, c, s, rewriter, judge).pick(pool);
     }
@@ -83,7 +83,7 @@ public final class ConversationPicker {
         final StyleBook styles;
         final Timeline t;
         final CountryPack pack;
-        final Seed seed;
+        final Draws seed;
         final Rewriter rewriter;
         final Judge judge;
         final LanguagePack lang;
@@ -95,7 +95,7 @@ public final class ConversationPicker {
         final List<Place> shops;
         final List<Sender> supermarkets;
 
-        Run(Persona p, People people, StyleBook styles, Timeline t, CountryPack pack, Seed seed, Rewriter rewriter, Judge judge) {
+        Run(Persona p, People people, StyleBook styles, Timeline t, CountryPack pack, Draws seed, Rewriter rewriter, Judge judge) {
             this.p = p;
             this.people = people;
             this.styles = styles;
@@ -295,7 +295,7 @@ public final class ConversationPicker {
 
         List<PoolConversation> fitting(Map<Relation, List<PoolConversation>> index, Contact contact) {
             List<PoolConversation> out = new ArrayList<>();
-            int age = p.year() - contact.birthYear();
+            int age = p.today().getYear() - contact.birthYear();
             StyleVector towards = styles.personaTowards().get(contact.relation());
             StyleVector theirs = styles.contacts().get(contact.id());
             for (PoolConversation c : index.getOrDefault(contact.relation(), List.of())) {
@@ -358,7 +358,7 @@ public final class ConversationPicker {
             int hi = sleepMinute() - maxMinute(c);
             int shift = lo + r.nextInt(hi - lo + 1);
 
-            String own = p.inputs().ownerName().trim().split("\\s+")[0];
+            String own = p.inputs().givenName().trim().split("\\s+")[0];
             Set<String> memberIds = new HashSet<>();
             members.forEach(m -> memberIds.add(m.id()));
             List<Contact> outside = people.contacts().stream().filter(x -> !memberIds.contains(x.id())).toList();
@@ -473,7 +473,7 @@ public final class ConversationPicker {
                 PoolSide side = g.sides().get(i);
                 Contact found = null;
                 for (Contact c : allowed) {
-                    if (!taken.contains(c.id()) && fitsContact(side, c, p.year() - c.birthYear(), styles.contacts().get(c.id()))) {
+                    if (!taken.contains(c.id()) && fitsContact(side, c, p.today().getYear() - c.birthYear(), styles.contacts().get(c.id()))) {
                         found = c;
                         break;
                     }

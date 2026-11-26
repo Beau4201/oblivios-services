@@ -10,7 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.random.RandomGenerator;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.City;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.lang.LanguagePack;
@@ -23,7 +23,7 @@ public final class TravelSurface {
     private TravelSurface() {}
 
     /** {@code lang} is the persona's language, for the labels of the places of a trip. */
-    public static TravelPlan generate(Timeline t, CountryPack c, LanguagePack lang, Seed s) {
+    public static TravelPlan generate(Timeline t, CountryPack c, LanguagePack lang, Draws s) {
         RandomGenerator r = s.stream("travel");
         ZoneId zone = t.zone();
         LocalDate startDate = LocalDate.ofInstant(t.phoneStart(), zone).plusDays(1);

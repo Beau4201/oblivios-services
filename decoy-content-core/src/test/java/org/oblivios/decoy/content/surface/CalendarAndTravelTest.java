@@ -44,15 +44,15 @@ class CalendarAndTravelTest {
     private record Setup(Timeline timeline, People people, CalendarPlan calendar, TravelPlan travel) {}
 
     private static Setup setup(long n) {
-        Persona p = Persona.derive(Seed.of(n, 1),
-                PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"))), 2026);
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1),
+                PersonaProfile.open(new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(29 - i), 60 + i * 5, 10, 8, 1_000_000L));
         }
-        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), nl(), NOW, Seed.of(n, 3));
-        People people = PeopleSurface.generate(p, t, nl(), Seed.of(n, 4));
-        return new Setup(t, people, CalendarSurface.generate(people, t, nl(), LanguagePack.of("nl"), Seed.of(n, 5)), TravelSurface.generate(t, nl(), LanguagePack.of("nl"), Seed.of(n, 6)));
+        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2))), nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
+        People people = PeopleSurface.generate(p, t, nl(), org.oblivios.decoy.content.Draws.of(Seed.of(n, 4)));
+        return new Setup(t, people, CalendarSurface.generate(people, t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(n, 5))), TravelSurface.generate(t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(n, 6))));
     }
 
     @Test

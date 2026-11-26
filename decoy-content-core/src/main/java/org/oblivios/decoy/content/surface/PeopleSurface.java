@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.NoVerifiedRange;
 import org.oblivios.decoy.content.country.Sender;
@@ -30,7 +30,7 @@ public final class PeopleSurface {
     private PeopleSurface() {}
 
     /** Throws {@link IllegalArgumentException} when the pack has no verified number range: no number is invented. */
-    public static People generate(Persona p, Timeline t, CountryPack c, Seed s) {
+    public static People generate(Persona p, Timeline t, CountryPack c, Draws s) {
         try {
             return build(p, t, c, s);
         } catch (NoVerifiedRange e) {
@@ -38,7 +38,7 @@ public final class PeopleSurface {
         }
     }
 
-    private static People build(Persona p, Timeline t, CountryPack c, Seed s) throws NoVerifiedRange {
+    private static People build(Persona p, Timeline t, CountryPack c, Draws s) throws NoVerifiedRange {
         RandomGenerator r = s.stream("people");
         ZoneId zone = p.inputs().zone();
         LanguagePack lang = LanguagePack.of(p.language());

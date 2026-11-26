@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.random.RandomGenerator;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.Timeline;
@@ -32,7 +32,7 @@ public final class CalendarSurface {
     private CalendarSurface() {}
 
     /** {@code lang} is the persona's language; a holiday without a name in the pack gets the generic title of the country's language. */
-    public static CalendarPlan generate(People people, Timeline t, CountryPack c, LanguagePack lang, Seed s) {
+    public static CalendarPlan generate(People people, Timeline t, CountryPack c, LanguagePack lang, Draws s) {
         RandomGenerator r = s.stream("calendar");
         String holiday = LanguagePack.forService(c, lang.tag()).text("holiday.generic");
         ZoneId zone = t.zone();

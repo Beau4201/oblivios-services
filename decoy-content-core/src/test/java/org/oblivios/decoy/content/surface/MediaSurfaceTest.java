@@ -71,17 +71,17 @@ class MediaSurfaceTest {
     }
 
     private static Setup setup(long n, YearMonth last, int chosenCount) {
-        Persona p = Persona.derive(Seed.of(n, 1),
-                PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1),
+                PersonaProfile.open(new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             months.add(new MonthCount(last.minusMonths(29 - i), 60 + i * 5, 10, 8, 1_000_000L));
         }
-        VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2));
-        Timeline t = Timeline.generate(p, v, nl(), NOW, Seed.of(n, 3));
-        TravelPlan travel = TravelSurface.generate(t, nl(), LanguagePack.of("nl"), Seed.of(n, 6));
+        VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2)));
+        Timeline t = Timeline.generate(p, v, nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
+        TravelPlan travel = TravelSurface.generate(t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(n, 6)));
         List<ChosenPhoto> chosen = chosen(chosenCount);
-        return new Setup(v, t, travel, chosen, MediaSurface.generate(v, t, travel, nl(), CAM, chosen, Seed.of(n, 7)));
+        return new Setup(v, t, travel, chosen, MediaSurface.generate(v, t, travel, nl(), CAM, chosen, org.oblivios.decoy.content.Draws.of(Seed.of(n, 7))));
     }
 
     private static Setup setup(long n) {
@@ -180,7 +180,7 @@ class MediaSurfaceTest {
         DeviceCameraProfile noGps = new DeviceCameraProfile(4080, 3072, List.of(table(8)),
                 "PXL_\\d{8}_\\d{9}\\.jpg", "'PXL_'yyyyMMdd_HHmmssSSS'.jpg'", false);
         Setup s = setup(2);
-        MediaPlan plan = MediaSurface.generate(s.volume(), s.timeline(), s.travel(), nl(), noGps, List.of(), Seed.of(2, 7));
+        MediaPlan plan = MediaSurface.generate(s.volume(), s.timeline(), s.travel(), nl(), noGps, List.of(), org.oblivios.decoy.content.Draws.of(Seed.of(2, 7)));
         for (MediaItem i : plan.items()) {
             assertNull(i.lat(), i.name());
             assertNull(i.lon(), i.name());
@@ -364,14 +364,14 @@ class MediaSurfaceTest {
         // a camera that names files to the second, and a month with thousands of photos, force clashes
         DeviceCameraProfile seconds = new DeviceCameraProfile(4080, 3072, List.of(table(8)), "IMG_\\d{8}_\\d{6}\\.jpg",
                 "'IMG_'yyyyMMdd_HHmmss'.jpg'", false);
-        Persona p = Persona.derive(Seed.of(1, 1), PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(1, 1), PersonaProfile.open(new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(5 - i), 6000, 10, 8, 1_000_000L));
         }
-        VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(1, 2));
-        Timeline t = Timeline.generate(p, v, nl(), NOW, Seed.of(1, 3));
-        MediaPlan plan = MediaSurface.generate(v, t, TravelSurface.generate(t, nl(), LanguagePack.of("nl"), Seed.of(1, 6)), nl(), seconds, List.of(), Seed.of(1, 7));
+        VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(1, 2)));
+        Timeline t = Timeline.generate(p, v, nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(1, 3)));
+        MediaPlan plan = MediaSurface.generate(v, t, TravelSurface.generate(t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(1, 6))), nl(), seconds, List.of(), org.oblivios.decoy.content.Draws.of(Seed.of(1, 7)));
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern(seconds.fileNameTemplate()).withZone(ZONE);
         Set<String> names = new HashSet<>();
         for (MediaItem i : plan.items()) {

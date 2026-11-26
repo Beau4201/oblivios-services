@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.random.RandomGenerator;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.pool.FilledConversation;
 
@@ -41,7 +42,7 @@ public final class RollForward {
         if (snapshot.contacts().isEmpty()) {
             return new RollForwardPlan(List.of());
         }
-        RandomGenerator r = fresh.stream("rollforward");
+        RandomGenerator r = Draws.of(fresh).stream("rollforward");
         ZoneId zone = snapshot.persona().inputs().zone();
         double gapDays = Duration.between(latest, now).toMinutes() / 1440.0;
         int calls = (int) Math.min(MAX_CALLS, Math.round(gapDays * CALLS_PER_DAY * (0.8 + 0.4 * r.nextDouble())));

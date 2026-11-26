@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.style.StyleVector.Caps;
 import org.oblivios.decoy.content.surface.Contact;
 import org.oblivios.decoy.content.surface.People;
@@ -31,7 +31,7 @@ public final class Styles {
      * The style of the persona (the chosen one, or its age band, with no voice when it sends none), its style towards
      * each relation, and the style of every contact, each contact from its own named stream.
      */
-    public static StyleBook book(Persona p, People people, Seed s) {
+    public static StyleBook book(Persona p, People people, Draws s) {
         StyleVector own = p.voiceNotes() ? p.style() : p.style().withVoiceRate(0);
         Map<Relation, StyleVector> towards = new EnumMap<>(Relation.class);
         for (Relation r : Relation.values()) {
@@ -40,7 +40,7 @@ public final class Styles {
         Map<String, StyleVector> contacts = new HashMap<>();
         for (Contact c : people.contacts()) {
             RandomGenerator r = s.stream("style." + c.id());
-            int age = p.year() - c.birthYear();
+            int age = p.today().getYear() - c.birthYear();
             StyleVector v = ageBand(age, r);
             if (FRIENDS.contains(c.relation())) {
                 Register reg = step(own.register(), r.nextInt(3) - 1);

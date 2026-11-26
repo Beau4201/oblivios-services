@@ -128,12 +128,12 @@ public final class RuleFixtures {
     // ---- building blocks ----
 
     public static PersonaInputs inputs() {
-        return new PersonaInputs("Sam Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"));
+        return new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"));
     }
 
     /** A persona of the inputs with the given answers; every other answer is drawn from a fixed seed. */
     public static Persona persona(UnaryOperator<PersonaProfile.Builder> answers) {
-        return Persona.derive(Seed.of(11, 11), answers.apply(PersonaProfile.builder(inputs())).build(), 2026);
+        return org.oblivios.decoy.content.TestSetup.derive(Seed.of(11, 11), answers.apply(PersonaProfile.builder(inputs())).build(), 2026);
     }
 
     /** A planner plan of the inputs, built once: its timeline gives the places, the zone and the start of the phone. */
@@ -149,9 +149,9 @@ public final class RuleFixtures {
             }
             DeviceCameraProfile cam = new DeviceCameraProfile(4080, 3072, List.of(table), "PXL_\\d{8}_\\d{9}\\.jpg",
                     "'PXL_'yyyyMMdd_HHmmssSSS'.jpg'", true);
-            base = ContentPlanner.build(PersonaProfile.open(inputs()), new VolumeCounts(months), List.of(),
-                    List.of(new AppSpec("org.example.chat", "chat.example.org", true)), "AndroidWifi", cam, ServerProbe.HONOURED, NOW,
-                    Seed.of(3, 3), TestPool.random(5000, Seed.of(3, 5000)), new IdentityRewriter(), new AcceptAllJudge());
+            base = ContentPlanner.build(PersonaProfile.open(inputs()), org.oblivios.decoy.content.TestSetup.inputs(new VolumeCounts(months), List.of(),
+                    List.of(new AppSpec("org.example.chat", "chat.example.org", true)), "AndroidWifi", cam, ServerProbe.HONOURED, NOW),
+                org.oblivios.decoy.content.review.ReviewEdits.none(), Seed.of(3, 3), TestPool.random(5000, Seed.of(3, 5000)), new IdentityRewriter(), new AcceptAllJudge());
         }
         return base;
     }

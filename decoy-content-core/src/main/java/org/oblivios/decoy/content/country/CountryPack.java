@@ -30,6 +30,9 @@ public interface CountryPack {
 
     List<Sender> senders(SenderKind kind);
 
+    /** The supermarket chains the setup offers; empty when the pack has none. */
+    List<String> supermarkets();
+
     /** The names of the shop senders that sell only online, so no place of a story bears them; a subset of the shops. */
     List<String> onlineShops();
 

@@ -5,7 +5,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
+import org.oblivios.decoy.content.persona.ChildAnswer;
+import org.oblivios.decoy.content.persona.ParentAnswer;
+import org.oblivios.decoy.content.persona.SiblingAnswer;
 import org.oblivios.decoy.content.persona.PersonaProfile.CircleSize;
 import org.oblivios.decoy.content.persona.PersonaProfile.FriendGroup;
 import org.oblivios.decoy.content.persona.PersonaProfile.Gender;
@@ -26,9 +29,9 @@ final class Circle {
 
     private Circle() {}
 
-    static List<Member> build(Persona p, Seed s) {
-        int year = p.year();
-        int age = p.age();
+    static List<Member> build(Persona p, Draws s) {
+        int year = p.today().getYear();
+        int age = year - p.birthYear(); // contacts have a birth year only, so ages here are differences of years
         List<Member> out = new ArrayList<>();
         boolean partner = p.relationship() == Relationship.PARTNER || p.relationship() == Relationship.MARRIED;
         boolean single = p.relationship() == Relationship.SINGLE || p.relationship() == Relationship.DIVORCED;
@@ -54,10 +57,13 @@ final class Circle {
         int parentsAge = -1;
         if (p.parentsAlive() && age + 25 <= 100) {
             int maxGap = Math.min(35, 100 - age);
-            int[] gaps = {25 + r.nextInt(maxGap - 25 + 1), 25 + r.nextInt(maxGap - 25 + 1)};
-            out.add(member(Relation.PARENT, year - (age + gaps[0]), Gender.FEMALE, null));
-            out.add(member(Relation.PARENT, year - (age + gaps[1]), Gender.MALE, null));
-            parentsAge = age + Math.min(gaps[0], gaps[1]);
+            for (ParentAnswer parent : p.parents()) {
+                int gap = 25 + r.nextInt(maxGap - 25 + 1); // drawn for the dead one too, so a death moves nobody else
+                if (parent.alive()) {
+                    out.add(member(Relation.PARENT, year - (age + gap), parent.gender(), null));
+                    parentsAge = parentsAge < 0 ? age + gap : Math.min(parentsAge, age + gap);
+                }
+            }
         }
         r = s.stream("circle.STEP_PARENT");
         if (parentsAge > 0 && !p.parentsTogether() && r.nextInt(100) < 50) {
@@ -73,14 +79,12 @@ final class Circle {
                 }
             }
         }
-        r = s.stream("circle.SIBLING");
-        for (int sib : p.siblingAges()) {
-            out.add(member(Relation.SIBLING, year - sib, gender(r), null));
+        for (SiblingAnswer sib : p.siblings()) {
+            out.add(member(Relation.SIBLING, year - sib.age(), sib.gender(), null));
         }
-        r = s.stream("circle.CHILD");
-        for (int c : p.childAges()) {
-            if (c >= 10) { // a child has its own phone from 10
-                out.add(member(Relation.CHILD, year - c, gender(r), null));
+        for (ChildAnswer c : p.children()) {
+            if (c.age() >= 10) { // a child has its own phone from 10
+                out.add(member(Relation.CHILD, year - c.age(), c.gender(), null));
             }
         }
         r = s.stream("circle.IN_LAW");
@@ -204,9 +208,9 @@ final class Circle {
     }
 
     /** Friends only from the chosen groups: within 2 years for school and study, within 8 for the others. */
-    private static void friends(Persona p, Seed s, List<Member> out) {
-        int year = p.year();
-        int age = p.age();
+    private static void friends(Persona p, Draws s, List<Member> out) {
+        int year = p.today().getYear();
+        int age = year - p.birthYear(); // contacts have a birth year only, so ages here are differences of years
         List<FriendGroup> groups = p.friendGroups().stream().sorted().toList();
         if (groups.isEmpty()) {
             return;

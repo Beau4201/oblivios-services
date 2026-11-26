@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
@@ -38,16 +38,13 @@ public final class Timeline {
         this.warnings = List.copyOf(warnings);
     }
 
-    /** Throws {@link IllegalArgumentException} for a country pack that has no place data ({@link CountryPack#capital}). */
-    public static Timeline generate(Persona p, VolumeModel v, CountryPack c, Instant now, Seed s) {
+    /** Throws {@link IllegalArgumentException} for a city the country pack has no place data for. */
+    public static Timeline generate(Persona p, VolumeModel v, CountryPack c, Instant now, Draws s) {
         RandomGenerator r = s.stream("timeline");
         List<String> warnings = new ArrayList<>();
 
-        double[] centre = c.city(p.inputs().city()).orElse(null);
-        if (centre == null) {
-            centre = c.capital();
-            warnings.add("city '" + p.inputs().city() + "' has no place data: the capital is used");
-        }
+        double[] centre = c.city(p.inputs().city()).orElseThrow(
+                () -> new IllegalArgumentException("city: no place data for '" + p.inputs().city() + "' in country " + c.code()));
 
         LanguagePack lang = LanguagePack.of(p.language());
         List<Place> places = new ArrayList<>();

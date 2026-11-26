@@ -22,7 +22,7 @@ class SeedTest {
     }
 
     private static PersonaInputs inputs() {
-        return new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
+        return new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag("nl-NL"));
     }
 
     @Test
@@ -53,13 +53,13 @@ class SeedTest {
 
     @Test
     void personaIsDeterministic() {
-        assertEquals(Persona.derive(Seed.of(5, 6), PersonaProfile.open(inputs()), 2026), Persona.derive(Seed.of(5, 6), PersonaProfile.open(inputs()), 2026));
+        assertEquals(org.oblivios.decoy.content.TestSetup.derive(Seed.of(5, 6), PersonaProfile.open(inputs()), 2026), org.oblivios.decoy.content.TestSetup.derive(Seed.of(5, 6), PersonaProfile.open(inputs()), 2026));
     }
 
     @Test
     void personaStaysInPlausibleRanges() {
         for (long i = 0; i < 200; i++) {
-            Persona p = Persona.derive(Seed.of(i, 1), PersonaProfile.open(inputs()), 2026);
+            Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(i, 1), PersonaProfile.open(inputs()), 2026);
             assertTrue(p.birthYear() >= 2026 - 70 && p.birthYear() <= 2026 - 16, "birth year " + p.birthYear());
             assertTrue(p.household() >= 1 && p.household() <= 12, "household " + p.household());
             assertTrue(p.job() != null);

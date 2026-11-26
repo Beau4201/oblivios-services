@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.random.RandomGenerator;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.Seed;
 
 /**
@@ -29,10 +30,10 @@ public final class VolumeModel {
 
     /** Deterministic convenience form with a fixed seed; the planner passes its own seed to the two-argument form. */
     public static VolumeModel fromCounts(VolumeCounts c) {
-        return fromCounts(c, Seed.of(0, 0));
+        return fromCounts(c, Draws.of(Seed.of(0, 0)));
     }
 
-    public static VolumeModel fromCounts(VolumeCounts c, Seed seed) {
+    public static VolumeModel fromCounts(VolumeCounts c, Draws seed) {
         List<String> warnings = new ArrayList<>();
         List<MonthCount> counted = new ArrayList<>(c.months());
         counted.sort(Comparator.comparing(MonthCount::month));

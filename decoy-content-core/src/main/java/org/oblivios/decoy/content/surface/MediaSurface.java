@@ -19,7 +19,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.random.RandomGenerator;
-import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
@@ -51,7 +51,7 @@ public final class MediaSurface {
     private MediaSurface() {}
 
     public static MediaPlan generate(VolumeModel v, Timeline t, TravelPlan travel, CountryPack c, DeviceCameraProfile cam,
-            List<ChosenPhoto> chosen, Seed s) {
+            List<ChosenPhoto> chosen, Draws s) {
         return new Builder(v, t, travel, c, cam, s).build(chosen);
     }
 
@@ -61,7 +61,7 @@ public final class MediaSurface {
         private final TravelPlan travel;
         private final CountryPack pack;
         private final DeviceCameraProfile cam;
-        private final Seed seed;
+        private final Draws seed;
         private final ZoneId zone;
         private final Instant now;
         private final List<MediaItem> items = new ArrayList<>();
@@ -74,7 +74,7 @@ public final class MediaSurface {
         private final Function<Instant, String> cameraName;
         private final Function<Instant, String> screenshotName;
 
-        Builder(VolumeModel v, Timeline t, TravelPlan travel, CountryPack c, DeviceCameraProfile cam, Seed s) {
+        Builder(VolumeModel v, Timeline t, TravelPlan travel, CountryPack c, DeviceCameraProfile cam, Draws s) {
             this.volume = v;
             this.timeline = t;
             this.travel = travel;

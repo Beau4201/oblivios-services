@@ -19,7 +19,7 @@ public final class NetworkSurface {
     private NetworkSurface() {}
 
     public static NetworkPlan generate(SurfaceContext ctx) {
-        RandomGenerator r = ctx.seed().stream("network");
+        RandomGenerator r = ctx.draws().stream("network");
         List<WifiNetwork> wifi = new ArrayList<>();
         List<String> patterns = ctx.pack().homeWifiPatterns();
         LanguagePack lang = LanguagePack.of(ctx.persona().language());

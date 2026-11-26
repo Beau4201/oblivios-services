@@ -69,15 +69,15 @@ class LanguagePackTest {
     }
 
     private static People people(String personaTag, long n) {
-        Persona p = Persona.derive(Seed.of(n, 1),
-                PersonaProfile.open(new PersonaInputs("Sam Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag(personaTag))), 2026);
+        Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1),
+                PersonaProfile.open(new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZoneId.of("Europe/Amsterdam"), Locale.forLanguageTag(personaTag))), 2026);
         List<MonthCount> months = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
             months.add(new MonthCount(YearMonth.of(2026, 10).minusMonths(11 - i), 60, 10, 8, 1_000_000L));
         }
         CountryPack nl = Packs.load("NL").orElseThrow();
-        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), Seed.of(n, 2)), nl, NOW, Seed.of(n, 3));
-        return PeopleSurface.generate(p, t, nl, Seed.of(n, 4));
+        Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2))), nl, NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
+        return PeopleSurface.generate(p, t, nl, org.oblivios.decoy.content.Draws.of(Seed.of(n, 4)));
     }
 
     @Test

@@ -20,7 +20,7 @@ import java.util.random.RandomGenerator;
 public final class DataPack implements CountryPack {
     private static final Set<String> KEYS = Set.of(
             "code", "language", "given", "family", "mobile.prefix", "mobile.blocks", "senders.BANK", "senders.PARCEL",
-            "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "senders.GLOBAL", "holidays", "wifi", "cities", "capital", "amount",
+            "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "supermarkets", "senders.GLOBAL", "holidays", "wifi", "cities", "capital", "amount",
             "mms.groups", "sites.GLOBAL", "sites.LOCAL", "trips.domestic", "trips.abroad");
 
     private final String code;
@@ -31,6 +31,7 @@ public final class DataPack implements CountryPack {
     private final long[][] blocks;
     private final Map<SenderKind, List<Sender>> senders = new EnumMap<>(SenderKind.class);
     private final List<String> onlineShops;
+    private final List<String> supermarkets;
     private final List<HolidayRule> holidays;
     private final List<String> wifi;
     private final Map<String, double[]> cities = new HashMap<>();
@@ -68,6 +69,7 @@ public final class DataPack implements CountryPack {
             }
             senders.put(kind, List.copyOf(out));
         }
+        supermarkets = list(p, "supermarkets");
         onlineShops = list(p, "senders.SHOP.online");
         for (String shop : onlineShops) {
             if (senders.get(SenderKind.SHOP).stream().noneMatch(s -> s.name().equals(shop))) {
@@ -204,6 +206,11 @@ public final class DataPack implements CountryPack {
     @Override
     public List<Sender> senders(SenderKind kind) {
         return senders.get(kind);
+    }
+
+    @Override
+    public List<String> supermarkets() {
+        return supermarkets;
     }
 
     @Override
