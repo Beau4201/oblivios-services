@@ -37,6 +37,8 @@ public final class PoolReader {
 
     /** A header or message that cannot be parsed. */
     private static final class Bad extends Exception {
+        private static final long serialVersionUID = 1L;
+
         final int line;
 
         Bad(int line, String message) {

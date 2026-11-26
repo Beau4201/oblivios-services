@@ -3,6 +3,8 @@ package org.oblivios.decoy.content.country;
 
 /** A pack has no number range that is verified as free or fictional; it must not invent numbers. */
 public final class NoVerifiedRange extends Exception {
+    private static final long serialVersionUID = 1L;
+
     public NoVerifiedRange(String message) {
         super(message);
     }

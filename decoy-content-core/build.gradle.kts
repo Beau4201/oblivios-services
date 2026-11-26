@@ -5,6 +5,12 @@ java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    // The library builds later as an Android.bp java_library (ADR-318 (3)): no Java 21 API, no unread warning.
+    options.release.set(17)
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+}
+
 repositories { mavenCentral() }
 
 dependencies {
