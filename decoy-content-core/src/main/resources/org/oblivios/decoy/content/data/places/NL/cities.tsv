@@ -1,4 +1,4 @@
-# source: CBS gebiedsindelingen (PDOK), CBS 100 metre squares and 86247NED, Rijksoverheid school holiday regions, Wikidata names; tools/decoy-content/places_cbs.py
+# source: CBS gebiedsindelingen (PDOK), CBS 100 metre squares and 86247NED, Rijksoverheid school holiday regions, Wikidata names and aliases; tools/decoy-content/places_cbs.py
 # licence: CC BY 4.0 (CBS, PDOK); CC0 (Rijksoverheid, Wikidata)
 # version: CBS squares 2025 v1, municipalities 2026, read 2026-11-26
 GM0014	Groningen	53.21829	6.57366	noord	
@@ -208,7 +208,7 @@ GM0779	Geertruidenberg	51.69789	4.87154	zuid
 GM0784	Gilze en Rijen	51.57589	4.93063	zuid	
 GM0785	Goirle	51.52508	5.05794	zuid	
 GM0794	Helmond	51.47668	5.65998	zuid	
-GM0796	's-Hertogenbosch	51.70889	5.31993	zuid	
+GM0796	's-Hertogenbosch	51.70889	5.31993	zuid	Den Bosch
 GM0797	Heusden	51.69701	5.16084	zuid	
 GM0798	Hilvarenbeek	51.48395	5.14750	zuid	
 GM0809	Loon op Zand	51.65266	5.03968	zuid	

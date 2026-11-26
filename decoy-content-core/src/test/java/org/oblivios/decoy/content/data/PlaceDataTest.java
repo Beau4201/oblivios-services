@@ -55,6 +55,10 @@ class PlaceDataTest {
         assertEquals("Den Haag", hague.name());
         assertEquals(hague, nl.city(" DenHaag ").orElseThrow());
         assertEquals(hague, nl.city("'s-Gravenhage").orElseThrow());
+        CityRef bosch = nl.city("den bosch").orElseThrow();
+        assertEquals("GM0796", bosch.municipality());
+        assertEquals("'s-Hertogenbosch", bosch.name());
+        assertEquals(bosch, nl.city("'s-Hertogenbosch").orElseThrow());
         assertEquals(UTRECHT, nl.city("UTRECHT").orElseThrow().municipality());
         assertEquals("GM0164", nl.city("Hengelo").orElseThrow().municipality());
         assertTrue(nl.city("Atlantis").isEmpty());
