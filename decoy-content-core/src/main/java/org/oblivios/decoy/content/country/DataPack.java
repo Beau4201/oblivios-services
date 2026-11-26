@@ -20,7 +20,7 @@ import java.util.random.RandomGenerator;
 public final class DataPack implements CountryPack {
     private static final Set<String> KEYS = Set.of(
             "code", "language", "given", "family", "mobile.prefix", "mobile.blocks", "senders.BANK", "senders.PARCEL",
-            "senders.OPERATOR", "senders.SHOP", "senders.GLOBAL", "holidays", "wifi", "cities", "capital", "amount",
+            "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "senders.GLOBAL", "holidays", "wifi", "cities", "capital", "amount",
             "mms.groups", "sites.GLOBAL", "sites.LOCAL", "trips.domestic", "trips.abroad");
 
     private final String code;
@@ -30,6 +30,7 @@ public final class DataPack implements CountryPack {
     private final String mobilePrefix;
     private final long[][] blocks;
     private final Map<SenderKind, List<Sender>> senders = new EnumMap<>(SenderKind.class);
+    private final List<String> onlineShops;
     private final List<HolidayRule> holidays;
     private final List<String> wifi;
     private final Map<String, double[]> cities = new HashMap<>();
@@ -66,6 +67,12 @@ public final class DataPack implements CountryPack {
                 out.add(new Sender(name, kind));
             }
             senders.put(kind, List.copyOf(out));
+        }
+        onlineShops = list(p, "senders.SHOP.online");
+        for (String shop : onlineShops) {
+            if (senders.get(SenderKind.SHOP).stream().noneMatch(s -> s.name().equals(shop))) {
+                throw new IllegalStateException("senders.SHOP.online names '" + shop + "', which is no shop of pack " + code);
+            }
         }
         List<HolidayRule> rules = new ArrayList<>();
         for (String rule : list(p, "holidays")) {
@@ -197,6 +204,11 @@ public final class DataPack implements CountryPack {
     @Override
     public List<Sender> senders(SenderKind kind) {
         return senders.get(kind);
+    }
+
+    @Override
+    public List<String> onlineShops() {
+        return onlineShops;
     }
 
     @Override

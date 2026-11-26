@@ -30,6 +30,9 @@ public interface CountryPack {
 
     List<Sender> senders(SenderKind kind);
 
+    /** The names of the shop senders that sell only online, so no place of a story bears them; a subset of the shops. */
+    List<String> onlineShops();
+
     List<LocalDate> publicHolidays(int year);
 
     /** The local name of a public holiday of {@link #publicHolidays}; empty for an ordinary day or a holiday without a name. */

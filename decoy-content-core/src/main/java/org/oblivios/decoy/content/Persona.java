@@ -381,6 +381,9 @@ public record Persona(PersonaInputs inputs, Gender gender, int birthYear, String
             case CARER -> f.add(Fact.CARER);
             default -> { }
         }
+        if (job == JobKind.OFFICE || job == JobKind.SHIFT || job == JobKind.SELF_EMPLOYED) {
+            f.add(Fact.WORKS);
+        }
         switch (relationship) {
             case PARTNER, MARRIED -> f.add(Fact.PARTNER);
             case SINGLE -> f.add(Fact.SINGLE);
