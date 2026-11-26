@@ -5,7 +5,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.random.RandomGenerator;
 
 /**
  * Everything country specific that the generators need, read from a data file per country ({@link Packs#load}).
@@ -21,9 +20,6 @@ public interface CountryPack {
     Map<NameForm.Child, Integer> childNameForms();
 
     Map<NameForm.Married, Integer> marriedNameForms();
-
-    /** A number from a verified free or fictional block; throws when the pack has none. */
-    PhoneNumber mobileNumber(RandomGenerator r) throws NoVerifiedRange;
 
     List<Sender> senders(SenderKind kind);
 

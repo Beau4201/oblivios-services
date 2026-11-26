@@ -16,6 +16,7 @@ import static org.oblivios.decoy.content.check.RuleFixtures.planted;
 import static org.oblivios.decoy.content.check.RuleFixtures.thread;
 import static org.oblivios.decoy.content.check.RuleFixtures.with;
 
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -129,6 +130,39 @@ class ExaminerRulesTest {
                 List.of())), "E-STALE"));
         assertEquals(0, count(with(bare(), new BrowserPlan(List.of(), List.of(new Cookie("example.org", "id", NOW.plus(Duration.ofDays(30)))),
                 List.of())), "E-STALE"));
+    }
+
+    /** The N-NUMBER reports of the bare plan with these contacts and the SIM's number as its own. */
+    private static List<String> numberReports(String own, String contactNumber) {
+        People people = new People(own, List.of(contact("c1", "Sam Example", contactNumber, Relation.FRIEND)), List.of(),
+                List.of(), List.of());
+        return planted(with(bare(), people)).only("N-NUMBER").stream().map(Violation::detail).toList();
+    }
+
+    @Test
+    void invalidNumberIsReported() {
+        String sim = bare().simNumber();
+        assertEquals(List.of(), numberReports(sim, number(1)));
+        assertEquals(1, numberReports(sim, "+3199123").size());
+    }
+
+    @Test
+    void tollFreeNumberIsReported() {
+        assertEquals(1, numberReports(bare().simNumber(), "+318001234").size());
+    }
+
+    @Test
+    void everyViewOfANumberIsRead() {
+        People people = new People(bare().simNumber(), List.of(),
+                List.of(new Call("+3199001", ago(3, 0), 5, CallType.INCOMING)),
+                List.of(thread("+3199002", "x"), thread("Bank", "x"), thread(number(1) + ";+3199003", "x")),
+                List.of(new Voicemail("+3199004", ago(4, 0), 20)));
+        assertEquals(4, count(with(bare(), people), "N-NUMBER"));
+    }
+
+    @Test
+    void inventedOwnNumberIsReported() {
+        assertEquals(1, numberReports(number(7), number(1)).size());
     }
 
     @Test

@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.random.RandomGenerator;
 
 /**
  * A country pack read from a data file ({@code country/<code>.properties}). Lists are separated by {@code |}. Every
@@ -17,7 +16,7 @@ import java.util.random.RandomGenerator;
  */
 public final class DataPack implements CountryPack {
     private static final Set<String> KEYS = Set.of(
-            "code", "language", "family.child", "family.married", "mobile.prefix", "mobile.blocks", "senders.BANK", "senders.PARCEL",
+            "code", "language", "family.child", "family.married", "senders.BANK", "senders.PARCEL",
             "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "supermarkets", "senders.GLOBAL", "holidays", "wifi", "amount",
             "mms.groups", "sites.GLOBAL", "sites.LOCAL", "trips.domestic", "trips.abroad");
 
@@ -25,8 +24,6 @@ public final class DataPack implements CountryPack {
     private final String language;
     private final Map<NameForm.Child, Integer> childForms;
     private final Map<NameForm.Married, Integer> marriedForms;
-    private final String mobilePrefix;
-    private final long[][] blocks;
     private final Map<SenderKind, List<Sender>> senders = new EnumMap<>(SenderKind.class);
     private final List<String> onlineShops;
     private final List<String> supermarkets;
@@ -51,13 +48,6 @@ public final class DataPack implements CountryPack {
         language = p.getProperty("language", "").trim();
         childForms = weights(p, "family.child", NameForm.Child.class);
         marriedForms = weights(p, "family.married", NameForm.Married.class);
-        mobilePrefix = p.getProperty("mobile.prefix", "").trim();
-        List<String> blockList = list(p, "mobile.blocks");
-        blocks = new long[blockList.size()][];
-        for (int i = 0; i < blocks.length; i++) {
-            long[] b = range(blockList.get(i), "mobile.blocks");
-            blocks[i] = b;
-        }
         for (SenderKind kind : SenderKind.values()) {
             List<Sender> out = new ArrayList<>();
             for (String name : list(p, "senders." + kind.name())) {
@@ -173,26 +163,6 @@ public final class DataPack implements CountryPack {
     @Override
     public Map<NameForm.Married, Integer> marriedNameForms() {
         return marriedForms;
-    }
-
-    @Override
-    public PhoneNumber mobileNumber(RandomGenerator r) throws NoVerifiedRange {
-        if (blocks.length == 0 || mobilePrefix.isEmpty()) {
-            throw new NoVerifiedRange("pack " + code + " has no verified number range");
-        }
-        long total = 0;
-        for (long[] b : blocks) {
-            total += b[1] - b[0] + 1;
-        }
-        long pick = r.nextLong(total);
-        for (long[] b : blocks) {
-            long size = b[1] - b[0] + 1;
-            if (pick < size) {
-                return new PhoneNumber(mobilePrefix + (b[0] + pick));
-            }
-            pick -= size;
-        }
-        throw new IllegalStateException("unreachable: pick is below the total");
     }
 
     @Override

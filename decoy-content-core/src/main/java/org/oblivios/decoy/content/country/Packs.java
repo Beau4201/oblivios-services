@@ -14,12 +14,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.SplittableRandom;
 import java.util.concurrent.ConcurrentHashMap;
+import org.oblivios.decoy.content.data.PhoneNumbers;
 
 /**
  * Loads the country packs from their data files. {@code XX} is the neutral pack and the defaults of every other pack.
- * A country without a pack, or whose pack has no verified range, gets the neutral pack.
+ * A country without a pack, or without number data, gets the neutral pack.
  */
 public final class Packs {
     private static final String DIR = "/org/oblivios/decoy/content/data/country/";
@@ -93,12 +93,7 @@ public final class Packs {
         String country = simCountry != null && !simCountry.isBlank() ? simCountry : locale.getCountry();
         for (CountryPack p : registry) {
             if (p.code().equalsIgnoreCase(country)) {
-                try {
-                    p.mobileNumber(new SplittableRandom(0));
-                    return new PackChoice(p, false);
-                } catch (NoVerifiedRange e) {
-                    return new PackChoice(neutral(), true);
-                }
+                return PhoneNumbers.has(p.code()) ? new PackChoice(p, false) : new PackChoice(neutral(), true);
             }
         }
         return new PackChoice(neutral(), true);

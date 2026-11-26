@@ -53,7 +53,7 @@ import org.oblivios.decoy.content.surface.VaultSurface;
  * Builds the whole plan from the persona inputs, the owner's counted volume and choices, and one seed. Every surface
  * draws from its own named stream of that seed, so the surfaces do not shift each other's values.
  *
- * <p>Throws {@link IllegalArgumentException} for a country without a verified number range or without place data:
+ * <p>Throws {@link IllegalArgumentException} for a country without number data or without place data:
  * there is no plan without contacts, and no number is invented. The setup shows that as the refusal of the country
  * step and offers another country. It throws {@code no conversation pool for <tag>} when the pool holds no conversation
  * in the persona's language: the personal threads come only from the pool. Each picked conversation is rewritten by
@@ -82,6 +82,7 @@ public final class ContentPlanner {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("background: " + e.getMessage(), e);
         }
+        data.numbers(); // records the version of the number formats the contacts are drawn from
         VolumeModel volume = VolumeModel.fromCounts(setup.counts(), draws);
         Timeline timeline = Timeline.generate(persona, volume, pack, now, draws);
         People generated = PeopleSurface.generate(persona, timeline, pack, draws);
@@ -107,7 +108,7 @@ public final class ContentPlanner {
         return new ContentPlan(persona, timeline, people, calendar, travel, DeviceSurface.generate(ctx), NetworkSurface.generate(ctx),
                 UsageSurface.generate(ctx), AppsSurface.generate(ctx), BrowserSurface.generate(ctx), VaultSurface.generate(ctx),
                 TracesSurface.generate(ctx), media, MailSurface.generate(persona, timeline, pack, setup.probe(), draws), styles,
-                conversations, picked.reserve(), warnings, versions);
+                conversations, picked.reserve(), warnings, versions, setup.simNumber());
     }
 
     /** A pool has no version of its own, so what it holds names it. */

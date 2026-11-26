@@ -164,7 +164,7 @@ public final class RuleFixtures {
                 new NetworkPlan(List.of(), List.of()), new UsagePlan(List.of(), Map.of()), new AppsPlan(List.of()),
                 new BrowserPlan(List.of(), List.of(), List.of()), new VaultPlan(List.of()), new TracesPlan(List.of(), Map.of()),
                 new MediaPlan(List.of(), List.of()), new MailPlan(List.of(), Optional.empty()), b.styles(), List.of(), List.of(), List.of(),
-                b.dataVersions());
+                b.dataVersions(), b.simNumber());
     }
 
     public static ContentPlan bare() {
@@ -218,7 +218,8 @@ public final class RuleFixtures {
             }
         }
         return new ContentPlan(persona, p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
-                traces, media, mail, styles, conversations, p.reserve(), p.warnings(), p.dataVersions());
+                traces, media, mail, styles, conversations, p.reserve(), p.warnings(), p.dataVersions(),
+                p.simNumber());
     }
 
     /** The checker inputs of one plan. */
@@ -300,6 +301,8 @@ public final class RuleFixtures {
         CASES.put("R-GROUP-MEMBER", () -> planted(with(bare(), people(List.of(contact("c1", "Sam Example", number(1), Relation.FRIEND)),
                 List.of(), List.of(new SmsThread("a;b", "a, b", null, List.of(new SmsMessage(ago(3, 0), true, "hello", true, "c1")),
                         List.of("c1", "nobody")))))));
+        CASES.put("N-NUMBER", () -> planted(with(bare(), people(List.of(contact("c1", "Sam Example", "+318001234", Relation.FRIEND)),
+                List.of(), List.of()))));
         // origin
         CASES.put("G-ORIGIN", () -> planted(with(bare(), people(List.of(), List.of(new Call(number(1), ago(2, 0), 30, CallType.INCOMING)),
                 List.of()))));

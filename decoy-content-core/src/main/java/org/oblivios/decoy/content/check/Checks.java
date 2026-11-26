@@ -21,6 +21,7 @@ import org.oblivios.decoy.content.check.rules.GSpread;
 import org.oblivios.decoy.content.check.rules.HHardware;
 import org.oblivios.decoy.content.check.rules.MRaw;
 import org.oblivios.decoy.content.check.rules.NDistinct;
+import org.oblivios.decoy.content.check.rules.NNumber;
 import org.oblivios.decoy.content.check.rules.OPresumes;
 import org.oblivios.decoy.content.check.rules.RBirthday;
 import org.oblivios.decoy.content.check.rules.RCallContact;
@@ -48,7 +49,8 @@ import org.oblivios.decoy.content.plan.ContentPlan;
  */
 public final class Checks {
     private static final List<ExaminerRule> EXAMINER = List.of(new NDistinct(), new FPresumes(), new SOne(), new MRaw(), new GClock(),
-            new CCalls(), new EStale(), new HHardware(), new RSmsSender(), new RBirthday(), new RGroupMember());
+            new CCalls(), new EStale(), new HHardware(), new RSmsSender(), new RBirthday(), new RGroupMember(),
+            new NNumber());
     private static final List<OriginRule> ORIGIN = List.of(new GOrigin(), new CCloseness(), new TAway(), new SPhysical(), new OPresumes(),
             new RPhotoPlace(), new RCallContact(), new RWifiPlace(), new RMailAge(), new RRequires(), new RUnrewritten(), new RFuture(),
             new RSlot(), new RRegister());

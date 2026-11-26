@@ -19,14 +19,14 @@ import org.oblivios.decoy.content.surface.VaultPlan;
 
 /**
  * What an examiner sees of a plan: the views of the phone's stores and nothing of the story. The travel plan is part of
- * the chronicle, not a view.
+ * the chronicle, not a view. The number of the SIM is a setup answer, which the examiner may read.
  */
 public record PhoneViews(People people, CalendarPlan calendar, MediaPlan media, MailPlan mail, BrowserPlan browser, VaultPlan vault,
-        NetworkPlan network, DevicePlan device, AppsPlan apps, UsagePlan usage, TracesPlan traces) {
+        NetworkPlan network, DevicePlan device, AppsPlan apps, UsagePlan usage, TracesPlan traces, String simNumber) {
 
     public static PhoneViews of(ContentPlan p) {
         return new PhoneViews(p.people(), p.calendar(), p.media(), p.mail(), p.browser(), p.vault(), p.network(), p.device(), p.apps(),
-                p.usage(), p.traces());
+                p.usage(), p.traces(), p.simNumber());
     }
 
     /** Every item of every view: the records of each list, each thread followed by its messages, and the device plan. */

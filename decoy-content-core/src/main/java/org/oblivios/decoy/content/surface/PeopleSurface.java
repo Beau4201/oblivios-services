@@ -18,10 +18,10 @@ import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
-import org.oblivios.decoy.content.country.NoVerifiedRange;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
 import org.oblivios.decoy.content.data.NameData;
+import org.oblivios.decoy.content.data.PhoneNumbers;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.story.Timeline;
@@ -30,23 +30,16 @@ import org.oblivios.decoy.content.story.Timeline;
 public final class PeopleSurface {
     private PeopleSurface() {}
 
-    /** Throws {@link IllegalArgumentException} when the pack has no verified number range: no number is invented. */
+    /** Throws {@link IllegalArgumentException} for a country without number data: no number is invented. */
     public static People generate(Persona p, Timeline t, CountryPack c, Draws s) {
-        try {
-            return build(p, t, c, s);
-        } catch (NoVerifiedRange e) {
-            throw new IllegalArgumentException("no verified number range for country pack " + c.code() + ": contacts cannot be created", e);
-        }
-    }
-
-    private static People build(Persona p, Timeline t, CountryPack c, Draws s) throws NoVerifiedRange {
+        PhoneNumbers phones = PhoneNumbers.of(c.code());
         RandomGenerator r = s.stream("people");
         ZoneId zone = p.inputs().zone();
         LanguagePack lang = LanguagePack.of(p.language());
         LanguagePack service = LanguagePack.forService(c, lang.tag());
         List<String> groupNames = lang.list("contact.groups");
         Set<String> used = new HashSet<>();
-        String own = freshNumber(c, r, used);
+        String own = freshNumber(phones, r, used);
 
         // the circle comes first, so the favourites are the closest people
         List<Circle.Member> circle = Circle.build(p, s);
@@ -67,7 +60,7 @@ public final class PeopleSurface {
             // people with their backgrounds and family rules (plan Task 9)
             String given = nameData.given(m.gender(), m.birthYear(), r);
             names[i] = r.nextInt(100) < 25 ? given : given + " " + nameData.family(m.gender(), r);
-            numbers[i] = freshNumber(c, r, used);
+            numbers[i] = freshNumber(phones, r, used);
             favourite[i] = i < favourites;
             groups[i] = groupNames.get(m.relation().groupIndex());
             birthdays[i] = r.nextInt(100) < 40 ? LocalDate.of(m.birthYear(), 1 + r.nextInt(12), 1 + r.nextInt(28)) : null;
@@ -105,7 +98,7 @@ public final class PeopleSurface {
         List<Voicemail> voicemails = new ArrayList<>();
         int vm = r.nextInt(5);
         for (int i = 0; i < vm; i++) {
-            String from = r.nextInt(100) < 70 ? numbers[r.nextInt(count)] : freshNumber(c, r, used);
+            String from = r.nextInt(100) < 70 ? numbers[r.nextInt(count)] : freshNumber(phones, r, used);
             voicemails.add(new Voicemail(from, Events.randomInstant(r, t.phoneStart(), t.now(), zone, earliest, latest), 5 + r.nextInt(116)));
         }
         voicemails.sort(Comparator.comparing(Voicemail::at));
@@ -206,9 +199,9 @@ public final class PeopleSurface {
         return r.nextInt(favourite.length);
     }
 
-    private static String freshNumber(CountryPack c, RandomGenerator r, Set<String> used) throws NoVerifiedRange {
+    private static String freshNumber(PhoneNumbers phones, RandomGenerator r, Set<String> used) {
         for (;;) {
-            String n = c.mobileNumber(r).e164();
+            String n = phones.mobile(r).e164();
             if (used.add(n)) {
                 return n;
             }

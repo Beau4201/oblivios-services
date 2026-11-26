@@ -32,24 +32,11 @@ import org.oblivios.decoy.content.story.VolumeModel;
 
 class PeopleSurfaceTest {
     private static final Instant NOW = Instant.parse("2026-11-25T12:00:00Z");
-    private static final String[] ACM_FREE_BLOCKS = {
-        "062-5780000 to 062-5999999", "062-1010000 to 062-1099999", "062-1720000 to 062-1799999",
-        "062-7660000 to 062-7739999", "062-7750000 to 062-7809999", "061-5970000 to 061-5999999",
-    };
     private static final Pattern SIX_DIGITS = Pattern.compile("\\b\\d{6}\\b");
 
-    private static boolean inAcmFreeBlock(String e164) {
-        if (!e164.startsWith("+316") || e164.length() != 12) {
-            return false;
-        }
-        long national = Long.parseLong(e164.substring(3));
-        for (String block : ACM_FREE_BLOCKS) {
-            String[] ends = block.split(" to ");
-            if (national >= Long.parseLong(ends[0].replace("-", "")) && national <= Long.parseLong(ends[1].replace("-", ""))) {
-                return true;
-            }
-        }
-        return false;
+    private static boolean subscriberMobile(String e164) {
+        return org.oblivios.decoy.content.data.PhoneNumbers.of("NL").valid(new org.oblivios.decoy.content.country.PhoneNumber(e164,
+                org.oblivios.decoy.content.country.PhoneNumber.NumberType.MOBILE));
     }
 
     private static CountryPack nl() {
@@ -109,7 +96,7 @@ class PeopleSurfaceTest {
             p.voicemails().forEach(v -> all.add(v.fromNumber()));
             all.add(p.ownNumber());
             for (String num : all) {
-                assertTrue(inAcmFreeBlock(num), "outside the free blocks: " + num);
+                assertTrue(subscriberMobile(num), "not a mobile number of the country: " + num);
             }
         }
     }
@@ -140,7 +127,7 @@ class PeopleSurfaceTest {
 
     @Test
     void callsOnlyToContacts() {
-        // Real services have no verified numbers, so the call log holds calls to contacts only.
+        // services send under their names and are not called, so the call log holds calls to contacts only
         for (long n = 0; n < 15; n++) {
             People p = setup(n).people();
             Set<String> numbers = contactNumbers(p);
@@ -224,7 +211,7 @@ class PeopleSurfaceTest {
             for (Voicemail v : p.voicemails()) {
                 assertNotEquals(p.ownNumber(), v.fromNumber());
                 assertTrue(v.seconds() > 0 && v.seconds() <= 180);
-                assertTrue(numbers.contains(v.fromNumber()) || inAcmFreeBlock(v.fromNumber()));
+                assertTrue(numbers.contains(v.fromNumber()) || subscriberMobile(v.fromNumber()));
             }
         }
     }
@@ -439,12 +426,12 @@ class PeopleSurfaceTest {
     }
 
     @Test
-    void aPackWithoutVerifiedNumbersMakesNoContact() {
+    void aCountryWithoutNumberDataMakesNoContact() {
         Setup s = setup(1, b -> b);
         IllegalArgumentException e = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> PeopleSurface.generate(s.persona(), s.timeline(), org.oblivios.decoy.content.country.Packs.neutral(),
                         org.oblivios.decoy.content.Draws.of(org.oblivios.decoy.content.Seed.of(1, 4))));
-        assertTrue(e.getMessage().contains("no verified number range"), e.getMessage());
+        assertTrue(e.getMessage().contains("no number data for country XX"), e.getMessage());
     }
 
     @Test

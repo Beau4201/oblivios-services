@@ -118,6 +118,11 @@ public final class PlaceData {
         return found.size() == 1 ? Optional.of(found.get(0).ref()) : Optional.empty();
     }
 
+    /** Every municipality, in the order of the file. */
+    public List<CityRef> municipalities() {
+        return cities.values().stream().map(City::ref).toList();
+    }
+
     /** At most {@code max} names that {@link #city} accepts, the nearest by edit distance first. */
     public List<String> suggest(String typed, int max) {
         String wanted = key(typed.substring(0, Math.min(typed.length(), LONGEST)));

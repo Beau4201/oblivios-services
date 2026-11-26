@@ -15,7 +15,7 @@ import java.util.zip.GZIPInputStream;
 
 /** The data files of the library: three header lines, then rows of cells between tabs. */
 final class Tables {
-    private static final String DIR = "/org/oblivios/decoy/content/data/";
+    static final String DIR = "/org/oblivios/decoy/content/data/";
     private static final Pattern COUNTRY = Pattern.compile("[A-Z]{2}");
 
     private Tables() {}

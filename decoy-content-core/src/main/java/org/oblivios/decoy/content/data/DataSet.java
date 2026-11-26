@@ -41,6 +41,12 @@ public final class DataSet {
         return data;
     }
 
+    public PhoneNumbers numbers() {
+        PhoneNumbers data = PhoneNumbers.of(pack.code());
+        versions.put("numbers/" + pack.code(), data.version());
+        return data;
+    }
+
     public PopulationData population() {
         PopulationData data = PopulationData.load(pack.code());
         versions.put("population/" + pack.code(), data.version());

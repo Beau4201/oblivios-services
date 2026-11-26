@@ -15,32 +15,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
-import java.util.SplittableRandom;
 import org.junit.jupiter.api.Test;
 
 class CountryPackTest {
-
-    /** The free mobile blocks of the ACM register, read 2026-11-25, as first and last number of each block. */
-    private static final String[] ACM_FREE_BLOCKS = {
-        "062-5780000 to 062-5999999", "062-1010000 to 062-1099999", "062-1720000 to 062-1799999",
-        "062-7660000 to 062-7739999", "062-7750000 to 062-7809999", "061-5970000 to 061-5999999",
-    };
-
-    private static boolean inAcmFreeBlock(String e164) {
-        if (!e164.startsWith("+316") || e164.length() != 12) {
-            return false;
-        }
-        long national = Long.parseLong(e164.substring(3)); // 6xxxxxxxx, the leading 0 dropped
-        for (String block : ACM_FREE_BLOCKS) {
-            String[] ends = block.split(" to ");
-            long from = Long.parseLong(ends[0].replace("-", "")); // 0625780000
-            long to = Long.parseLong(ends[1].replace("-", ""));
-            if (national >= from && national <= to) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private static CountryPack nl() {
         return Packs.load("NL").orElseThrow();
@@ -62,7 +39,7 @@ class CountryPackTest {
     }
 
     @Test
-    void countryWithoutVerifiedRangeFallsBackToNeutral() {
+    void countryWithoutNumberDataFallsBackToNeutral() {
         CountryPack noRange = pack("code", "ZZ", "senders.BANK", "ZedBank");
         PackChoice c = Packs.forDevice(List.of(noRange), "ZZ", ZoneId.of("UTC"), Locale.ROOT);
         assertTrue(c.fellBack());
@@ -101,51 +78,6 @@ class CountryPackTest {
                 assertTrue(Packs.neutral().senders(kind).isEmpty(), kind + " must be empty for the neutral pack");
             }
         }
-    }
-
-    @Test
-    void neutralPackHasNoNumbersOfItsOwn() {
-        assertThrows(NoVerifiedRange.class, () -> Packs.neutral().mobileNumber(new SplittableRandom(1)));
-    }
-
-    @Test
-    void neutralHasNoVerifiedRange() {
-        assertThrows(NoVerifiedRange.class, () -> Packs.load("XX").get().mobileNumber(new SplittableRandom(2)));
-    }
-
-    @Test
-    void nlNumbersAreInVerifiedRange() throws NoVerifiedRange {
-        CountryPack nl = nl();
-        SplittableRandom r = new SplittableRandom(42);
-        Set<String> distinct = new HashSet<>();
-        for (int i = 0; i < 5000; i++) {
-            String n = nl.mobileNumber(r).e164();
-            assertTrue(inAcmFreeBlock(n), "outside the free blocks: " + n);
-            distinct.add(n);
-        }
-        assertTrue(distinct.size() > 4900, "numbers repeat too much: " + distinct.size());
-    }
-
-    @Test
-    void nlNumbersSpreadOverAllVerifiedBlocks() throws NoVerifiedRange {
-        CountryPack nl = nl();
-        SplittableRandom r = new SplittableRandom(7);
-        Set<String> prefixes = new HashSet<>();
-        for (int i = 0; i < 20000; i++) {
-            prefixes.add(nl.mobileNumber(r).e164().substring(0, 7)); // +316xxx
-        }
-        assertTrue(prefixes.size() >= 4, "only " + prefixes.size() + " three-digit prefixes used");
-    }
-
-    @Test
-    void blocksAreParsedInclusive() throws NoVerifiedRange {
-        CountryPack p = pack("code", "ZZ", "mobile.prefix", "+31", "mobile.blocks", "600000000-600000001");
-        SplittableRandom r = new SplittableRandom(5);
-        Set<String> seen = new HashSet<>();
-        for (int i = 0; i < 200; i++) {
-            seen.add(p.mobileNumber(r).e164());
-        }
-        assertEquals(Set.of("+31600000000", "+31600000001"), seen);
     }
 
     @Test
