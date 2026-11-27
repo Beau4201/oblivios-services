@@ -187,7 +187,8 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         Set<FriendGroup> friends = p.friendGroups() != null ? p.friendGroups() : drawFriendGroups(d.stream("persona.friendGroups"), age, job);
         List<ActivityAnswer> activities = p.activities() != null ? p.activities() : drawActivities(d, friends);
         CircleSize circle = p.circle() != null ? p.circle() : pick(d.stream("persona.circle"), new int[] {30, 50, 20}, CircleSize.values());
-        Set<String> interests = p.interests() != null ? p.interests() : Set.of();
+        Set<String> interests = p.interests() != null ? p.interests()
+                : data.interests().draw(age, gender, d.stream("persona.interests"));
         Set<String> kept = data.holidays().kept(background);
         Set<String> holidays = p.holidays() != null ? p.holidays() : kept;
         String bank = p.bank() != null ? p.bank() : oneOf(d.stream("persona.bank"), names(pack.senders(SenderKind.BANK)));

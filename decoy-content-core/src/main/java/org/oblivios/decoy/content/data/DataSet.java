@@ -65,6 +65,12 @@ public final class DataSet {
         return data;
     }
 
+    public InterestData interests() {
+        InterestData data = InterestData.load(pack.code());
+        versions.put("interests/" + pack.code(), data.version());
+        return data;
+    }
+
     /** The version of each data file that was read through this set. */
     public Map<String, String> versions() {
         return Map.copyOf(versions);

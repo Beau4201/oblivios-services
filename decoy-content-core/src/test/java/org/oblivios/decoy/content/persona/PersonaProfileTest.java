@@ -463,6 +463,19 @@ class PersonaProfileTest {
     }
 
     @Test
+    void openInterestsAreDrawnFromTheCountrysFiguresAndGivenOnesAreKept() {
+        Set<String> known = DataSet.of("NL").interests().names();
+        Set<String> seen = new java.util.HashSet<>();
+        for (long n = 0; n < 200; n++) {
+            Persona p = derive(n, open());
+            assertTrue(known.containsAll(p.interests()), p.interests().toString());
+            seen.addAll(p.interests());
+            assertEquals(Set.of(), derive(n, with(x -> x.interests(Set.of()))).interests(), "a given empty answer");
+        }
+        assertTrue(seen.size() > 30, "only " + seen);
+    }
+
+    @Test
     void sameSeedSamePersona() {
         assertEquals(derive(7, open()), derive(7, open()));
         assertEquals(derive(7, Profiles.full()), derive(7, Profiles.full()));
