@@ -48,6 +48,8 @@ import org.oblivios.decoy.content.surface.TravelPlan;
 import org.oblivios.decoy.content.surface.TravelSurface;
 import org.oblivios.decoy.content.surface.UsageSurface;
 import org.oblivios.decoy.content.surface.VaultSurface;
+import org.oblivios.decoy.content.world.World;
+import org.oblivios.decoy.content.world.WorldBuilder;
 
 /**
  * Builds the whole plan from the persona inputs, the owner's counted volume and choices, and one seed. Every surface
@@ -84,8 +86,9 @@ public final class ContentPlanner {
         }
         data.numbers(); // records the version of the number formats the contacts are drawn from
         VolumeModel volume = VolumeModel.fromCounts(setup.counts(), draws);
-        Timeline timeline = Timeline.generate(persona, volume, pack, now, draws);
-        People generated = PeopleSurface.generate(persona, timeline, pack, draws);
+        World world = WorldBuilder.build(persona, pack, data, draws);
+        Timeline timeline = Timeline.generate(persona, volume, world, now, draws);
+        People generated = PeopleSurface.generate(persona, world, timeline, pack, draws);
         StyleBook styles = Styles.book(persona, generated, draws);
         Picked picked = ConversationPicker.pick(persona, generated, styles, timeline, pack, pool, draws, rewriter, judge);
         List<FilledConversation> conversations = new ArrayList<>();
@@ -105,7 +108,7 @@ public final class ContentPlanner {
         warnings.addAll(picked.warnings());
         Map<String, String> versions = new TreeMap<>(data.versions());
         versions.put("pool", digest(pool));
-        return new ContentPlan(persona, timeline, people, calendar, travel, DeviceSurface.generate(ctx), NetworkSurface.generate(ctx),
+        return new ContentPlan(persona, world, timeline, people, calendar, travel, DeviceSurface.generate(ctx), NetworkSurface.generate(ctx),
                 UsageSurface.generate(ctx), AppsSurface.generate(ctx), BrowserSurface.generate(ctx), VaultSurface.generate(ctx),
                 TracesSurface.generate(ctx), media, MailSurface.generate(persona, timeline, pack, setup.probe(), draws), styles,
                 conversations, picked.reserve(), warnings, versions, setup.simNumber());

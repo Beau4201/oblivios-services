@@ -55,10 +55,10 @@ public final class TestPool {
                 kind = GroupKind.values()[r.nextInt(GroupKind.values().length)];
                 int count = 3 + r.nextInt(4);
                 for (int k = 1; k < count; k++) {
-                    sides.add(new PoolSide((char) ('A' + k), Relation.values()[r.nextInt(Relation.values().length)], band(r), gender(r), register(r)));
+                    sides.add(new PoolSide((char) ('A' + k), Relation.values()[r.nextInt(Relation.SELF.ordinal())], band(r), gender(r), register(r)));
                 }
             } else {
-                sides.add(new PoolSide('B', Relation.values()[r.nextInt(Relation.values().length)], band(r), gender(r), register(r)));
+                sides.add(new PoolSide('B', Relation.values()[r.nextInt(Relation.SELF.ordinal())], band(r), gender(r), register(r)));
             }
             Set<Fact> requires = r.nextInt(100) < 85 ? Set.of() : Set.of(Fact.values()[r.nextInt(Fact.values().length)]);
             List<String> topics = List.of(TOPICS.get(r.nextInt(TOPICS.size())));

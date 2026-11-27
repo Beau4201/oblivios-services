@@ -8,17 +8,15 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
-import org.oblivios.decoy.content.country.Sender;
-import org.oblivios.decoy.content.country.SenderKind;
-import org.oblivios.decoy.content.data.CityRef;
-import org.oblivios.decoy.content.data.NameData;
-import org.oblivios.decoy.content.data.PlaceData;
+import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.lang.LanguagePack;
+import org.oblivios.decoy.content.world.World;
+import org.oblivios.decoy.content.world.WorldBuilder;
+import org.oblivios.decoy.content.world.WorldPlace;
 
 /** The one timeline behind every surface: where the owner lives and works, when the day starts, and since when the phone exists. */
 public final class Timeline {
@@ -41,31 +39,32 @@ public final class Timeline {
         this.warnings = List.copyOf(warnings);
     }
 
-    /** Throws {@link IllegalArgumentException} for a city the country pack has no place data for. */
+    /**
+     * The timeline of a world built from the same draws. Throws {@link IllegalArgumentException} for a city or country
+     * the world cannot be built for.
+     */
     public static Timeline generate(Persona p, VolumeModel v, CountryPack c, Instant now, Draws s) {
+        return generate(p, v, WorldBuilder.build(p, c, DataSet.of(c.code()), s), now, s);
+    }
+
+    public static Timeline generate(Persona p, VolumeModel v, World world, Instant now, Draws s) {
         RandomGenerator r = s.stream("timeline");
         List<String> warnings = new ArrayList<>();
 
-        // shortcut: places lie around the city's middle until the world draws them from where people live (plan Task 9)
-        CityRef city = PlaceData.require(c.code(), p.inputs().city());
-        double[] centre = {city.lat(), city.lon()};
-
+        // shortcut: the views know home, work, cafes and shops; the year of the story takes the other places (plan Task 10)
         LanguagePack lang = LanguagePack.of(p.language());
         List<Place> places = new ArrayList<>();
-        double[] home = around(centre, 0.3, 4.0, r);
-        places.add(new Place(lang.text("place.home"), home[0], home[1], PlaceKind.HOME));
-        double[] work = around(home, 3.0, 15.0, r);
-        places.add(new Place(lang.text("place.work"), work[0], work[1], PlaceKind.WORK));
-        for (int i = 0; i < 2; i++) {
-            double[] cafe = around(home, 0.3, 3.0, r);
-            String name = NameData.load(p.background()).family(p.gender(), r);
-            places.add(new Place(lang.format("place.cafe", Map.of("name", name)), cafe[0], cafe[1], PlaceKind.CAFE));
-        }
-        List<Sender> shops = c.senders(SenderKind.SHOP);
-        for (int i = 0; i < 3; i++) {
-            double[] shop = around(home, 0.3, 4.0, r);
-            String name = shops.isEmpty() ? lang.text("place.supermarket") : shops.get(r.nextInt(shops.size())).name();
-            places.add(new Place(name, shop[0], shop[1], PlaceKind.SHOP));
+        for (WorldPlace at : world.places()) {
+            PlaceKind kind = at.kind() == PlaceKind.SUPERMARKET ? PlaceKind.SHOP : at.kind();
+            String name = switch (kind) {
+                case HOME -> lang.text("place.home");
+                case WORK -> lang.text("place.work");
+                case CAFE, SHOP -> at.name();
+                default -> null;
+            };
+            if (name != null) {
+                places.add(new Place(name, at.lat(), at.lon(), kind));
+            }
         }
 
         LocalTime wake = LocalTime.of(6, 0).plusMinutes(r.nextInt(151)); // 06:00..08:30
@@ -77,15 +76,6 @@ public final class Timeline {
         Instant phoneStart = candidate.isBefore(limit) ? candidate : limit;
 
         return new Timeline(places, wake, sleep, phoneStart, now, p.inputs().zone(), warnings);
-    }
-
-    /** A point between {@code minKm} and {@code maxKm} from {@code from}, uniform over the ring's area. */
-    private static double[] around(double[] from, double minKm, double maxKm, RandomGenerator r) {
-        double d = Math.sqrt(minKm * minKm + r.nextDouble() * (maxKm * maxKm - minKm * minKm));
-        double angle = r.nextDouble() * 2 * Math.PI;
-        double lat = from[0] + d * Math.cos(angle) / 111.32;
-        double lon = from[1] + d * Math.sin(angle) / (111.32 * Math.cos(Math.toRadians(from[0])));
-        return new double[] {lat, lon};
     }
 
     public List<Place> places() {

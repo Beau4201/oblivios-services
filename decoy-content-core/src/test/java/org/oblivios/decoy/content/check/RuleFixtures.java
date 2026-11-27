@@ -20,6 +20,9 @@ import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
+import org.oblivios.decoy.content.country.PhoneNumber;
+import org.oblivios.decoy.content.data.NameData;
+import org.oblivios.decoy.content.origin.Origin;
 import org.oblivios.decoy.content.country.SenderKind;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.persona.PersonaProfile;
@@ -69,6 +72,8 @@ import org.oblivios.decoy.content.surface.UsagePlan;
 import org.oblivios.decoy.content.surface.VaultPlan;
 import org.oblivios.decoy.content.surface.Visit;
 import org.oblivios.decoy.content.surface.WifiNetwork;
+import org.oblivios.decoy.content.world.World;
+import org.oblivios.decoy.content.world.WorldPerson;
 
 /**
  * One planted case per rule of {@link Checks}: a plan whose views hold nothing but the items that break the rule, so a
@@ -159,7 +164,7 @@ public final class RuleFixtures {
     /** The base plan with this persona and every view, the travel plan and the conversations empty. */
     public static ContentPlan bare(Persona persona) {
         ContentPlan b = base();
-        return new ContentPlan(persona, b.timeline(), new People(b.people().ownNumber(), List.of(), List.of(), List.of(), List.of()),
+        return new ContentPlan(persona, b.world(), b.timeline(), new People(b.people().ownNumber(), List.of(), List.of(), List.of(), List.of()),
                 new CalendarPlan(List.of(), List.of(), List.of()), new TravelPlan(List.of(), List.of()), b.device(),
                 new NetworkPlan(List.of(), List.of()), new UsagePlan(List.of(), Map.of()), new AppsPlan(List.of()),
                 new BrowserPlan(List.of(), List.of(), List.of()), new VaultPlan(List.of()), new TracesPlan(List.of(), Map.of()),
@@ -174,6 +179,7 @@ public final class RuleFixtures {
     /** A copy of {@code p} with each part (found by its type) replacing the plan's own. */
     public static ContentPlan with(ContentPlan p, Object... parts) {
         Persona persona = p.persona();
+        World world = p.world();
         People people = p.people();
         CalendarPlan calendar = p.calendar();
         TravelPlan travel = p.travel();
@@ -189,6 +195,8 @@ public final class RuleFixtures {
         for (Object part : parts) {
             if (part instanceof Persona x) {
                 persona = x;
+            } else if (part instanceof World x) {
+                world = x;
             } else if (part instanceof People x) {
                 people = x;
             } else if (part instanceof CalendarPlan x) {
@@ -217,7 +225,7 @@ public final class RuleFixtures {
                 throw new IllegalArgumentException(part.getClass().getName());
             }
         }
-        return new ContentPlan(persona, p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
+        return new ContentPlan(persona, world, p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
                 traces, media, mail, styles, conversations, p.reserve(), p.warnings(), p.dataVersions(),
                 p.simNumber());
     }
@@ -264,9 +272,33 @@ public final class RuleFixtures {
         return LanguagePack.of(language).list(key).stream().filter(w -> !w.isEmpty()).findFirst().orElseThrow();
     }
 
+    /** A person of the base world's language with a phone, born in 1990, saved as {@code label}. */
+    public static WorldPerson person(String id, Relation relation, String given, String family, Gender gender, String label) {
+        return new WorldPerson(id, relation, given, family, family, gender, LocalDate.of(1990, 6, 1), "NL", List.of(), null,
+                false, null, new PhoneNumber(number(Integer.parseInt(id.substring(1))), PhoneNumber.NumberType.MOBILE), label,
+                given, "Sam", 0, null, null, Origin.answer("CIRCLE"));
+    }
+
+    /** The bare plan whose world holds exactly these people. */
+    public static Planted world(WorldPerson... people) {
+        World b = base().world();
+        return planted(with(bare(), new World(b.self(), List.of(people), b.pets(), b.places(), b.choices(), b.habits())));
+    }
+
+    /** A given name of the name data for this sex, born in 1990. */
+    private static String given(Gender gender) {
+        return NameData.load("NL").given(gender, 1990, Seed.of(5, 5).stream("fixture." + gender));
+    }
+
     // ---- the cases ----
 
     static {
+        // the world
+        CASES.put("N-GENDER", () -> world(person("p1", Relation.FRIEND, given(Gender.MALE), "Example", Gender.FEMALE, "x")));
+        CASES.put("N-COHORT", () -> world(person("p1", Relation.FRIEND, "Qqqq", "Example", Gender.FEMALE, "Qqqq")));
+        CASES.put("N-BACKGROUND", () -> world(person("p1", Relation.FRIEND, "Qqqq", "Example", Gender.FEMALE, "Qqqq")));
+        CASES.put("N-FAMILY", () -> world(person("p1", Relation.SIBLING, given(Gender.FEMALE), "Other", Gender.FEMALE, "x")));
+        CASES.put("N-LABEL", () -> world(person("p1", Relation.FRIEND, given(Gender.FEMALE), "Example", Gender.FEMALE, "Boss")));
         // examiner
         CASES.put("N-DISTINCT", () -> planted(with(bare(), people(List.of(contact("c1", "Sam Example", number(1), Relation.FRIEND),
                 contact("c2", "Sam Example", number(2), Relation.COLLEAGUE)), List.of(), List.of()))));

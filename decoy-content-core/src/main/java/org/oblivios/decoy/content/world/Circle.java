@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-package org.oblivios.decoy.content.surface;
+package org.oblivios.decoy.content.world;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +15,7 @@ import org.oblivios.decoy.content.persona.PersonaProfile.Gender;
 import org.oblivios.decoy.content.persona.PersonaProfile.Housing;
 import org.oblivios.decoy.content.persona.PersonaProfile.JobKind;
 import org.oblivios.decoy.content.persona.PersonaProfile.Relationship;
+import org.oblivios.decoy.content.surface.Relation;
 
 /**
  * The people around the persona, before names and numbers: each with a relation, a birth year and a gender, and a
@@ -22,7 +23,13 @@ import org.oblivios.decoy.content.persona.PersonaProfile.Relationship;
  * moves another. The acquaintances fill the book up to its size (60 to 400, as before the circle existed).
  */
 final class Circle {
-    record Member(Relation relation, int birthYear, Gender gender, FriendGroup origin) {}
+    /**
+     * {@code age} is set where the persona's answers state it, else {@code null} and {@code birthYear} holds;
+     * {@code given} is the name an answer states, empty for one the world draws; {@code calledAs} what an answer says
+     * the persona calls them.
+     */
+    record Member(Relation relation, int birthYear, Gender gender, FriendGroup origin, Integer age, String given,
+            String calledAs) {}
 
     private static final int MIN_TOTAL = 60;
     private static final int MAX_TOTAL = 400;
@@ -60,7 +67,7 @@ final class Circle {
             for (ParentAnswer parent : p.parents()) {
                 int gap = 25 + r.nextInt(maxGap - 25 + 1); // drawn for the dead one too, so a death moves nobody else
                 if (parent.alive()) {
-                    out.add(member(Relation.PARENT, year - (age + gap), parent.gender(), null));
+                    out.add(new Member(Relation.PARENT, year - (age + gap), parent.gender(), null, null, "", parent.calledAs()));
                     parentsAge = parentsAge < 0 ? age + gap : Math.min(parentsAge, age + gap);
                 }
             }
@@ -80,12 +87,11 @@ final class Circle {
             }
         }
         for (SiblingAnswer sib : p.siblings()) {
-            out.add(member(Relation.SIBLING, year - sib.age(), sib.gender(), null));
+            // what the owner says a brother or sister is called is their name
+            out.add(new Member(Relation.SIBLING, year - sib.age(), sib.gender(), null, sib.age(), sib.calledAs(), ""));
         }
         for (ChildAnswer c : p.children()) {
-            if (c.age() >= 10) { // a child has its own phone from 10
-                out.add(member(Relation.CHILD, year - c.age(), c.gender(), null));
-            }
+            out.add(new Member(Relation.CHILD, year - c.age(), c.gender(), null, c.age(), c.givenName(), ""));
         }
         r = s.stream("circle.IN_LAW");
         if (partner) {
@@ -245,7 +251,7 @@ final class Circle {
     }
 
     private static Member member(Relation rel, int birthYear, Gender g, FriendGroup origin) {
-        return new Member(rel, birthYear, g, origin);
+        return new Member(rel, birthYear, g, origin, null, "", "");
     }
 
     private static Gender gender(RandomGenerator r) {

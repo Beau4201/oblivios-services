@@ -5,7 +5,9 @@ package org.oblivios.decoy.content.surface;
 public enum Relation {
     PARTNER, EX_PARTNER, DATE, PARENT, STEP_PARENT, GRANDPARENT, SIBLING, CHILD, IN_LAW, RELATIVE, BEST_FRIEND, FRIEND,
     OLD_FRIEND, HOUSEMATE, NEIGHBOUR, COLLEAGUE, MANAGER, REPORT, CLIENT, CLASSMATE, TEACHER, TEAMMATE, CHILDMINDER,
-    PARENT_OF_FRIEND, LANDLORD, TENANT, TRADESPERSON, MARKETPLACE, ACQUAINTANCE;
+    PARENT_OF_FRIEND, LANDLORD, TENANT, TRADESPERSON, MARKETPLACE, ACQUAINTANCE,
+    /** The persona itself, a person of the world; no contact and no side of a conversation has it. */
+    SELF;
 
     public boolean isFamily() {
         return switch (this) {

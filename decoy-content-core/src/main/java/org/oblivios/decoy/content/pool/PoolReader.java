@@ -145,6 +145,9 @@ public final class PoolReader {
                 }
             } else {
                 relation = value(Relation.class, rel[i], h, id);
+                if (relation == Relation.SELF) {
+                    throw new Bad(h, id + ": no side other than A is the persona");
+                }
             }
             sides.add(new PoolSide((char) ('A' + i), relation, band(age[i], h, id), value(Gender.class, gender[i], h, id),
                     value(Register.class, reg[i], h, id)));

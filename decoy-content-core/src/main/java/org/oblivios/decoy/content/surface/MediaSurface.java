@@ -194,6 +194,10 @@ public final class MediaSurface {
                 kind = x < 0.50 ? PlaceKind.HOME : x < 0.75 ? PlaceKind.CAFE : PlaceKind.SHOP;
             }
             List<Place> of = timeline.places().stream().filter(p -> p.kind() == kind).toList();
+            if (of.isEmpty()) {
+                // a persona without work has no work place, and a city may name no cafe: the photo is taken at home
+                of = timeline.places().stream().filter(p -> p.kind() == PlaceKind.HOME).toList();
+            }
             return of.get(r.nextInt(of.size()));
         }
 

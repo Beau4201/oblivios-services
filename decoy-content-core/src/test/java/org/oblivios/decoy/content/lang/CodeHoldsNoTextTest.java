@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * No text that a phone shows is written in the code (ADR-336). The scan covers the packages that make the content of a
- * phone ({@code surface}, {@code story}). Left out are what never reaches a phone: comments, diagnostics, the name of
+ * phone ({@code surface}, {@code story}, {@code world}). Left out are what never reaches a phone: comments, diagnostics, the name of
  * a draw stream or of a language key, data keys, package names and anything without two letters in a row.
  */
 class CodeHoldsNoTextTest {
@@ -40,6 +40,9 @@ class CodeHoldsNoTextTest {
             // internal ids, prefixes of a media source, roll-forward event kinds, mail template parts
             "cam-", "appstate:", "boardingpass:", "doc:receipt", "doc:scan", "doc:ticket", "fill:", "saved:", "gps",
             "CALL", "IN", "OUT", "SMS", ".body", ".subject",
+            // the world's ids, the parts of its streams' names, a component named by a null check, parts of diagnostics
+            "origin", "self", "work", "family", "pet", ".birth", ".label", ".percent", "addressed", "background", "given",
+            "phone", "used", " born ", ": no family name beside one", ": no free given name for ",
             // formats, file extensions and an alphabet
             "https://", "dd-MMM-yyyy HH:mm:ss Z", "yyyyMMdd", ".jpg", ".jpeg", ".png", ".webp", ".pdf",
             "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789",
@@ -65,9 +68,17 @@ class CodeHoldsNoTextTest {
             "TracesSurface.java#Missed call", "TracesSurface.java#New activity", "TracesSurface.java#New message",
             "TracesSurface.java#Reminder", "TracesSurface.java#Update available");
 
+    private static Stream<Path> walk(String name) {
+        try {
+            return Files.walk(MAIN.resolve(name));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private static Set<String> found() {
         Set<String> out = new TreeSet<>();
-        try (Stream<Path> files = Stream.concat(Files.walk(MAIN.resolve("surface")), Files.walk(MAIN.resolve("story")))) {
+        try (Stream<Path> files = Stream.of("surface", "story", "world").flatMap(CodeHoldsNoTextTest::walk)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String code = NOT_SHOWN.matcher(COMMENT.matcher(Files.readString(p)).replaceAll("")).replaceAll("(");
                 Matcher m = LITERAL.matcher(code);

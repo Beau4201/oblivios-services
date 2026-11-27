@@ -20,47 +20,49 @@ import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
-import org.oblivios.decoy.content.data.NameData;
+import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.data.PhoneNumbers;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.story.Timeline;
+import org.oblivios.decoy.content.world.World;
+import org.oblivios.decoy.content.world.WorldBuilder;
+import org.oblivios.decoy.content.world.WorldPerson;
 
 /** Contacts, call log, SMS threads and voicemail, all of one life story. */
 public final class PeopleSurface {
     private PeopleSurface() {}
 
-    /** Throws {@link IllegalArgumentException} for a country without number data: no number is invented. */
+    /**
+     * The people of a world built from the same draws. Throws {@link IllegalArgumentException} for a country without
+     * number data: no number is invented.
+     */
     public static People generate(Persona p, Timeline t, CountryPack c, Draws s) {
+        PhoneNumbers.of(c.code()); // refused for its numbers before the world refuses the city
+        return generate(p, WorldBuilder.build(p, c, DataSet.of(c.code()), s), t, c, s);
+    }
+
+    /** The contacts are the world's people with a phone, the closest first, so the favourites are the closest people. */
+    public static People generate(Persona p, World world, Timeline t, CountryPack c, Draws s) {
         PhoneNumbers phones = PhoneNumbers.of(c.code());
         RandomGenerator r = s.stream("people");
         ZoneId zone = p.inputs().zone();
         LanguagePack lang = LanguagePack.of(p.language());
         LanguagePack service = LanguagePack.forService(c, lang.tag());
+        List<WorldPerson> circle = world.people().stream().filter(w -> w.phone() != null).toList();
+        int count = circle.size();
         Set<String> used = new HashSet<>();
+        circle.forEach(w -> used.add(w.phone().e164()));
         String own = freshNumber(phones, r, used);
 
-        // the circle comes first, so the favourites are the closest people
-        List<Circle.Member> circle = Circle.build(p, s);
-        NameData nameData = NameData.load(p.background());
-        int count = circle.size();
-        String[] ids = new String[count];
-        String[] names = new String[count];
         String[] numbers = new String[count];
         boolean[] favourite = new boolean[count];
         LocalDate[] birthdays = new LocalDate[count];
         PhotoKind[] photos = new PhotoKind[count];
-        int favourites = r.nextInt(7);
         for (int i = 0; i < count; i++) {
-            Circle.Member m = circle.get(i);
-            ids[i] = "c" + i;
-            // shortcut: every contact takes a name of the persona's background, without families; the world draws the
-            // people with their backgrounds and family rules (plan Task 9)
-            String given = nameData.given(m.gender(), m.birthYear(), r);
-            names[i] = r.nextInt(100) < 25 ? given : given + " " + nameData.family(m.gender(), r);
-            numbers[i] = freshNumber(phones, r, used);
-            favourite[i] = i < favourites;
-            birthdays[i] = r.nextInt(100) < 40 ? LocalDate.of(m.birthYear(), 1 + r.nextInt(12), 1 + r.nextInt(28)) : null;
+            numbers[i] = circle.get(i).phone().e164();
+            favourite[i] = i < world.habits().favourites();
+            birthdays[i] = r.nextInt(100) < 40 ? circle.get(i).birthDate() : null;
             photos[i] = r.nextInt(100) < 15 ? PhotoKind.INITIALS : PhotoKind.NONE;
         }
 
@@ -106,9 +108,9 @@ public final class PeopleSurface {
         }
         List<Contact> contacts = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            Circle.Member m = circle.get(i);
-            contacts.add(new Contact(ids[i], names[i], numbers[i], favourite[i], null, birthdays[i], lastCall.get(numbers[i]), photos[i],
-                    m.relation(), m.birthYear(), m.gender(), m.origin()));
+            WorldPerson w = circle.get(i);
+            contacts.add(new Contact(w.id(), w.label(), numbers[i], favourite[i], null, birthdays[i], lastCall.get(numbers[i]),
+                    photos[i], w.relation(), w.birthDate().getYear(), w.gender(), w.group()));
         }
         return new People(own, contacts, calls, threads, voicemails);
     }

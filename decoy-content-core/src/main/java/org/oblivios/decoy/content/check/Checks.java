@@ -20,6 +20,11 @@ import org.oblivios.decoy.content.check.rules.GSignature;
 import org.oblivios.decoy.content.check.rules.GSpread;
 import org.oblivios.decoy.content.check.rules.HHardware;
 import org.oblivios.decoy.content.check.rules.MRaw;
+import org.oblivios.decoy.content.check.rules.NBackground;
+import org.oblivios.decoy.content.check.rules.NCohort;
+import org.oblivios.decoy.content.check.rules.NFamily;
+import org.oblivios.decoy.content.check.rules.NGender;
+import org.oblivios.decoy.content.check.rules.NLabel;
 import org.oblivios.decoy.content.check.rules.NDistinct;
 import org.oblivios.decoy.content.check.rules.NNumber;
 import org.oblivios.decoy.content.check.rules.OPresumes;
@@ -53,7 +58,7 @@ public final class Checks {
             new NNumber());
     private static final List<OriginRule> ORIGIN = List.of(new GOrigin(), new CCloseness(), new TAway(), new SPhysical(), new OPresumes(),
             new RPhotoPlace(), new RCallContact(), new RWifiPlace(), new RMailAge(), new RRequires(), new RUnrewritten(), new RFuture(),
-            new RSlot(), new RRegister());
+            new RSlot(), new RRegister(), new NGender(), new NCohort(), new NFamily(), new NBackground(), new NLabel());
     private static final List<PopulationRule> POPULATION = List.of(new GSignature(), new GSpread());
     private static final Set<String> IDS = ids(EXAMINER.stream().map(ExaminerRule::id), ORIGIN.stream().map(OriginRule::id),
             POPULATION.stream().map(PopulationRule::id));

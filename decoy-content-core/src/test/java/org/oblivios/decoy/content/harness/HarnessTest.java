@@ -24,10 +24,18 @@ import org.oblivios.decoy.content.pool.TestPool;
  * the rules the first 40-seed run reported. A task that fixes a rule moves it from the second set to the first.
  */
 public class HarnessTest {
-    public static final Set<String> MUST_PASS = ContentPlanValidator.RULES;
+    public static final Set<String> MUST_PASS = union(ContentPlanValidator.RULES, Set.of("N-GENDER", "N-COHORT",
+            "N-FAMILY", "N-BACKGROUND", "N-LABEL", "N-DISTINCT", "S-PHYSICAL", "O-PRESUMES", "G-SPREAD"));
+
+    private static Set<String> union(Set<String> a, Set<String> b) {
+        Set<String> out = new HashSet<>(a);
+        out.addAll(b);
+        return Set.copyOf(out);
+    }
+
     /** Read from the first run on 2026-11-26: 32 plans built, 8 refused, each of these rules in at least one plan. */
     static final Set<String> KNOWN_FAILING = Set.of("C-CALLS", "C-CLOSENESS", "E-STALE", "F-PRESUMES", "G-CLOCK", "G-ORIGIN", "N-NUMBER",
-            "G-SIGNATURE", "G-SPREAD", "H-HARDWARE", "M-RAW", "N-DISTINCT", "O-PRESUMES", "S-ONE", "S-PHYSICAL", "T-AWAY");
+            "G-SIGNATURE", "H-HARDWARE", "M-RAW", "S-ONE", "T-AWAY");
     private static final List<PoolConversation> POOL = TestPool.random(5000, Seed.of(17, 17));
     private static Report forty;
 

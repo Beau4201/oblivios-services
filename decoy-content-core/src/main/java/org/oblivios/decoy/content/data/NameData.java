@@ -32,6 +32,7 @@ public final class NameData {
     /** A given name is drawn only where it occurs at least this much, against its own largest period. */
     private static final double COHORT = 0.05;
     private static final double ONE_SEX = 0.9;
+    private static volatile Set<String> backgrounds;
 
     private record Entry(String name, long weight) {}
 
@@ -123,6 +124,15 @@ public final class NameData {
 
     /** The backgrounds that have a name file, as {@code names/index.properties} lists them. */
     public static Set<String> backgrounds() {
+        Set<String> found = backgrounds;
+        if (found == null) {
+            found = readBackgrounds();
+            backgrounds = found;
+        }
+        return found;
+    }
+
+    private static Set<String> readBackgrounds() {
         try (InputStream in = NameData.class.getResourceAsStream(DIR + "index.properties")) {
             if (in == null) {
                 throw new IllegalStateException("names/index.properties is missing");
@@ -265,6 +275,11 @@ public final class NameData {
     private double cohortShare(String given, Period p, Gender g) {
         Double largest = largestShare.get(g).get(given);
         return largest == null ? 0.0 : p.share(given) / largest;
+    }
+
+    /** Whether the data holds this given name for this sex, in any period. */
+    public boolean hasGiven(String given, Gender g) {
+        return largestShare.get(g).containsKey(given);
     }
 
     /** The sex that holds nine tenths or more of the name's shares, empty for a name of both or of neither. */

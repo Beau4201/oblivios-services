@@ -4,6 +4,7 @@ package org.oblivios.decoy.content.plan;
 import java.util.List;
 import java.util.Map;
 import org.oblivios.decoy.content.Persona;
+import org.oblivios.decoy.content.world.World;
 import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.style.StyleBook;
@@ -27,7 +28,7 @@ import org.oblivios.decoy.content.surface.VaultPlan;
  * name file that was read and, as {@code pool}, a digest of the conversation pool, so that a plan can be built again.
  * {@code simNumber} is the setup's number of the SIM, the only number a view may state as the phone's own.
  */
-public record ContentPlan(Persona persona, Timeline timeline, People people, CalendarPlan calendar, TravelPlan travel, DevicePlan device,
+public record ContentPlan(Persona persona, World world, Timeline timeline, People people, CalendarPlan calendar, TravelPlan travel, DevicePlan device,
         NetworkPlan network, UsagePlan usage, AppsPlan apps, BrowserPlan browser, VaultPlan vault, TracesPlan traces, MediaPlan media,
         MailPlan mail, StyleBook styles, List<FilledConversation> conversations, List<FilledConversation> reserve, List<String> warnings,
         Map<String, String> dataVersions, String simNumber) {

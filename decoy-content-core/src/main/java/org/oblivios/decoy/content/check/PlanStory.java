@@ -18,12 +18,12 @@ import org.oblivios.decoy.content.style.StyleBook;
 import org.oblivios.decoy.content.surface.Contact;
 import org.oblivios.decoy.content.surface.Relation;
 import org.oblivios.decoy.content.surface.Trip;
+import org.oblivios.decoy.content.world.World;
 
 /**
- * What the origin checker knows of a plan beyond its views: the persona, the people, the places and the spans away, the
- * conversations with the reserve, and the style book. Today's plan has no world or chronicle, so it is read from the
- * contacts (relation, gender, birth year, and the order of the circle as closeness), the timeline and the travel plan,
- * and {@link #resolve} finds nothing.
+ * What the origin checker knows of a plan beyond its views: the persona and its world, the places and the spans away,
+ * the conversations with the reserve, and the style book. Today's plan has no chronicle, so the closeness of a contact
+ * is its order, and places and spans come from the timeline and the travel plan.
  */
 public final class PlanStory {
     /** A person of the story; {@code closeness} 0 is the closest. */
@@ -37,6 +37,7 @@ public final class PlanStory {
     }
 
     private final Persona persona;
+    private final World world;
     private final ZoneId zone;
     private final Instant now;
     private final Instant phoneStart;
@@ -49,6 +50,7 @@ public final class PlanStory {
 
     private PlanStory(ContentPlan p) {
         persona = p.persona();
+        world = p.world();
         zone = p.timeline().zone();
         now = p.timeline().now();
         phoneStart = p.timeline().phoneStart();
@@ -78,9 +80,16 @@ public final class PlanStory {
         return persona;
     }
 
-    /** The entry or event an origin names; empty when the story holds none, as for every origin of today's plan. */
+    public World world() {
+        return world;
+    }
+
+    /** The entry or event an origin names; empty when the story holds none. Today only the world holds entries. */
     public Optional<Object> resolve(Origin o) {
-        return Optional.empty();
+        if (o.kind() != Origin.Kind.WORLD) {
+            return Optional.empty();
+        }
+        return world.person(o.id()).map(Object.class::cast).or(() -> world.place(o.id()).map(Object.class::cast));
     }
 
     public Optional<Person> personByNumber(String e164) {

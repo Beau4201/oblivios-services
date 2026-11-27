@@ -30,7 +30,9 @@ class QuestionEffectTest {
      * Per question the {@link PhoneViews} components it drives, from the setup table of the design. Empty until the view
      * tasks convert their views; each adds its rows. A row the test shows false is a finding, never deleted to pass.
      */
-    private static final Map<Question, Set<String>> DRIVES = Map.of();
+    private static final Map<Question, Set<String>> DRIVES = Map.of(Question.GENDER, Set.of("people"),
+            Question.BIRTH_YEAR, Set.of("people"), Question.PARENTS, Set.of("people"), Question.SIBLINGS, Set.of("people"),
+            Question.CIRCLE, Set.of("people"));
 
     private static Persona derive(PersonaProfile p) {
         PersonaInputs in = p.inputs();
