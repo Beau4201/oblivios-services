@@ -33,7 +33,10 @@ import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
-import org.oblivios.decoy.content.lang.LanguagePack;
+import org.oblivios.decoy.content.origin.Origin;
+import org.oblivios.decoy.content.persona.PersonaProfile.TravelMode;
+import org.oblivios.decoy.content.story.PlaceKind;
+import org.oblivios.decoy.content.world.WorldPlace;
 import org.oblivios.decoy.content.story.MonthCount;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
@@ -70,6 +73,18 @@ class MediaSurfaceTest {
         return out;
     }
 
+    /** Six trips of five days, two months apart, by turns by plane and by car. */
+    private static TravelPlan trips() {
+        List<Trip> out = new ArrayList<>();
+        for (int i = 6; i > 0; i--) {
+            Instant from = NOW.minus(java.time.Duration.ofDays(60L * i));
+            WorldPlace there = new WorldPlace("trip." + i, PlaceKind.TRAVEL, "Away", 41.39, 2.17, "", Origin.answer("TRIPS"));
+            out.add(new Trip("trip-" + i, List.of(there), i % 2 == 0 ? TravelMode.CAR : TravelMode.PLANE, from,
+                    from.plus(java.time.Duration.ofDays(5)), ZONE, Origin.answer("TRIPS")));
+        }
+        return new TravelPlan(out);
+    }
+
     private static Setup setup(long n, YearMonth last, int chosenCount) {
         Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1),
                 PersonaProfile.open(new PersonaInputs("Sam", "Example", "Utrecht", "NL", ZONE, Locale.forLanguageTag("nl-NL"))), 2026);
@@ -79,7 +94,7 @@ class MediaSurfaceTest {
         }
         VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2)));
         Timeline t = Timeline.generate(p, v, nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
-        TravelPlan travel = TravelSurface.generate(t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(n, 6)));
+        TravelPlan travel = trips();
         List<ChosenPhoto> chosen = chosen(chosenCount);
         return new Setup(v, t, travel, chosen, MediaSurface.generate(v, t, travel, nl(), CAM, chosen, org.oblivios.decoy.content.Draws.of(Seed.of(n, 7))));
     }
@@ -342,22 +357,23 @@ class MediaSurfaceTest {
     }
 
     @Test
-    void everyBoardingPassTripHasItsScreenshot() {
+    void onlyAFlightLeavesABoardingPassTheEveningBefore() {
+        int shots = 0;
         for (long n = 0; n < 20; n++) {
             Setup s = setup(n);
-            for (String id : s.travel().boardingPassTrips()) {
-                Trip trip = s.travel().trips().stream().filter(t -> t.id().equals(id)).findFirst().orElseThrow();
-                MediaItem shot = s.plan().items().stream().filter(i -> ("boardingpass:" + id).equals(i.sourceId())).findFirst().orElse(null);
-                if (shot == null) {
-                    // only a month outside the volume model has no screenshot
-                    YearMonth m = YearMonth.from(trip.from().atZone(ZONE).toLocalDate().minusDays(1));
-                    assertFalse(s.volume().months().contains(m) && s.volume().targetScreenshots(m) > 0, "no screenshot for " + id);
-                    continue;
+            for (Trip trip : s.travel().trips()) {
+                for (MediaItem shot : s.plan().items()) {
+                    if (!("boardingpass:" + trip.id()).equals(shot.sourceId())) {
+                        continue;
+                    }
+                    shots++;
+                    assertEquals(TravelMode.PLANE, trip.mode(), "a boarding pass without a flight: " + trip.id());
+                    assertEquals(MediaKind.SCREENSHOT, shot.kind());
+                    assertTrue(shot.taken().isBefore(trip.from()) && shot.taken().isAfter(trip.from().minusSeconds(3 * 86_400L)));
                 }
-                assertEquals(MediaKind.SCREENSHOT, shot.kind());
-                assertTrue(shot.taken().isBefore(trip.from()) && shot.taken().isAfter(trip.from().minusSeconds(3 * 86_400L)));
             }
         }
+        assertTrue(shots > 20, "boarding passes: " + shots);
     }
 
     @Test
@@ -394,7 +410,7 @@ class MediaSurfaceTest {
         }
         VolumeModel v = VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(1, 2)));
         Timeline t = Timeline.generate(p, v, nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(1, 3)));
-        MediaPlan plan = MediaSurface.generate(v, t, TravelSurface.generate(t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(1, 6))), nl(), seconds, List.of(), org.oblivios.decoy.content.Draws.of(Seed.of(1, 7)));
+        MediaPlan plan = MediaSurface.generate(v, t, trips(), nl(), seconds, List.of(), org.oblivios.decoy.content.Draws.of(Seed.of(1, 7)));
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern(seconds.fileNameTemplate()).withZone(ZONE);
         Set<String> names = new HashSet<>();
         for (MediaItem i : plan.items()) {

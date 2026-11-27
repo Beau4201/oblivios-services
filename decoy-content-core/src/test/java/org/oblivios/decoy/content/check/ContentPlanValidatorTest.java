@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.persona.PersonaProfile;
 import org.oblivios.decoy.content.persona.PersonaProfile.Fact;
+import org.oblivios.decoy.content.persona.PersonaProfile.TravelMode;
+import org.oblivios.decoy.content.origin.Origin;
 import org.oblivios.decoy.content.pool.FilledConversation;
 import org.oblivios.decoy.content.style.StyleBook;
 import org.oblivios.decoy.content.style.StyleVector;
@@ -312,8 +314,8 @@ class ContentPlanValidatorTest {
                 c0.relation(), c0.birthYear(), c0.gender(), c0.origin()));
         planted.put("last contact", swap(p, new People(pe.ownNumber(), contacts, pe.calls(), pe.threads(), pe.voicemails())));
         planted.put("note", swap(p, new CalendarPlan(p.calendar().events(), p.calendar().alarms(), plus(p.calendar().notes(), new Note("x", late, false)))));
-        planted.put("trip", swap(p, new TravelPlan(plus(p.travel().trips(), new Trip("tx", List.of(p.timeline().places().get(0)), false, late, late.plus(Duration.ofDays(1)))),
-                p.travel().boardingPassTrips())));
+        planted.put("trip", swap(p, new TravelPlan(plus(p.travel().trips(), new Trip("tx", List.of(p.world().places().get(0)),
+                TravelMode.CAR, late, late.plus(Duration.ofDays(1)), p.chronicle().zone(), Origin.answer("TRIPS"))))));
         planted.put("taken", swap(p, new MediaPlan(plus(p.media().items(), new MediaItem(MediaKind.DOCUMENT, "Scan_a.pdf", late, NOW.minus(Duration.ofHours(1)),
                 "doc:scan", null, 0, 0, false, null, null, null, Set.of())), p.media().warnings())));
         planted.put("added", swap(p, new MediaPlan(plus(p.media().items(), new MediaItem(MediaKind.DOCUMENT, "Scan_b.pdf", NOW.minus(Duration.ofDays(1)), late,

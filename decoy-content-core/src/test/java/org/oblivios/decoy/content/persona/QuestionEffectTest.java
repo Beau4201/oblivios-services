@@ -32,7 +32,7 @@ class QuestionEffectTest {
      */
     private static final Map<Question, Set<String>> DRIVES = Map.of(Question.GENDER, Set.of("people"),
             Question.BIRTH_YEAR, Set.of("people"), Question.PARENTS, Set.of("people"), Question.SIBLINGS, Set.of("people"),
-            Question.CIRCLE, Set.of("people"));
+            Question.CIRCLE, Set.of("people"), Question.TRIPS, Set.of("media"));
 
     private static Persona derive(PersonaProfile p) {
         PersonaInputs in = p.inputs();

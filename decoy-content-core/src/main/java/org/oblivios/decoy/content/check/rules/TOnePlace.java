@@ -14,13 +14,19 @@ import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.surface.MediaItem;
 
 /**
- * {@code T-ONE-PLACE}: two photos further apart than {@value #FASTEST_KMH} km/h allows over the time between them. A
- * distance under {@value #NEAR_METRES} m is the error of a position. A calendar entry has no place in the view, so it
- * is not judged.
+ * {@code T-ONE-PLACE}: two photos further apart than {@value #FASTEST_KMH} km/h over land, or a flight, allows over the
+ * time between them. A flight explains a distance of {@value #SHORTEST_FLIGHT_METRES} m or more when the time holds it
+ * at {@value #FLIGHT_KMH} km/h and {@value #AIRPORT_SECONDS} s more to get on and off; the examiner reads no mode of
+ * travel, so it grants the flight to whoever could have taken it. These three figures are {@code [assumption]}. A
+ * distance under {@value #NEAR_METRES} m is the error of a position. A calendar entry has no place in the view, so it is
+ * not judged.
  */
 public final class TOnePlace implements ExaminerRule {
     static final int FASTEST_KMH = 150;
     static final int NEAR_METRES = 1000;
+    static final int SHORTEST_FLIGHT_METRES = 200_000;
+    static final int FLIGHT_KMH = 900;
+    static final int AIRPORT_SECONDS = 7200;
 
     @Override
     public String id() {
@@ -36,7 +42,8 @@ public final class TOnePlace implements ExaminerRule {
             MediaItem b = placed.get(i);
             double metres = Checks.metres(a.lat(), a.lon(), b.lat(), b.lon());
             double seconds = Duration.between(a.taken(), b.taken()).toMillis() / 1000.0;
-            if (metres > NEAR_METRES && metres > seconds * FASTEST_KMH / 3.6) {
+            boolean flown = metres >= SHORTEST_FLIGHT_METRES && seconds >= AIRPORT_SECONDS + metres / (FLIGHT_KMH / 3.6);
+            if (metres > NEAR_METRES && metres > seconds * FASTEST_KMH / 3.6 && !flown) {
                 out.add(new Violation(id(), a.name() + " and " + b.name() + " are " + Math.round(metres / 1000) + " km and "
                         + Math.round(seconds / 60) + " min apart"));
             }

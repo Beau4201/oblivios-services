@@ -39,8 +39,7 @@ class TextsHaveSourcesTest {
                 "calendar.lunch", "calendar.notes", "device.keyboard.layouts", "device.keyboard.words",
                 "device.name", "mail.closing", "mail.greeting", "place.cafe", "place.home",
                 "place.supermarket", "place.work", "presumes.CAR", "presumes.CAT", "presumes.DOG",
-                "presumes.SCHOOL_CHILDREN", "presumes.WORKS", "sms.service.code",
-                "travel.centre", "travel.hotel", "travel.station", "wifi.guest"));
+                "presumes.SCHOOL_CHILDREN", "presumes.WORKS", "sms.service.code", "wifi.guest"));
         for (String sender : List.of("BANK", "OPERATOR", "PARCEL", "SHOP", "GLOBAL")) {
             language.add("sms.service." + sender);
             for (int n = 1; n <= 3; n++) {
@@ -52,12 +51,11 @@ class TextsHaveSourcesTest {
             language.forEach(k -> out.add("lang/" + tag + ".properties#" + k));
         }
         for (String k : List.of("senders.BANK", "senders.PARCEL", "senders.OPERATOR", "senders.SHOP",
-                "senders.SHOP.online", "supermarkets", "wifi", "amount", "mms.groups", "sites.LOCAL",
-                "trips.domestic")) {
+                "senders.SHOP.online", "supermarkets", "wifi", "amount", "mms.groups", "sites.LOCAL")) {
             out.add("country/NL.properties#" + k);
         }
         for (String k : List.of("senders.GLOBAL", "senders.SHOP.online", "supermarkets", "holidays", "wifi", "amount",
-                "mms.groups", "sites.GLOBAL", "trips.abroad")) {
+                "mms.groups", "sites.GLOBAL")) {
             out.add("country/XX.properties#" + k);
         }
         for (String k : List.of("sites", "notes", "wifi.work", "prefixes", "notifications", "bluetooth")) {

@@ -18,7 +18,7 @@ public final class DataPack implements CountryPack {
     private static final Set<String> KEYS = Set.of(
             "code", "language", "family.child", "family.married", "senders.BANK", "senders.PARCEL",
             "senders.OPERATOR", "senders.SHOP", "senders.SHOP.online", "supermarkets", "senders.GLOBAL", "holidays", "wifi", "amount",
-            "mms.groups", "sites.GLOBAL", "sites.LOCAL", "trips.domestic", "trips.abroad");
+            "mms.groups", "sites.GLOBAL", "sites.LOCAL");
 
     private final String code;
     private final String language;
@@ -32,8 +32,6 @@ public final class DataPack implements CountryPack {
     private final String amount;
     private final int[] mmsGroups;
     private final List<String> sites;
-    private final List<City> domesticTrips;
-    private final List<City> abroadTrips;
 
     public DataPack(Properties p) {
         for (String key : p.stringPropertyNames()) {
@@ -71,8 +69,6 @@ public final class DataPack implements CountryPack {
         List<String> allSites = new ArrayList<>(list(p, "sites.GLOBAL"));
         allSites.addAll(list(p, "sites.LOCAL"));
         sites = List.copyOf(allSites);
-        domesticTrips = cities(p, "trips.domestic");
-        abroadTrips = cities(p, "trips.abroad");
         amount = p.getProperty("amount", "{n}").trim();
         if (!amount.contains("{n}")) {
             throw new IllegalStateException("amount pattern of pack " + code + " has no {n}");
@@ -107,24 +103,6 @@ public final class DataPack implements CountryPack {
             }
         }
         return java.util.Collections.unmodifiableMap(out);
-    }
-
-    /** Entries {@code <name> <lat> <lon>}; the name may hold spaces. */
-    private List<City> cities(Properties p, String key) {
-        List<City> out = new ArrayList<>();
-        for (String entry : list(p, key)) {
-            String[] t = entry.split("\\s+");
-            if (t.length < 3) {
-                throw new IllegalStateException(key + " entry is not '<name> <lat> <lon>' in pack " + code + ": '" + entry + "'");
-            }
-            String name = String.join(" ", java.util.Arrays.copyOf(t, t.length - 2));
-            try {
-                out.add(new City(name, Double.parseDouble(t[t.length - 2]), Double.parseDouble(t[t.length - 1])));
-            } catch (NumberFormatException e) {
-                throw new IllegalStateException(key + " entry with a bad coordinate in pack " + code + ": '" + entry + "'", e);
-            }
-        }
-        return List.copyOf(out);
     }
 
     /** {@code <first>-<last>}, inclusive. */
@@ -217,15 +195,5 @@ public final class DataPack implements CountryPack {
     @Override
     public List<String> sites() {
         return sites;
-    }
-
-    @Override
-    public List<City> domesticTrips() {
-        return domesticTrips;
-    }
-
-    @Override
-    public List<City> abroadTrips() {
-        return abroadTrips;
     }
 }

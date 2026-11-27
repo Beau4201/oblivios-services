@@ -77,6 +77,8 @@ import org.oblivios.decoy.content.surface.Visit;
 import org.oblivios.decoy.content.surface.WifiNetwork;
 import org.oblivios.decoy.content.world.World;
 import org.oblivios.decoy.content.world.WorldPerson;
+import org.oblivios.decoy.content.world.WorldPlace;
+import org.oblivios.decoy.content.persona.PersonaProfile.TravelMode;
 
 /**
  * One planted case per rule of {@link Checks}: a plan whose views hold nothing but the items that break the rule, so a
@@ -168,7 +170,7 @@ public final class RuleFixtures {
     public static ContentPlan bare(Persona persona) {
         ContentPlan b = base();
         return new ContentPlan(persona, b.world(), b.chronicle(), b.timeline(), new People(b.people().ownNumber(), List.of(), List.of(), List.of(), List.of()),
-                new CalendarPlan(List.of(), List.of(), List.of()), new TravelPlan(List.of(), List.of()), b.device(),
+                new CalendarPlan(List.of(), List.of(), List.of()), new TravelPlan(List.of()), b.device(),
                 new NetworkPlan(List.of(), List.of()), new UsagePlan(List.of(), Map.of()), new AppsPlan(List.of()),
                 new BrowserPlan(List.of(), List.of(), List.of()), new VaultPlan(List.of()), new TracesPlan(List.of(), Map.of()),
                 new MediaPlan(List.of(), List.of()), new MailPlan(List.of(), Optional.empty()), b.styles(), List.of(), List.of(), List.of(),
@@ -360,8 +362,7 @@ public final class RuleFixtures {
                 List.of(), List.of()))));
         CASES.put("S-PHYSICAL", () -> {
             String online = Checks.packOf(base().persona()).onlineShops().get(0);
-            return planted(with(bare(), new TravelPlan(List.of(new Trip("trip-1", List.of(new Place(online, 52.1, 5.1, PlaceKind.SHOP)), false,
-                    ago(40, 0), ago(38, 0))), List.of())));
+            return planted(with(bare(), shopTrip(online)));
         });
         CASES.put("O-PRESUMES", () -> planted(bare(persona(b -> b.job(JobKind.RETIRED)))));
         CASES.put("R-PHOTO-PLACE", () -> {
@@ -412,7 +413,7 @@ public final class RuleFixtures {
     /** The base plan's chronicle with these events and no other. */
     public static Chronicle chronicle(Event... events) {
         Chronicle b = base().chronicle();
-        return new Chronicle(List.of(events), b.routine(), b.phoneStart(), b.now(), b.zone());
+        return new Chronicle(List.of(events), b.routine(), List.of(), b.phoneStart(), b.now(), b.zone());
     }
 
     /** {@code n} outgoing calls of {@code seconds} each to the number of index 1. */
@@ -426,8 +427,20 @@ public final class RuleFixtures {
 
     /** A trip of two days, 21 to 19 days before now, to a place far from home. */
     public static TravelPlan trip() {
-        return new TravelPlan(List.of(new Trip("trip-1", List.of(new Place("Away", 41.39, 2.17, PlaceKind.TRAVEL)), true,
-                NOW.minus(Duration.ofDays(21)), NOW.minus(Duration.ofDays(19)))), List.of("trip-1"));
+        return oneTrip("Away", 41.39, 2.17, PlaceKind.TRAVEL, TravelMode.PLANE, NOW.minus(Duration.ofDays(21)),
+                NOW.minus(Duration.ofDays(19)));
+    }
+
+    /** A trip of 40 to 38 days before now to a shop of this name. */
+    public static TravelPlan shopTrip(String name) {
+        return oneTrip(name, 52.1, 5.1, PlaceKind.SHOP, TravelMode.CAR, ago(40, 0), ago(38, 0));
+    }
+
+    private static TravelPlan oneTrip(String name, double lat, double lon, PlaceKind kind, TravelMode mode, Instant from,
+            Instant to) {
+        Origin answered = Origin.answer("TRIPS");
+        return new TravelPlan(List.of(new Trip("trip-1",
+                List.of(new WorldPlace("trip-1.0", kind, name, lat, lon, "", answered)), mode, from, to, ZONE, answered)));
     }
 
     public static MediaItem photo(double lat, double lon, Instant taken) {

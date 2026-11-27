@@ -23,10 +23,12 @@ import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Sender;
 import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.persona.PersonaProfile.TravelMode;
 import org.oblivios.decoy.content.story.Place;
 import org.oblivios.decoy.content.story.PlaceKind;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeModel;
+import org.oblivios.decoy.content.world.WorldPlace;
 
 /**
  * The gallery of the decoy: per month the counts of the volume model, split over the owner's chosen photos (moved
@@ -181,7 +183,8 @@ public final class MediaSurface {
             LocalDate day = LocalDate.ofInstant(at, zone);
             for (Trip trip : travel.trips()) {
                 if (!day.isBefore(LocalDate.ofInstant(trip.from(), zone)) && !day.isAfter(LocalDate.ofInstant(trip.to(), zone))) {
-                    return trip.places().get(r.nextInt(trip.places().size()));
+                    WorldPlace there = trip.places().get(r.nextInt(trip.places().size()));
+                    return new Place(there.name(), there.lat(), there.lon(), there.kind());
                 }
             }
             int hour = at.atZone(zone).getHour();
@@ -219,8 +222,11 @@ public final class MediaSurface {
 
         private void screenshots(Map<YearMonth, Integer> cap) {
             RandomGenerator r = seed.stream("media-shots");
-            for (String id : travel.boardingPassTrips()) {
-                Trip trip = travel.trips().stream().filter(x -> x.id().equals(id)).findFirst().orElseThrow();
+            for (Trip trip : travel.trips()) {
+                // most flights leave a screenshot of their boarding pass; its own stream, so another trip never moves it
+                if (trip.mode() != TravelMode.PLANE || seed.stream("media.boardingpass." + trip.id()).nextInt(100) >= 70) {
+                    continue;
+                }
                 LocalDate day = LocalDate.ofInstant(trip.from(), zone).minusDays(1);
                 Instant at = day.atTime(19 + r.nextInt(4), r.nextInt(60), r.nextInt(60)).atZone(zone).toInstant();
                 YearMonth month = YearMonth.from(day);
@@ -229,7 +235,7 @@ public final class MediaSurface {
                 }
                 cap.merge(month, -1, Integer::sum);
                 Named named = timed(at, screenshotName);
-                items.add(shot(named, "boardingpass:" + id));
+                items.add(shot(named, "boardingpass:" + trip.id()));
             }
             for (Map.Entry<YearMonth, Integer> e : cap.entrySet()) {
                 Instant[] w = windows.get(e.getKey());

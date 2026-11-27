@@ -66,6 +66,19 @@ class ExaminerRulesTest {
         assertEquals(0, count(twoPlaces(45), "T-ONE-PLACE"));
     }
 
+    /** Two camera photos in Utrecht and Barcelona, some 1200 km apart, {@code minutes} apart. */
+    private static ContentPlan twoCountries(int minutes) {
+        return with(bare(), new MediaPlan(List.of(RuleFixtures.photo(52.09, 5.12, ago(9, 0)),
+                RuleFixtures.photo(41.39, 2.17, ago(9, 0).plus(Duration.ofMinutes(minutes)))), List.of()));
+    }
+
+    @Test
+    void aFlightExplainsAFarJump() {
+        assertEquals(0, count(twoCountries(300), "T-ONE-PLACE"));
+        // no flight does it in two hours, with the way to the airport and back
+        assertEquals(1, count(twoCountries(120), "T-ONE-PLACE"));
+    }
+
     @Test
     void sameLabelTwiceIsReported() {
         ContentPlan twice = with(bare(), people(List.of(contact("c1", "Sam Example", number(1), Relation.FRIEND),

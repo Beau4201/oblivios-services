@@ -34,6 +34,11 @@ public final class Availability {
         return event(t, e -> true).isEmpty();
     }
 
+    /** Whether nothing takes any part of the time from {@code from} up to {@code to}. */
+    public boolean free(Instant from, Instant to) {
+        return busy.stream().noneMatch(e -> e.start().isBefore(to) && e.end().isAfter(from));
+    }
+
     /** The place of what the persona does at {@code t}; home where nothing says another. */
     public String placeAt(Instant t) {
         return event(t, e -> true).map(Event::placeId).filter(id -> !id.isEmpty()).orElse(WorldBuilder.HOME);

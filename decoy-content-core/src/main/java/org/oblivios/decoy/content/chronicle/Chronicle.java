@@ -5,11 +5,13 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import org.oblivios.decoy.content.surface.Trip;
 
-/** What happens when, from the start of the phone to now, the earliest event first. */
-public record Chronicle(List<Event> events, Routine routine, Instant phoneStart, Instant now, ZoneId zone) {
+/** What happens when, from the start of the phone to now, the earliest event and trip first. */
+public record Chronicle(List<Event> events, Routine routine, List<Trip> trips, Instant phoneStart, Instant now, ZoneId zone) {
     public Chronicle {
         events = List.copyOf(events);
+        trips = List.copyOf(trips);
     }
 
     public Availability availability() {

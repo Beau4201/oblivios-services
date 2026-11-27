@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.oblivios.decoy.content.data;
 
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -76,6 +77,26 @@ public final class PlaceData {
                     Double.parseDouble(c[3]), Double.parseDouble(c[4])));
         });
         version = cityVersion + "; " + venueVersion;
+    }
+
+    /** A city a trip abroad can go to, with the time zone it lies in. */
+    public record Destination(String name, double lat, double lon, ZoneId zone) {}
+
+    /** {@code places/abroad.tsv}, read on first use: every country's cities of 100,000 inhabitants or more and its capital. */
+    private static final class Abroad {
+        static final Map<String, List<Destination>> BY_COUNTRY = new HashMap<>();
+        static final String VERSION = Tables.read("places/abroad.tsv", Tables.open("places/abroad.tsv"), 5,
+                c -> BY_COUNTRY.computeIfAbsent(c[0], k -> new ArrayList<>()).add(
+                        new Destination(c[1], Double.parseDouble(c[2]), Double.parseDouble(c[3]), ZoneId.of(c[4]))));
+    }
+
+    /** The destinations in a country; empty for a country the file does not know. */
+    public static List<Destination> abroad(String country) {
+        return List.copyOf(Abroad.BY_COUNTRY.getOrDefault(country, List.of()));
+    }
+
+    static String abroadVersion() {
+        return Abroad.VERSION;
     }
 
     /** Throws {@link IllegalArgumentException} for a country without place data: no other places stand in. */

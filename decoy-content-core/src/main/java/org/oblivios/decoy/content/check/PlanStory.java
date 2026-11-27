@@ -32,7 +32,7 @@ import org.oblivios.decoy.content.world.World;
 /**
  * What the origin checker knows of a plan beyond its views: the persona and its world, the chronicle, the places and
  * the spans away, the conversations with the reserve, and the style book. The closeness of a contact is still its order,
- * and places and spans come from the timeline and the travel plan.
+ * the places come from the timeline and the spans away from the travel plan, which holds the chronicle's trips.
  */
 public final class PlanStory {
     /** A person of the story; {@code closeness} 0 is the closest. */
@@ -70,7 +70,8 @@ public final class PlanStory {
         places = p.timeline().places();
         List<Span> spans = new ArrayList<>();
         for (Trip t : p.travel().trips()) {
-            spans.add(new Span(t.from(), t.to(), t.id(), t.places()));
+            spans.add(new Span(t.from(), t.to(), t.id(),
+                    t.places().stream().map(at -> new Place(at.name(), at.lat(), at.lon(), at.kind())).toList()));
         }
         away = List.copyOf(spans);
         Map<String, Person> people = new HashMap<>();

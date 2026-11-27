@@ -14,7 +14,6 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -28,8 +27,6 @@ import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.story.MonthCount;
-import org.oblivios.decoy.content.story.Place;
-import org.oblivios.decoy.content.story.PlaceKind;
 import org.oblivios.decoy.content.story.Timeline;
 import org.oblivios.decoy.content.story.VolumeCounts;
 import org.oblivios.decoy.content.story.VolumeModel;
@@ -41,7 +38,7 @@ class CalendarAndTravelTest {
         return Packs.forDevice("NL", ZoneId.of("Europe/Amsterdam"), Locale.ROOT).pack();
     }
 
-    private record Setup(Timeline timeline, People people, CalendarPlan calendar, TravelPlan travel) {}
+    private record Setup(Timeline timeline, People people, CalendarPlan calendar) {}
 
     private static Setup setup(long n) {
         Persona p = org.oblivios.decoy.content.TestSetup.derive(Seed.of(n, 1),
@@ -52,7 +49,7 @@ class CalendarAndTravelTest {
         }
         Timeline t = Timeline.generate(p, VolumeModel.fromCounts(new VolumeCounts(months), org.oblivios.decoy.content.Draws.of(Seed.of(n, 2))), nl(), NOW, org.oblivios.decoy.content.Draws.of(Seed.of(n, 3)));
         People people = PeopleSurface.generate(p, t, nl(), org.oblivios.decoy.content.Draws.of(Seed.of(n, 4)));
-        return new Setup(t, people, CalendarSurface.generate(people, t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(n, 5))), TravelSurface.generate(t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(n, 6))));
+        return new Setup(t, people, CalendarSurface.generate(people, t, nl(), LanguagePack.of("nl"), org.oblivios.decoy.content.Draws.of(Seed.of(n, 5))));
     }
 
     @Test
@@ -109,53 +106,6 @@ class CalendarAndTravelTest {
     }
 
     @Test
-    void tripPlacesHaveCoordinatesInCountryOrAbroad() {
-        for (long n = 0; n < 20; n++) {
-            Setup s = setup(n);
-            assertFalse(s.travel().trips().isEmpty());
-            for (Trip t : s.travel().trips()) {
-                assertFalse(t.places().isEmpty());
-                for (Place p : t.places()) {
-                    assertTrue(p.kind() == PlaceKind.TRAVEL);
-                    assertTrue(Math.abs(p.lat()) <= 90 && Math.abs(p.lon()) <= 180, "coordinates " + p);
-                    assertFalse(p.lat() == 0 && p.lon() == 0, "null island");
-                }
-            }
-        }
-    }
-
-    @Test
-    void boardingPassOnlyForFlightTrips() {
-        for (long n = 0; n < 30; n++) {
-            Setup s = setup(n);
-            for (String id : s.travel().boardingPassTrips()) {
-                Trip trip = s.travel().trips().stream().filter(t -> t.id().equals(id)).findFirst().orElseThrow();
-                assertTrue(trip.flight(), "boarding pass for a trip without a flight: " + id);
-            }
-        }
-    }
-
-    @Test
-    void tripsStayInsideTheStoryAndDoNotOverlap() {
-        for (long n = 0; n < 20; n++) {
-            Setup s = setup(n);
-            List<Trip> trips = new ArrayList<>(s.travel().trips());
-            trips.sort(Comparator.comparing(Trip::from));
-            for (int i = 0; i < trips.size(); i++) {
-                Trip t = trips.get(i);
-                assertTrue(t.from().isBefore(t.to()));
-                assertFalse(t.from().isBefore(s.timeline().phoneStart()), "trip before the phone start");
-                assertFalse(t.to().isAfter(s.timeline().now()), "trip after now");
-                long days = Duration.between(t.from(), t.to()).toDays();
-                assertTrue(days >= 1 && days <= 16, "trip of " + days + " days");
-                if (i > 0) {
-                    assertFalse(t.from().isBefore(trips.get(i - 1).to()), "overlapping trips");
-                }
-            }
-        }
-    }
-
-    @Test
     void upcomingEntriesExistWithinTheHorizon() {
         // a calendar with nothing ahead is a tell; ahead means appointments and holidays, never past the horizon
         for (long n = 0; n < 20; n++) {
@@ -196,6 +146,5 @@ class CalendarAndTravelTest {
         Setup a = setup(8);
         Setup b = setup(8);
         assertEquals(a.calendar(), b.calendar());
-        assertEquals(a.travel(), b.travel());
     }
 }

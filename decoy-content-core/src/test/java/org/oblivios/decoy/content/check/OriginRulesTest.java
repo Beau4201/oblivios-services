@@ -26,8 +26,6 @@ import org.oblivios.decoy.content.origin.Origin;
 import org.oblivios.decoy.content.origin.Sourced;
 import org.oblivios.decoy.content.persona.PersonaProfile.JobKind;
 import org.oblivios.decoy.content.plan.ContentPlan;
-import org.oblivios.decoy.content.story.Place;
-import org.oblivios.decoy.content.story.PlaceKind;
 import org.oblivios.decoy.content.surface.CalEvent;
 import org.oblivios.decoy.content.surface.CalendarPlan;
 import org.oblivios.decoy.content.surface.Call;
@@ -35,7 +33,6 @@ import org.oblivios.decoy.content.surface.CallType;
 import org.oblivios.decoy.content.surface.Contact;
 import org.oblivios.decoy.content.surface.Relation;
 import org.oblivios.decoy.content.surface.TravelPlan;
-import org.oblivios.decoy.content.surface.Trip;
 
 class OriginRulesTest {
     /** A test item that names an origin; no story of today holds one. */
@@ -145,10 +142,8 @@ class OriginRulesTest {
     @Test
     void onlineShopAsAPlaceIsReported() {
         String online = Checks.packOf(bare().persona()).onlineShops().get(0);
-        TravelPlan shop = new TravelPlan(List.of(new Trip("trip-1", List.of(new Place(online, 52.1, 5.1, PlaceKind.SHOP)), false, ago(40, 0),
-                ago(38, 0))), List.of());
-        TravelPlan market = new TravelPlan(List.of(new Trip("trip-1", List.of(new Place("Market Example", 52.1, 5.1, PlaceKind.SHOP)), false,
-                ago(40, 0), ago(38, 0))), List.of());
+        TravelPlan shop = RuleFixtures.shopTrip(online);
+        TravelPlan market = RuleFixtures.shopTrip("Market Example");
         // the shops of today's timeline are drawn from the pack's senders, so the base may hold an online one already
         int before = count(bare(), "S-PHYSICAL");
         assertEquals(before + 1, count(with(bare(), shop), "S-PHYSICAL"));

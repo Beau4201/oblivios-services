@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.oblivios.decoy.content.data;
 
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.oblivios.decoy.content.country.CountryPack;
@@ -39,6 +40,12 @@ public final class DataSet {
         PlaceData data = PlaceData.load(pack.code());
         versions.put("places/" + pack.code(), data.version());
         return data;
+    }
+
+    /** The destinations of another country than the set's; empty for one the data does not know. */
+    public List<PlaceData.Destination> abroad(String country) {
+        versions.put("places/abroad", PlaceData.abroadVersion());
+        return PlaceData.abroad(country);
     }
 
     public PhoneNumbers numbers() {

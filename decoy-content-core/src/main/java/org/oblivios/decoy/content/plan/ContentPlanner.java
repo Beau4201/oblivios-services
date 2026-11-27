@@ -47,7 +47,6 @@ import org.oblivios.decoy.content.surface.PeopleSurface;
 import org.oblivios.decoy.content.surface.SurfaceContext;
 import org.oblivios.decoy.content.surface.TracesSurface;
 import org.oblivios.decoy.content.surface.TravelPlan;
-import org.oblivios.decoy.content.surface.TravelSurface;
 import org.oblivios.decoy.content.surface.UsageSurface;
 import org.oblivios.decoy.content.surface.VaultSurface;
 import org.oblivios.decoy.content.world.World;
@@ -101,7 +100,7 @@ public final class ContentPlanner {
 
         LanguagePack lang = LanguagePack.of(persona.language());
         CalendarPlan calendar = CalendarSurface.generate(people, timeline, pack, lang, draws);
-        TravelPlan travel = TravelSurface.generate(timeline, pack, lang, draws);
+        TravelPlan travel = new TravelPlan(chronicle.trips());
         SurfaceContext ctx = new SurfaceContext(persona, timeline, people, pack, setup.apps(), setup.currentSsid(), now, draws);
         MediaPlan media = MediaSurface.generate(volume, timeline, travel, pack, setup.cam(), setup.chosen(), draws);
 
