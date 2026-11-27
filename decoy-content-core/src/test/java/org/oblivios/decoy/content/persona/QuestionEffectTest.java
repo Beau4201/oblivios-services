@@ -73,6 +73,15 @@ class QuestionEffectTest {
         }
     }
 
+    /** The calendar view reads the routine only once it is a view of the chronicle; until then the chronicle shows it. */
+    @Test
+    void theRoutineAnswersShapeTheChronicle() {
+        for (Question q : new Question[] {Question.WORK_PATTERN, Question.ACTIVITIES}) {
+            assertNotEquals(PlanHarness.plan(Profiles.full(), Seed.of(9, 9)).chronicle().events(),
+                    PlanHarness.plan(Profiles.alternative(q), Seed.of(9, 9)).chronicle().events(), q + " changes no event");
+        }
+    }
+
     @Test
     void everyQuestionDrivesItsViews() throws ReflectiveOperationException {
         for (Map.Entry<Question, Set<String>> row : DRIVES.entrySet()) {

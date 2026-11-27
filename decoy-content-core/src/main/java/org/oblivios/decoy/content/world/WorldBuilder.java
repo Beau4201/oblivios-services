@@ -47,7 +47,8 @@ import org.oblivios.decoy.content.world.Habits.LabelHabit;
  */
 public final class WorldBuilder {
     private static final String SELF = "self";
-    private static final String HOME = "home";
+    /** The id of the place where the persona lives; the first place of every world. */
+    public static final String HOME = "home";
     private static final String WORK = "work";
     private static final String FAMILY = "family";
     /** From this age a person has a phone of its own, [assumption]. */

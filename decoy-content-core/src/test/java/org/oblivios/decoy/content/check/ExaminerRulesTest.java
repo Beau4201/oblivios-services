@@ -34,6 +34,7 @@ import org.oblivios.decoy.content.surface.Call;
 import org.oblivios.decoy.content.surface.CallType;
 import org.oblivios.decoy.content.surface.Contact;
 import org.oblivios.decoy.content.surface.Cookie;
+import org.oblivios.decoy.content.surface.MediaPlan;
 import org.oblivios.decoy.content.surface.NetworkPlan;
 import org.oblivios.decoy.content.surface.People;
 import org.oblivios.decoy.content.surface.Relation;
@@ -47,6 +48,22 @@ class ExaminerRulesTest {
 
     private static List<Contact> one() {
         return List.of(contact("c1", "Sam Example", number(1), Relation.FRIEND));
+    }
+
+    /** Two camera photos in Utrecht and Rotterdam, about 48 km apart, {@code minutes} apart. */
+    private static ContentPlan twoPlaces(int minutes) {
+        return with(bare(), new MediaPlan(List.of(RuleFixtures.photo(52.09, 5.12, ago(9, 0)),
+                RuleFixtures.photo(51.92, 4.48, ago(9, 0).plus(Duration.ofMinutes(minutes)))), List.of()));
+    }
+
+    @Test
+    void twoPlacesTooFarApartIsReported() {
+        assertEquals(1, count(twoPlaces(10), "T-ONE-PLACE"));
+    }
+
+    @Test
+    void aJourneyThatFitsPasses() {
+        assertEquals(0, count(twoPlaces(45), "T-ONE-PLACE"));
     }
 
     @Test

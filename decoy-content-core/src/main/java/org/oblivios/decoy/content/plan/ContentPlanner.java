@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import org.oblivios.decoy.content.chronicle.Chronicle;
+import org.oblivios.decoy.content.chronicle.ChronicleBuilder;
 import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.Persona;
@@ -87,7 +89,8 @@ public final class ContentPlanner {
         data.numbers(); // records the version of the number formats the contacts are drawn from
         VolumeModel volume = VolumeModel.fromCounts(setup.counts(), draws);
         World world = WorldBuilder.build(persona, pack, data, draws);
-        Timeline timeline = Timeline.generate(persona, volume, world, now, draws);
+        Chronicle chronicle = ChronicleBuilder.frame(persona, world, data, volume, now, draws);
+        Timeline timeline = Timeline.of(chronicle, world, LanguagePack.of(persona.language()));
         People generated = PeopleSurface.generate(persona, world, timeline, pack, draws);
         StyleBook styles = Styles.book(persona, generated, draws);
         Picked picked = ConversationPicker.pick(persona, generated, styles, timeline, pack, pool, draws, rewriter, judge);
@@ -108,7 +111,7 @@ public final class ContentPlanner {
         warnings.addAll(picked.warnings());
         Map<String, String> versions = new TreeMap<>(data.versions());
         versions.put("pool", digest(pool));
-        return new ContentPlan(persona, world, timeline, people, calendar, travel, DeviceSurface.generate(ctx), NetworkSurface.generate(ctx),
+        return new ContentPlan(persona, world, chronicle, timeline, people, calendar, travel, DeviceSurface.generate(ctx), NetworkSurface.generate(ctx),
                 UsageSurface.generate(ctx), AppsSurface.generate(ctx), BrowserSurface.generate(ctx), VaultSurface.generate(ctx),
                 TracesSurface.generate(ctx), media, MailSurface.generate(persona, timeline, pack, setup.probe(), draws), styles,
                 conversations, picked.reserve(), warnings, versions, setup.simNumber());

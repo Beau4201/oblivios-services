@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -239,8 +240,9 @@ class PeopleSurfaceTest {
             Setup s = setup(n);
             ZoneId zone = s.persona().inputs().zone();
             for (Call c : s.people().calls()) {
-                int hour = c.at().atZone(zone).getHour();
-                assertTrue(hour >= 5 && hour < 24, "call at hour " + hour);
+                LocalTime at = c.at().atZone(zone).toLocalTime();
+                assertTrue(!at.isBefore(s.timeline().wakeTime()) && !at.isAfter(LocalTime.of(23, 31)),
+                        "call at " + at + ", waking " + s.timeline().wakeTime());
             }
         }
     }

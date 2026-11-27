@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.oblivios.decoy.content.story;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.random.RandomGenerator;
 import org.oblivios.decoy.content.Persona;
+import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Draws;
+import org.oblivios.decoy.content.chronicle.Chronicle;
+import org.oblivios.decoy.content.chronicle.ChronicleBuilder;
 import org.oblivios.decoy.content.country.CountryPack;
+import org.oblivios.decoy.content.country.Packs;
 import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.world.World;
@@ -48,11 +49,14 @@ public final class Timeline {
     }
 
     public static Timeline generate(Persona p, VolumeModel v, World world, Instant now, Draws s) {
-        RandomGenerator r = s.stream("timeline");
-        List<String> warnings = new ArrayList<>();
+        PersonaInputs in = p.inputs();
+        DataSet data = DataSet.of(Packs.forDevice(in.countryCode(), in.zone(), in.locale()).pack().code());
+        return of(ChronicleBuilder.frame(p, world, data, v, now, s), world, LanguagePack.of(p.language()));
+    }
 
-        // shortcut: the views know home, work, cafes and shops; the year of the story takes the other places (plan Task 10)
-        LanguagePack lang = LanguagePack.of(p.language());
+    /** What the views of today read of a chronicle: the places they know and the times of a working day. */
+    public static Timeline of(Chronicle c, World world, LanguagePack lang) {
+        // shortcut: the views know home, work, cafes and shops, until they read the chronicle (plan Task 22)
         List<Place> places = new ArrayList<>();
         for (WorldPlace at : world.places()) {
             PlaceKind kind = at.kind() == PlaceKind.SUPERMARKET ? PlaceKind.SHOP : at.kind();
@@ -66,16 +70,8 @@ public final class Timeline {
                 places.add(new Place(name, at.lat(), at.lon(), kind));
             }
         }
-
-        LocalTime wake = LocalTime.of(6, 0).plusMinutes(r.nextInt(151)); // 06:00..08:30
-        LocalTime sleep = LocalTime.of(22, 30).plusMinutes(r.nextInt(136)); // 22:30..00:45
-
-        Instant first = v.months().get(0).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant candidate = first.minus(Duration.ofDays(r.nextInt(29)));
-        Instant limit = now.minus(Duration.ofDays(180L + r.nextInt(91)));
-        Instant phoneStart = candidate.isBefore(limit) ? candidate : limit;
-
-        return new Timeline(places, wake, sleep, phoneStart, now, p.inputs().zone(), warnings);
+        return new Timeline(places, c.routine().wakeWorkday(), c.routine().sleepWorkday(), c.phoneStart(), c.now(), c.zone(),
+                List.of());
     }
 
     public List<Place> places() {

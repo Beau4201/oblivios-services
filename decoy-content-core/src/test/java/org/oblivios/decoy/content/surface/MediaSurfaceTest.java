@@ -130,13 +130,30 @@ class MediaSurfaceTest {
         for (long n = 0; n < 10; n++) {
             Setup s = setup(n);
             for (YearMonth m : s.volume().months()) {
-                long camera = s.plan().items().stream().filter(i -> isCamera(i) && monthOf(i).equals(m)).count();
+                assertCamera(s, m);
+                if (beforeThePhone(s, m)) {
+                    continue;
+                }
                 long saved = s.plan().items().stream().filter(i -> i.kind() == MediaKind.SAVED && monthOf(i).equals(m)).count();
                 long shots = s.plan().items().stream().filter(i -> i.kind() == MediaKind.SCREENSHOT && monthOf(i).equals(m)).count();
-                assertWithin(s.volume().targetCamera(m), camera, "camera " + m);
                 assertWithin(s.volume().targetSaved(m), saved, "saved " + m);
                 assertWithin(s.volume().targetScreenshots(m), shots, "screenshots " + m);
             }
+        }
+    }
+
+    /** A month the phone did not exist in, as one before the school holiday data for school children, has no media. */
+    private static boolean beforeThePhone(Setup s, YearMonth m) {
+        return !m.plusMonths(1).atDay(1).atStartOfDay(ZONE).toInstant().isAfter(s.timeline().phoneStart());
+    }
+
+    private static void assertCamera(Setup s, YearMonth m) {
+        long camera = s.plan().items().stream().filter(i -> isCamera(i) && monthOf(i).equals(m)).count();
+        if (beforeThePhone(s, m)) {
+            assertEquals(0, camera, "camera before the phone, " + m);
+            assertTrue(s.plan().warnings().stream().anyMatch(w -> w.contains(m.toString())), "no warning for " + m);
+        } else {
+            assertWithin(s.volume().targetCamera(m), camera, "camera " + m);
         }
     }
 
@@ -293,8 +310,7 @@ class MediaSurfaceTest {
         assertTrue(chosen.size() <= total, "chosen " + chosen.size() + " of capacity " + total);
         assertFalse(s.plan().warnings().isEmpty());
         for (YearMonth m : s.volume().months()) {
-            long camera = s.plan().items().stream().filter(i -> isCamera(i) && monthOf(i).equals(m)).count();
-            assertWithin(s.volume().targetCamera(m), camera, "camera " + m);
+            assertCamera(s, m);
         }
     }
 
@@ -347,13 +363,20 @@ class MediaSurfaceTest {
     @Test
     void generatedItemsStayInTheDayAndNamesAreUnique() {
         for (long n = 0; n < 10; n++) {
-            List<MediaItem> items = setup(n).plan().items();
+            Setup s = setup(n);
+            // the day of the views: from waking to the bedtime, or to midnight where that lies after it
+            LocalTime wake = s.timeline().wakeTime();
+            LocalTime bed = s.timeline().sleepTime();
+            LocalTime end = bed.isAfter(wake) ? bed.plusMinutes(1) : LocalTime.MAX;
             Set<String> names = new HashSet<>();
-            for (MediaItem i : items) {
+            for (MediaItem i : s.plan().items()) {
                 assertTrue(names.add(i.name()), "duplicate name " + i.name());
                 if (i.kind() == MediaKind.CAMERA_FILL || i.kind() == MediaKind.SAVED || i.kind() == MediaKind.SCREENSHOT) {
-                    int hour = i.taken().atZone(ZONE).getHour();
-                    assertFalse(hour >= 2 && hour < 5, i.name() + " taken at hour " + hour);
+                    if (i.sourceId().startsWith("boardingpass:")) {
+                        continue; // taken the evening before the flight, whatever the bedtime
+                    }
+                    LocalTime at = i.taken().atZone(ZONE).toLocalTime();
+                    assertTrue(!at.isBefore(wake) && at.isBefore(end), i.name() + " taken at " + at + ", day " + wake + " to " + end);
                 }
             }
         }

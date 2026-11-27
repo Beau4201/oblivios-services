@@ -25,7 +25,7 @@ import org.oblivios.decoy.content.pool.TestPool;
  */
 public class HarnessTest {
     public static final Set<String> MUST_PASS = union(ContentPlanValidator.RULES, Set.of("N-GENDER", "N-COHORT",
-            "N-FAMILY", "N-BACKGROUND", "N-LABEL", "N-DISTINCT", "S-PHYSICAL", "O-PRESUMES", "G-SPREAD"));
+            "N-FAMILY", "N-BACKGROUND", "N-LABEL", "N-DISTINCT", "S-PHYSICAL", "O-PRESUMES", "G-SPREAD", "T-DAY-KIND"));
 
     private static Set<String> union(Set<String> a, Set<String> b) {
         Set<String> out = new HashSet<>(a);
@@ -35,7 +35,7 @@ public class HarnessTest {
 
     /** Read from the first run on 2026-11-26: 32 plans built, 8 refused, each of these rules in at least one plan. */
     static final Set<String> KNOWN_FAILING = Set.of("C-CALLS", "C-CLOSENESS", "E-STALE", "F-PRESUMES", "G-CLOCK", "G-ORIGIN", "N-NUMBER",
-            "G-SIGNATURE", "H-HARDWARE", "M-RAW", "S-ONE", "T-AWAY");
+            "G-SIGNATURE", "H-HARDWARE", "M-RAW", "S-ONE", "T-AWAY", "T-ASLEEP", "T-ONE-PLACE");
     private static final List<PoolConversation> POOL = TestPool.random(5000, Seed.of(17, 17));
     private static Report forty;
 

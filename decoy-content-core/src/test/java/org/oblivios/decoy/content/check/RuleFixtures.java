@@ -19,6 +19,9 @@ import java.util.function.UnaryOperator;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.PersonaInputs;
 import org.oblivios.decoy.content.Seed;
+import org.oblivios.decoy.content.chronicle.Chronicle;
+import org.oblivios.decoy.content.chronicle.Event;
+import org.oblivios.decoy.content.chronicle.EventKind;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.PhoneNumber;
 import org.oblivios.decoy.content.data.NameData;
@@ -164,7 +167,7 @@ public final class RuleFixtures {
     /** The base plan with this persona and every view, the travel plan and the conversations empty. */
     public static ContentPlan bare(Persona persona) {
         ContentPlan b = base();
-        return new ContentPlan(persona, b.world(), b.timeline(), new People(b.people().ownNumber(), List.of(), List.of(), List.of(), List.of()),
+        return new ContentPlan(persona, b.world(), b.chronicle(), b.timeline(), new People(b.people().ownNumber(), List.of(), List.of(), List.of(), List.of()),
                 new CalendarPlan(List.of(), List.of(), List.of()), new TravelPlan(List.of(), List.of()), b.device(),
                 new NetworkPlan(List.of(), List.of()), new UsagePlan(List.of(), Map.of()), new AppsPlan(List.of()),
                 new BrowserPlan(List.of(), List.of(), List.of()), new VaultPlan(List.of()), new TracesPlan(List.of(), Map.of()),
@@ -191,6 +194,7 @@ public final class RuleFixtures {
         MediaPlan media = p.media();
         MailPlan mail = p.mail();
         StyleBook styles = p.styles();
+        Chronicle chronicle = p.chronicle();
         List<FilledConversation> conversations = p.conversations();
         for (Object part : parts) {
             if (part instanceof Persona x) {
@@ -217,6 +221,8 @@ public final class RuleFixtures {
                 media = x;
             } else if (part instanceof MailPlan x) {
                 mail = x;
+            } else if (part instanceof Chronicle x) {
+                chronicle = x;
             } else if (part instanceof StyleBook x) {
                 styles = x;
             } else if (part instanceof FilledConversation x) {
@@ -225,7 +231,7 @@ public final class RuleFixtures {
                 throw new IllegalArgumentException(part.getClass().getName());
             }
         }
-        return new ContentPlan(persona, world, p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
+        return new ContentPlan(persona, world, chronicle, p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
                 traces, media, mail, styles, conversations, p.reserve(), p.warnings(), p.dataVersions(),
                 p.simNumber());
     }
@@ -389,6 +395,24 @@ public final class RuleFixtures {
         CASES.put("G-SIGNATURE", () -> planted(List.of(sites(List.of("a.example", "b.example")), sites(List.of("a.example", "b.example")),
                 sites(List.of("a.example", "b.example")))));
         CASES.put("G-SPREAD", () -> planted(List.of(birthdays(1000))));
+        CASES.put("T-ASLEEP", () -> planted(with(bare(), chronicle(event("night", EventKind.SLEEP, ago(3, 0), ago(3, -8))),
+                people(List.of(contact("c1", "Sam Example", number(1), Relation.FRIEND)),
+                        List.of(new Call(number(1), ago(3, -4), 60, CallType.OUTGOING)), List.of()))));
+        // King's Day 2026, a Monday
+        CASES.put("T-DAY-KIND", () -> planted(with(bare(persona(b -> b.job(JobKind.OFFICE))), chronicle(event("work",
+                EventKind.WORK, Instant.parse("2026-04-27T07:00:00Z"), Instant.parse("2026-04-27T15:00:00Z"))))));
+        CASES.put("T-ONE-PLACE", () -> planted(with(bare(), new MediaPlan(List.of(photo(52.09, 5.12, ago(9, 0)),
+                photo(51.92, 4.48, ago(9, 0).plus(Duration.ofMinutes(10)))), List.of()))));
+    }
+
+    public static Event event(String id, EventKind kind, Instant start, Instant end) {
+        return new Event(id, kind, start, end, ZONE, "", List.of(), Event.Layer.ROUTINE, Set.of(), Map.of(), Origin.answer("JOB"));
+    }
+
+    /** The base plan's chronicle with these events and no other. */
+    public static Chronicle chronicle(Event... events) {
+        Chronicle b = base().chronicle();
+        return new Chronicle(List.of(events), b.routine(), b.phoneStart(), b.now(), b.zone());
     }
 
     /** {@code n} outgoing calls of {@code seconds} each to the number of index 1. */

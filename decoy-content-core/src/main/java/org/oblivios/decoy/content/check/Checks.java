@@ -42,7 +42,10 @@ import org.oblivios.decoy.content.check.rules.RUnrewritten;
 import org.oblivios.decoy.content.check.rules.RWifiPlace;
 import org.oblivios.decoy.content.check.rules.SOne;
 import org.oblivios.decoy.content.check.rules.SPhysical;
+import org.oblivios.decoy.content.check.rules.TAsleep;
 import org.oblivios.decoy.content.check.rules.TAway;
+import org.oblivios.decoy.content.check.rules.TDayKind;
+import org.oblivios.decoy.content.check.rules.TOnePlace;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.Packs;
 import org.oblivios.decoy.content.plan.ContentPlan;
@@ -55,8 +58,9 @@ import org.oblivios.decoy.content.plan.ContentPlan;
 public final class Checks {
     private static final List<ExaminerRule> EXAMINER = List.of(new NDistinct(), new FPresumes(), new SOne(), new MRaw(), new GClock(),
             new CCalls(), new EStale(), new HHardware(), new RSmsSender(), new RBirthday(), new RGroupMember(),
-            new NNumber());
-    private static final List<OriginRule> ORIGIN = List.of(new GOrigin(), new CCloseness(), new TAway(), new SPhysical(), new OPresumes(),
+            new NNumber(), new TOnePlace());
+    private static final List<OriginRule> ORIGIN = List.of(new GOrigin(), new CCloseness(), new TAway(), new TAsleep(), new TDayKind(),
+            new SPhysical(), new OPresumes(),
             new RPhotoPlace(), new RCallContact(), new RWifiPlace(), new RMailAge(), new RRequires(), new RUnrewritten(), new RFuture(),
             new RSlot(), new RRegister(), new NGender(), new NCohort(), new NFamily(), new NBackground(), new NLabel());
     private static final List<PopulationRule> POPULATION = List.of(new GSignature(), new GSpread());

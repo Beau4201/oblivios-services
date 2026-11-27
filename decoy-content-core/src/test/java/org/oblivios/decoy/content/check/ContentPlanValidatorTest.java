@@ -127,7 +127,7 @@ class ContentPlanValidatorTest {
 
     /** A copy of {@code p} with the given parts replaced; null keeps the original. */
     private static ContentPlan with(ContentPlan p, People people, CalendarPlan calendar, NetworkPlan network, MediaPlan media, MailPlan mail) {
-        return new ContentPlan(p.persona(), p.world(), p.timeline(), people != null ? people : p.people(), calendar != null ? calendar : p.calendar(),
+        return new ContentPlan(p.persona(), p.world(), p.chronicle(), p.timeline(), people != null ? people : p.people(), calendar != null ? calendar : p.calendar(),
                 p.travel(), p.device(), network != null ? network : p.network(), p.usage(), p.apps(), p.browser(), p.vault(), p.traces(),
                 media != null ? media : p.media(), mail != null ? mail : p.mail(), p.styles(), p.conversations(), p.reserve(), p.warnings(),
                 p.dataVersions(), p.simNumber());
@@ -284,7 +284,7 @@ class ContentPlanValidatorTest {
                 throw new IllegalArgumentException(part.getClass().getName());
             }
         }
-        return new ContentPlan(p.persona(), p.world(), p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
+        return new ContentPlan(p.persona(), p.world(), p.chronicle(), p.timeline(), people, calendar, travel, p.device(), network, usage, apps, browser, p.vault(),
                 traces, media, mail, p.styles(), p.conversations(), p.reserve(), p.warnings(), p.dataVersions(),
                 p.simNumber());
     }
@@ -365,7 +365,7 @@ class ContentPlanValidatorTest {
 
     /** A copy of {@code p} with other conversations, reserve and style book; null keeps the original. */
     private static ContentPlan withPool(ContentPlan p, List<FilledConversation> conversations, List<FilledConversation> reserve, StyleBook styles) {
-        return new ContentPlan(p.persona(), p.world(), p.timeline(), p.people(), p.calendar(), p.travel(), p.device(), p.network(), p.usage(), p.apps(),
+        return new ContentPlan(p.persona(), p.world(), p.chronicle(), p.timeline(), p.people(), p.calendar(), p.travel(), p.device(), p.network(), p.usage(), p.apps(),
                 p.browser(), p.vault(), p.traces(), p.media(), p.mail(), styles != null ? styles : p.styles(),
                 conversations != null ? conversations : p.conversations(), reserve != null ? reserve : p.reserve(), p.warnings(),
                 p.dataVersions(), p.simNumber());

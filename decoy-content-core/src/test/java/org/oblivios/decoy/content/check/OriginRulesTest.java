@@ -13,10 +13,15 @@ import static org.oblivios.decoy.content.check.RuleFixtures.planted;
 import static org.oblivios.decoy.content.check.RuleFixtures.trip;
 import static org.oblivios.decoy.content.check.RuleFixtures.with;
 
+import static org.oblivios.decoy.content.check.RuleFixtures.chronicle;
+import static org.oblivios.decoy.content.check.RuleFixtures.event;
+
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.oblivios.decoy.content.check.rules.GOrigin;
+import org.oblivios.decoy.content.chronicle.EventKind;
 import org.oblivios.decoy.content.origin.Origin;
 import org.oblivios.decoy.content.origin.Sourced;
 import org.oblivios.decoy.content.persona.PersonaProfile.JobKind;
@@ -38,6 +43,54 @@ class OriginRulesTest {
 
     private static int count(ContentPlan p, String id) {
         return planted(p).only(id).size();
+    }
+
+    /** A night from {@code from} to {@code to} and one outgoing call of the persona at {@code call}. */
+    private static ContentPlan night(String from, String to, String call) {
+        return with(bare(), chronicle(event("night", EventKind.SLEEP, Instant.parse(from), Instant.parse(to))),
+                people(List.of(), List.of(new Call(number(1), Instant.parse(call), 60, CallType.OUTGOING)), List.of()));
+    }
+
+    @Test
+    void callWhileAsleepIsReported() {
+        assertEquals(1, count(night("2026-11-20T22:00:00Z", "2026-11-21T06:00:00Z", "2026-11-21T02:00:00Z"), "T-ASLEEP"));
+    }
+
+    @Test
+    void callAtTheEdgeOfSleepPasses() {
+        assertEquals(0, count(night("2026-11-20T22:00:00Z", "2026-11-21T06:00:00Z", "2026-11-20T22:10:00Z"), "T-ASLEEP"));
+        assertEquals(0, count(night("2026-11-20T22:00:00Z", "2026-11-21T06:00:00Z", "2026-11-21T07:00:00Z"), "T-ASLEEP"));
+    }
+
+    /** An office persona, Monday to Friday, whose chronicle holds one event of {@code kind} on {@code day}. */
+    private static ContentPlan dayWith(EventKind kind, String day) {
+        return with(bare(persona(b -> b.job(JobKind.OFFICE))), chronicle(event("e", kind, Instant.parse(day + "T07:00:00Z"),
+                Instant.parse(day + "T15:00:00Z"))));
+    }
+
+    @Test
+    void workOnAPublicHolidayIsReported() {
+        assertEquals(1, count(dayWith(EventKind.WORK, "2026-04-27"), "T-DAY-KIND"));
+        assertEquals(0, count(dayWith(EventKind.WORK, "2026-04-28"), "T-DAY-KIND"));
+    }
+
+    @Test
+    void workOnADayWithoutWorkIsReported() {
+        assertEquals(1, count(dayWith(EventKind.WORK, "2026-11-21"), "T-DAY-KIND"));
+    }
+
+    @Test
+    void schoolInTheSummerHolidayIsReported() {
+        assertEquals(1, count(dayWith(EventKind.BRING_CHILD, "2026-07-27"), "T-DAY-KIND"));
+        assertEquals(0, count(dayWith(EventKind.BRING_CHILD, "2026-11-24"), "T-DAY-KIND"));
+    }
+
+    @Test
+    void workOnALeaveDayIsReported() {
+        Instant start = Instant.parse("2026-11-24T07:00:00Z");
+        Instant end = Instant.parse("2026-11-24T15:00:00Z");
+        assertEquals(1, count(with(bare(persona(b -> b.job(JobKind.OFFICE))),
+                chronicle(event("work", EventKind.WORK, start, end), event("leave", EventKind.LEAVE, start, end))), "T-DAY-KIND"));
     }
 
     @Test

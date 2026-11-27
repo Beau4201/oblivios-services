@@ -2,13 +2,22 @@
 package org.oblivios.decoy.content.check;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.oblivios.decoy.content.Persona;
+import org.oblivios.decoy.content.chronicle.Availability;
+import org.oblivios.decoy.content.chronicle.Chronicle;
+import org.oblivios.decoy.content.chronicle.Routine;
+import org.oblivios.decoy.content.chronicle.YearFrame;
+import org.oblivios.decoy.content.country.CountryPack;
+import org.oblivios.decoy.content.data.HolidayData;
+import org.oblivios.decoy.content.data.PlaceData;
 import org.oblivios.decoy.content.origin.Origin;
 import org.oblivios.decoy.content.persona.PersonaProfile.Gender;
 import org.oblivios.decoy.content.plan.ContentPlan;
@@ -47,8 +56,12 @@ public final class PlanStory {
     private final List<FilledConversation> conversations;
     private final List<FilledConversation> reserve;
     private final StyleBook styles;
+    private final Chronicle chronicle;
+    private final Availability availability;
 
     private PlanStory(ContentPlan p) {
+        chronicle = p.chronicle();
+        availability = chronicle.availability();
         persona = p.persona();
         world = p.world();
         zone = p.timeline().zone();
@@ -84,8 +97,34 @@ public final class PlanStory {
         return world;
     }
 
-    /** The entry or event an origin names; empty when the story holds none. Today only the world holds entries. */
+    public Chronicle chronicle() {
+        return chronicle;
+    }
+
+    public Routine routine() {
+        return chronicle.routine();
+    }
+
+    public Availability availability() {
+        return availability;
+    }
+
+    /** The holidays of the persona's country and region over the time of the chronicle. */
+    public YearFrame year() {
+        CountryPack pack = Checks.packOf(persona);
+        List<Instant> times = new ArrayList<>(List.of(phoneStart, now));
+        chronicle.events().forEach(e -> times.add(e.start()));
+        LocalDate from = LocalDate.ofInstant(times.stream().min(Comparator.naturalOrder()).orElseThrow(), zone);
+        LocalDate to = LocalDate.ofInstant(times.stream().max(Comparator.naturalOrder()).orElseThrow(), zone);
+        return YearFrame.of(pack, HolidayData.load(pack.code()),
+                PlaceData.require(pack.code(), persona.inputs().city()).schoolRegion(), from, to, persona.holidays());
+    }
+
+    /** The entry or event an origin names; empty when the story holds none. */
     public Optional<Object> resolve(Origin o) {
+        if (o.kind() == Origin.Kind.EVENT) {
+            return chronicle.event(o.id()).map(Object.class::cast);
+        }
         if (o.kind() != Origin.Kind.WORLD) {
             return Optional.empty();
         }
