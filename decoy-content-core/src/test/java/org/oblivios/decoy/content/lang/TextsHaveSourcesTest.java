@@ -39,7 +39,7 @@ class TextsHaveSourcesTest {
                 "calendar.lunch", "calendar.notes", "device.keyboard.layouts", "device.keyboard.words",
                 "device.name", "mail.closing", "mail.greeting", "place.cafe", "place.home",
                 "place.supermarket", "place.work", "presumes.CAR", "presumes.CAT", "presumes.DOG",
-                "presumes.SCHOOL_CHILDREN", "presumes.WORKS", "register.STREET.words", "sms.service.code",
+                "presumes.SCHOOL_CHILDREN", "presumes.WORKS", "sms.service.code",
                 "travel.centre", "travel.hotel", "travel.station", "wifi.guest"));
         for (String sender : List.of("BANK", "OPERATOR", "PARCEL", "SHOP", "GLOBAL")) {
             language.add("sms.service." + sender);
