@@ -30,9 +30,9 @@ import org.oblivios.decoy.content.surface.Trip;
 import org.oblivios.decoy.content.world.World;
 
 /**
- * What the origin checker knows of a plan beyond its views: the persona and its world, the places and the spans away,
- * the conversations with the reserve, and the style book. Today's plan has no chronicle, so the closeness of a contact
- * is its order, and places and spans come from the timeline and the travel plan.
+ * What the origin checker knows of a plan beyond its views: the persona and its world, the chronicle, the places and
+ * the spans away, the conversations with the reserve, and the style book. The closeness of a contact is still its order,
+ * and places and spans come from the timeline and the travel plan.
  */
 public final class PlanStory {
     /** A person of the story; {@code closeness} 0 is the closest. */
