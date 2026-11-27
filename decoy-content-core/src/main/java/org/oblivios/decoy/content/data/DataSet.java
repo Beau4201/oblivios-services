@@ -22,6 +22,11 @@ public final class DataSet {
         return new DataSet(Packs.load(country).orElseThrow(() -> new IllegalArgumentException("no data for country " + country)));
     }
 
+    /** The country pack of the set. */
+    public CountryPack pack() {
+        return pack;
+    }
+
     public NameData names(String background) {
         NameData data = NameData.load(background);
         versions.put("names/" + background, data.version());

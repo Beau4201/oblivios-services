@@ -38,8 +38,11 @@ import org.oblivios.decoy.content.surface.MediaPlan;
 import org.oblivios.decoy.content.surface.NetworkPlan;
 import org.oblivios.decoy.content.surface.People;
 import org.oblivios.decoy.content.surface.Relation;
+import org.oblivios.decoy.content.surface.SmsMessage;
 import org.oblivios.decoy.content.surface.SmsThread;
+import org.oblivios.decoy.content.surface.Visit;
 import org.oblivios.decoy.content.surface.Voicemail;
+import java.util.Locale;
 
 class ExaminerRulesTest {
     private static int count(ContentPlan p, String id) {
@@ -193,6 +196,37 @@ class ExaminerRulesTest {
     @Test
     void inventedOwnNumberIsReported() {
         assertEquals(1, numberReports(number(7), number(1)).size());
+    }
+
+    @Test
+    void aPhoneThatIsTooTidyIsReported() {
+        // no contact unused, and every entry with all its traces
+        assertEquals(2, count(RuleFixtures.tidy(20, 20, 20, 20), "G-TIDY"));
+    }
+
+    @Test
+    void aPhoneWithLooseEndsPasses() {
+        assertEquals(0, count(RuleFixtures.tidy(20, 17, 20, 6), "G-TIDY"));
+    }
+
+    @Test
+    void aPhoneWithTooFewItemsIsNotJudged() {
+        assertEquals(0, count(RuleFixtures.tidy(5, 5, 5, 5), "G-TIDY"));
+    }
+
+    @Test
+    void messagesWhoseCauseShowsNowhereAreReported() {
+        String name = RuleFixtures.sender(SenderKind.PARCEL);
+        List<SmsMessage> texts = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            texts.add(new SmsMessage(ago(3 + i, 0), true, "x", true, null));
+        }
+        People people = new People(bare().simNumber(), List.of(), List.of(),
+                List.of(new SmsThread(name, name, SenderKind.PARCEL, texts, List.of())), List.of());
+        assertEquals(1, count(with(bare(), people), "G-TIDY"));
+        String site = name.toLowerCase(Locale.ROOT).replace(" ", "") + ".nl";
+        BrowserPlan seen = new BrowserPlan(List.of(new Visit(site, "https://" + site + "/", ago(4, 0))), List.of(), List.of());
+        assertEquals(0, count(with(bare(), people, seen), "G-TIDY"));
     }
 
     @Test

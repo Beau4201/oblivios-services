@@ -88,7 +88,9 @@ public final class ContentPlanner {
         data.numbers(); // records the version of the number formats the contacts are drawn from
         VolumeModel volume = VolumeModel.fromCounts(setup.counts(), draws);
         World world = WorldBuilder.build(persona, pack, data, draws);
-        Chronicle chronicle = ChronicleBuilder.frame(persona, world, data, volume, now, draws);
+        // no conversation is placed in the chronicle yet (plan Task 26)
+        Chronicle chronicle = ChronicleBuilder.complete(ChronicleBuilder.frame(persona, world, data, volume, now, draws),
+                List.of(), world, data, draws);
         Timeline timeline = Timeline.of(chronicle, world, LanguagePack.of(persona.language()));
         People generated = PeopleSurface.generate(persona, world, timeline, pack, draws);
         StyleBook styles = Styles.book(persona, generated, draws);

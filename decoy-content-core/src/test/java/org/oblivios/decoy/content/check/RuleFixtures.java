@@ -22,6 +22,8 @@ import org.oblivios.decoy.content.Seed;
 import org.oblivios.decoy.content.chronicle.Chronicle;
 import org.oblivios.decoy.content.chronicle.Event;
 import org.oblivios.decoy.content.chronicle.EventKind;
+import org.oblivios.decoy.content.chronicle.Trace;
+import org.oblivios.decoy.content.surface.Note;
 import org.oblivios.decoy.content.country.CountryPack;
 import org.oblivios.decoy.content.country.PhoneNumber;
 import org.oblivios.decoy.content.data.NameData;
@@ -402,6 +404,8 @@ public final class RuleFixtures {
         // King's Day 2026, a Monday
         CASES.put("T-DAY-KIND", () -> planted(with(bare(persona(b -> b.job(JobKind.OFFICE))), chronicle(event("work",
                 EventKind.WORK, Instant.parse("2026-04-27T07:00:00Z"), Instant.parse("2026-04-27T15:00:00Z"))))));
+        CASES.put("S-CAUSE", () -> planted(serviceText(SenderKind.PARCEL, "x", ago(3, 0))));
+        CASES.put("G-TIDY", () -> planted(tidy(20, 20, 20, 20)));
         CASES.put("T-ONE-PLACE", () -> planted(with(bare(), new MediaPlan(List.of(photo(52.09, 5.12, ago(9, 0)),
                 photo(51.92, 4.48, ago(9, 0).plus(Duration.ofMinutes(10)))), List.of()))));
     }
@@ -411,6 +415,51 @@ public final class RuleFixtures {
     }
 
     /** The base plan's chronicle with these events and no other. */
+    /** The name of the first sender of this kind in the base persona's country. */
+    public static String sender(SenderKind kind) {
+        return Checks.packOf(base().persona()).senders(kind).get(0).name();
+    }
+
+    /** An event done at {@code at}, with its company and the traces it left. */
+    public static Event caused(String id, EventKind kind, Instant at, String company, Origin origin, Trace... traces) {
+        return new Event(id, kind, at, at, ZONE, "", List.of(), Event.Layer.SMALL, Set.of(traces), Map.of("company", company),
+                origin);
+    }
+
+    /** A plan with one incoming text of a service sender at {@code at}, over a chronicle of {@code story}. */
+    public static ContentPlan serviceText(SenderKind kind, String body, Instant at, Event... story) {
+        String name = sender(kind);
+        return with(bare(), chronicle(story), people(List.of(), List.of(),
+                List.of(new SmsThread(name, name, kind, List.of(new SmsMessage(at, true, body, true, null)), List.of()))));
+    }
+
+    /**
+     * A phone of {@code contacts} contacts of which {@code used} were called, and {@code events} calendar entries of
+     * which {@code full} left every trace: a photo at their start and their title in a note.
+     */
+    public static ContentPlan tidy(int contacts, int used, int events, int full) {
+        List<Contact> saved = new ArrayList<>();
+        List<Call> calls = new ArrayList<>();
+        for (int i = 0; i < contacts; i++) {
+            saved.add(contact("c" + i, "Name " + i, number(i), Relation.FRIEND));
+            if (i < used) {
+                calls.add(new Call(number(i), ago(2, i), 30, CallType.OUTGOING));
+            }
+        }
+        List<CalEvent> entries = new ArrayList<>();
+        List<Note> notes = new ArrayList<>();
+        List<MediaItem> photos = new ArrayList<>();
+        for (int i = 0; i < events; i++) {
+            entries.add(new CalEvent("Plan " + i, ago(30 + i, 0), false));
+            if (i < full) {
+                notes.add(new Note("Plan " + i, ago(31 + i, 0), false));
+                photos.add(photo(52.09, 5.12, ago(30 + i, 0).plus(Duration.ofMinutes(20))));
+            }
+        }
+        return with(bare(), people(saved, calls, List.of()), new CalendarPlan(entries, List.of(), notes),
+                new MediaPlan(photos, List.of()));
+    }
+
     public static Chronicle chronicle(Event... events) {
         Chronicle b = base().chronicle();
         return new Chronicle(List.of(events), b.routine(), List.of(), b.phoneStart(), b.now(), b.zone());

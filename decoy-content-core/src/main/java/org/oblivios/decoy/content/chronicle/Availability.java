@@ -18,7 +18,9 @@ public final class Availability {
     private final List<Event> busy;
 
     Availability(List<Event> events) {
-        busy = events.stream().filter(e -> !e.kind().marksDays()).sorted(Comparator.comparing(Event::start)).toList();
+        // an event that ends when it starts, as one done on the phone does, takes no time
+        busy = events.stream().filter(e -> !e.kind().marksDays() && e.end().isAfter(e.start()))
+                .sorted(Comparator.comparing(Event::start)).toList();
     }
 
     public Optional<Block> at(Instant t) {

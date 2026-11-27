@@ -10,10 +10,10 @@ import java.util.random.RandomGenerator;
  * the platform runtime (ART) may not have it; this class needs only {@code nextInt(int)}. Whether
  * {@code RandomGenerator} itself exists in the built tree's core library is read at Task 15 (the module build).
  */
-final class Shuffle {
+public final class Shuffle {
     private Shuffle() {}
 
-    static void inPlace(List<?> list, RandomGenerator r) {
+    public static void inPlace(List<?> list, RandomGenerator r) {
         for (int i = list.size() - 1; i > 0; i--) {
             Collections.swap(list, i, r.nextInt(i + 1));
         }

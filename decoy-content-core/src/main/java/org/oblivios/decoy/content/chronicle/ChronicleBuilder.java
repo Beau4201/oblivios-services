@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.random.RandomGenerator;
+import java.util.stream.Stream;
 import org.oblivios.decoy.content.Draws;
 import org.oblivios.decoy.content.Persona;
 import org.oblivios.decoy.content.PersonaInputs;
@@ -40,7 +41,8 @@ import org.oblivios.decoy.content.world.World;
 import org.oblivios.decoy.content.world.WorldBuilder;
 
 /**
- * The first three layers of the chronicle: the year, the routine with its exceptions, and the life events and trips.
+ * The chronicle: {@code frame} makes the year, the routine with its exceptions, and the life events and trips;
+ * {@code complete} adds the small events and the traces.
  * How much leave and how many sick days a person has, and how the nights of a trip are clipped by its journeys, is
  * {@code [assumption]}.
  */
@@ -151,6 +153,26 @@ public final class ChronicleBuilder {
                     Origin.event(travelled.get(i).id()), Event.Layer.LIFE);
         }
         return new Chronicle(events.sorted(), drawn.routine(), travelled, phoneStart, now, zone);
+    }
+
+    /**
+     * Layers 5 and 6 on a frame: the small events around the frame and the placed conversations, and then the traces of
+     * every event. An event that already has traces, as a conversation's does, keeps them.
+     */
+    public static Chronicle complete(Chronicle frame, List<Event> conversationEvents, World w, DataSet data, Draws d) {
+        Chronicle before = new Chronicle(sorted(Stream.concat(frame.events().stream(), conversationEvents.stream())),
+                frame.routine(), frame.trips(), frame.phoneStart(), frame.now(), frame.zone());
+        List<Event> small = SmallEvents.add(before, w, data.pack(), data.spreads(), d);
+        Stream<Event> all = Stream.concat(before.events().stream(), small.stream())
+                .map(e -> e.traces().isEmpty()
+                        ? new Event(e.id(), e.kind(), e.start(), e.end(), e.zone(), e.placeId(), e.people(), e.layer(),
+                                Traces.of(e, w.habits(), d.stream("trace." + e.id())), e.details(), e.origin())
+                        : e);
+        return new Chronicle(sorted(all), frame.routine(), frame.trips(), frame.phoneStart(), frame.now(), frame.zone());
+    }
+
+    private static List<Event> sorted(Stream<Event> events) {
+        return events.sorted(Comparator.comparing(Event::start).thenComparing(Event::id)).toList();
     }
 
     private static Optional<Trips.Planned> onTrip(List<Trips.Planned> trips, LocalDate day) {
@@ -327,7 +349,7 @@ public final class ChronicleBuilder {
         }
 
         List<Event> sorted() {
-            return out.stream().sorted(Comparator.comparing(Event::start).thenComparing(Event::id)).toList();
+            return ChronicleBuilder.sorted(out.stream());
         }
     }
 }

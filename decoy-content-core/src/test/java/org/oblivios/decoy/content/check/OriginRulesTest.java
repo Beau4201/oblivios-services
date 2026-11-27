@@ -15,13 +15,23 @@ import static org.oblivios.decoy.content.check.RuleFixtures.with;
 
 import static org.oblivios.decoy.content.check.RuleFixtures.chronicle;
 import static org.oblivios.decoy.content.check.RuleFixtures.event;
+import static org.oblivios.decoy.content.check.RuleFixtures.caused;
+import static org.oblivios.decoy.content.check.RuleFixtures.sender;
+import static org.oblivios.decoy.content.check.RuleFixtures.serviceText;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.oblivios.decoy.content.check.rules.GOrigin;
+import org.oblivios.decoy.content.chronicle.Event;
 import org.oblivios.decoy.content.chronicle.EventKind;
+import org.oblivios.decoy.content.chronicle.Trace;
+import org.oblivios.decoy.content.country.SenderKind;
+import org.oblivios.decoy.content.surface.MailMessage;
+import org.oblivios.decoy.content.surface.MailPlan;
 import org.oblivios.decoy.content.origin.Origin;
 import org.oblivios.decoy.content.origin.Sourced;
 import org.oblivios.decoy.content.persona.PersonaProfile.JobKind;
@@ -88,6 +98,50 @@ class OriginRulesTest {
         Instant end = Instant.parse("2026-11-24T15:00:00Z");
         assertEquals(1, count(with(bare(persona(b -> b.job(JobKind.OFFICE))),
                 chronicle(event("work", EventKind.WORK, start, end), event("leave", EventKind.LEAVE, start, end))), "T-DAY-KIND"));
+    }
+
+    @Test
+    void aParcelTextWithoutADeliveryIsReported() {
+        Instant at = ago(3, 0);
+        String carrier = sender(SenderKind.PARCEL);
+        assertEquals(1, count(serviceText(SenderKind.PARCEL, "x", at), "S-CAUSE"));
+        Event order = caused("order", EventKind.ORDER, at.minus(Duration.ofDays(3)), sender(SenderKind.SHOP),
+                Origin.world("self"), Trace.MAIL);
+        Event delivery = caused("delivery", EventKind.DELIVERY, at.plus(Duration.ofHours(4)), carrier, Origin.event("order"),
+                Trace.PARCEL_SMS);
+        assertEquals(0, count(serviceText(SenderKind.PARCEL, "x", at, order, delivery), "S-CAUSE"));
+    }
+
+    @Test
+    void aCodeWithoutALogInIsReported() {
+        Instant at = ago(3, 0);
+        assertEquals(1, count(serviceText(SenderKind.BANK, "x 123456 y", at), "S-CAUSE"));
+        assertEquals(0, count(serviceText(SenderKind.BANK, "x y", at), "S-CAUSE"));
+        Event login = caused("login", EventKind.LOGIN, at.minusSeconds(60), sender(SenderKind.BANK), Origin.world("self"),
+                Trace.CODE_SMS);
+        assertEquals(0, count(serviceText(SenderKind.BANK, "x 123456 y", at, login), "S-CAUSE"));
+    }
+
+    @Test
+    void aReceiptWithoutAPurchaseIsReported() {
+        Instant at = ago(3, 0);
+        String shop = sender(SenderKind.SHOP);
+        MailPlan mail = new MailPlan(List.of(new MailMessage(shop, "s", "b", at)), Optional.empty());
+        assertEquals(1, count(with(bare(), chronicle(), mail), "S-CAUSE"));
+        Event order = caused("order", EventKind.ORDER, at.minusSeconds(90), shop, Origin.world("self"), Trace.MAIL);
+        assertEquals(0, count(with(bare(), chronicle(order), mail), "S-CAUSE"));
+    }
+
+    /** The story itself is judged too: a trace that only another kind of event, or its cause, can leave. */
+    @Test
+    void aTraceWithoutItsCauseIsReported() {
+        Origin self = Origin.world("self");
+        for (Event wrong : List.of(caused("a", EventKind.PAYMENT, ago(3, 0), "x", self, Trace.PARCEL_SMS),
+                caused("b", EventKind.DELIVERY, ago(3, 0), "x", self, Trace.PARCEL_SMS),
+                caused("c", EventKind.ORDER, ago(3, 0), "x", self, Trace.CODE_SMS),
+                caused("d", EventKind.PAYMENT, ago(3, 0), "x", self, Trace.PAYMENT_SMS))) {
+            assertEquals(1, count(with(bare(), chronicle(wrong)), "S-CAUSE"), wrong.toString());
+        }
     }
 
     @Test
