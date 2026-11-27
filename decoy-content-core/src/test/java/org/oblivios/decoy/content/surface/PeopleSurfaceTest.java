@@ -2,6 +2,7 @@
 package org.oblivios.decoy.content.surface;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -374,16 +375,10 @@ class PeopleSurfaceTest {
     }
 
     @Test
-    void familyRelationsGetTheFamilyGroup() {
-        List<String> groups = LanguagePack.of("nl").list("contact.groups");
-        Set<Relation> family = Set.of(Relation.PARTNER, Relation.PARENT, Relation.STEP_PARENT, Relation.GRANDPARENT, Relation.SIBLING,
-                Relation.CHILD, Relation.IN_LAW, Relation.RELATIVE);
-        Set<Relation> friends = Set.of(Relation.BEST_FRIEND, Relation.FRIEND, Relation.OLD_FRIEND, Relation.HOUSEMATE);
-        Set<Relation> work = Set.of(Relation.COLLEAGUE, Relation.MANAGER, Relation.REPORT, Relation.CLIENT);
+    void noContactHasAGroupUntilASourceNamesThem() {
         for (long n = 0; n < 10; n++) {
             for (Contact c : setup(n).people().contacts()) {
-                int want = family.contains(c.relation()) ? 0 : friends.contains(c.relation()) ? 1 : work.contains(c.relation()) ? 2 : 3;
-                assertEquals(groups.get(want), c.group(), c.relation().name());
+                assertNull(c.group(), c.relation().name());
             }
         }
     }

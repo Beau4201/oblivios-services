@@ -23,6 +23,7 @@ import org.oblivios.decoy.content.country.CountryPack;
  */
 public final class LanguagePack {
     private static final String DIR = "/org/oblivios/decoy/content/data/lang/";
+    private static final String TEXT_DIR = "/org/oblivios/decoy/content/data/text/";
     private static final Map<String, LanguagePack> CACHE = new ConcurrentHashMap<>();
     private static final Set<String> AVAILABLE = readAvailable();
 
@@ -40,7 +41,29 @@ public final class LanguagePack {
         if (!AVAILABLE.contains(language)) {
             throw new IllegalArgumentException("no language data for " + (language.isEmpty() && tag != null ? tag.trim() : language));
         }
-        return CACHE.computeIfAbsent(language, l -> new LanguagePack(l, read(DIR + l + ".properties")));
+        return CACHE.computeIfAbsent(language, l -> new LanguagePack(l, readAll(l)));
+    }
+
+    /** The language file and the files a tool wrote from the sources ({@code text/<tag>/<kind>.properties}). */
+    private static Properties readAll(String language) {
+        Properties out = read(DIR + language + ".properties");
+        String texts = TEXT_DIR + language + "/";
+        for (String kind : read(texts + "index.properties").getProperty("kinds", "").split("\\|")) {
+            merge(out, read(texts + kind + ".properties"), "text/" + language + "/" + kind + ".properties");
+        }
+        return out;
+    }
+
+    static void merge(Properties into, Properties add, String file) {
+        for (String key : add.stringPropertyNames()) {
+            if (into.put(key, add.getProperty(key)) != null) {
+                throw new IllegalStateException(file + ": the key " + key + " is in two files");
+            }
+        }
+    }
+
+    Set<String> keys() {
+        return values.stringPropertyNames();
     }
 
     /**

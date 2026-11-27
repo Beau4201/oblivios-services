@@ -41,14 +41,23 @@ class CodeHoldsNoLanguageTest {
         return out;
     }
 
-    private static Set<String> valueWords(String tag) throws IOException {
-        try (InputStream in = getResource("/org/oblivios/decoy/content/data/lang/" + tag + ".properties")) {
+    private static Properties read(String path) throws IOException {
+        try (InputStream in = getResource("/org/oblivios/decoy/content/data/" + path)) {
             Properties p = new Properties();
             p.load(new InputStreamReader(in, StandardCharsets.UTF_8));
-            Set<String> out = new HashSet<>();
-            p.stringPropertyNames().forEach(k -> out.addAll(words(p.getProperty(k))));
-            return out;
+            return p;
         }
+    }
+
+    /** The words of a language's hand-written file and of the files a tool wrote for it. */
+    private static Set<String> valueWords(String tag) throws IOException {
+        List<Properties> files = new ArrayList<>(List.of(read("lang/" + tag + ".properties")));
+        for (String kind : read("text/" + tag + "/index.properties").getProperty("kinds").split("\\|")) {
+            files.add(read("text/" + tag + "/" + kind + ".properties"));
+        }
+        Set<String> out = new HashSet<>();
+        files.forEach(p -> p.stringPropertyNames().forEach(k -> out.addAll(words(p.getProperty(k)))));
+        return out;
     }
 
     private static InputStream getResource(String path) {

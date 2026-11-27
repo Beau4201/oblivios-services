@@ -100,6 +100,23 @@ class LanguagePackTest {
     }
 
     @Test
+    void aKeyInTwoFilesIsRefused() {
+        Properties into = new Properties();
+        into.setProperty("weekdays", "a");
+        Properties add = new Properties();
+        add.setProperty("weekdays", "b");
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> LanguagePack.merge(into, add, "text/en/weekdays.properties"));
+        assertEquals("text/en/weekdays.properties: the key weekdays is in two files", e.getMessage());
+    }
+
+    @Test
+    void everyLanguageHasTheSameKeys() {
+        assertEquals(LanguagePack.of("nl").keys(), LanguagePack.of("en").keys());
+        assertTrue(LanguagePack.of("nl").keys().containsAll(Set.of("weekdays", "stopwords")));
+    }
+
+    @Test
     void missingKeyThrows() {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> LanguagePack.of("en").text("no.such.key"));
         assertTrue(e.getMessage().contains("no.such.key"), e.getMessage());

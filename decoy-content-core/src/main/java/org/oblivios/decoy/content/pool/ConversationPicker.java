@@ -491,7 +491,7 @@ public final class ConversationPicker {
             Relation r = c.relation();
             return switch (kind) {
                 case HOUSEHOLD -> r == Relation.PARTNER || r == Relation.CHILD || r == Relation.HOUSEMATE;
-                case FAMILY -> r.groupIndex() == 0;
+                case FAMILY -> r.isFamily();
                 case SIBLINGS -> r == Relation.SIBLING;
                 case FRIENDS -> r == Relation.FRIEND || r == Relation.BEST_FRIEND;
                 case OLD_FRIENDS -> FRIENDS.contains(r);
@@ -503,7 +503,7 @@ public final class ConversationPicker {
                 case SPORT_TEAM -> r == Relation.TEAMMATE;
                 case HOBBY_CLUB, GAMING -> FRIENDS.contains(r) && HOBBY.contains(c.origin());
                 case NEIGHBOURHOOD -> r == Relation.NEIGHBOUR;
-                case TRIP, EVENT, MOVING, FUNERAL -> FRIENDS.contains(r) || r.groupIndex() == 0;
+                case TRIP, EVENT, MOVING, FUNERAL -> FRIENDS.contains(r) || r.isFamily();
             };
         }
     }

@@ -37,7 +37,6 @@ public final class PeopleSurface {
         ZoneId zone = p.inputs().zone();
         LanguagePack lang = LanguagePack.of(p.language());
         LanguagePack service = LanguagePack.forService(c, lang.tag());
-        List<String> groupNames = lang.list("contact.groups");
         Set<String> used = new HashSet<>();
         String own = freshNumber(phones, r, used);
 
@@ -49,7 +48,6 @@ public final class PeopleSurface {
         String[] names = new String[count];
         String[] numbers = new String[count];
         boolean[] favourite = new boolean[count];
-        String[] groups = new String[count];
         LocalDate[] birthdays = new LocalDate[count];
         PhotoKind[] photos = new PhotoKind[count];
         int favourites = r.nextInt(7);
@@ -62,7 +60,6 @@ public final class PeopleSurface {
             names[i] = r.nextInt(100) < 25 ? given : given + " " + nameData.family(m.gender(), r);
             numbers[i] = freshNumber(phones, r, used);
             favourite[i] = i < favourites;
-            groups[i] = groupNames.get(m.relation().groupIndex());
             birthdays[i] = r.nextInt(100) < 40 ? LocalDate.of(m.birthYear(), 1 + r.nextInt(12), 1 + r.nextInt(28)) : null;
             photos[i] = r.nextInt(100) < 15 ? PhotoKind.INITIALS : PhotoKind.NONE;
         }
@@ -110,7 +107,7 @@ public final class PeopleSurface {
         List<Contact> contacts = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             Circle.Member m = circle.get(i);
-            contacts.add(new Contact(ids[i], names[i], numbers[i], favourite[i], groups[i], birthdays[i], lastCall.get(numbers[i]), photos[i],
+            contacts.add(new Contact(ids[i], names[i], numbers[i], favourite[i], null, birthdays[i], lastCall.get(numbers[i]), photos[i],
                     m.relation(), m.birthYear(), m.gender(), m.origin()));
         }
         return new People(own, contacts, calls, threads, voicemails);
