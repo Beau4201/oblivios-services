@@ -37,7 +37,7 @@ class TextsHaveSourcesTest {
         Set<String> out = new TreeSet<>();
         List<String> language = new ArrayList<>(List.of("browser.paths", "calendar.appointments", "calendar.birthday",
                 "calendar.lunch", "calendar.notes", "device.keyboard.layouts", "device.keyboard.words",
-                "device.name", "holiday.generic", "mail.closing", "mail.greeting", "place.cafe", "place.home",
+                "device.name", "mail.closing", "mail.greeting", "place.cafe", "place.home",
                 "place.supermarket", "place.work", "presumes.CAR", "presumes.CAT", "presumes.DOG",
                 "presumes.SCHOOL_CHILDREN", "presumes.WORKS", "register.STREET.words", "sms.service.code",
                 "travel.centre", "travel.hotel", "travel.station", "wifi.guest"));
@@ -52,7 +52,7 @@ class TextsHaveSourcesTest {
             language.forEach(k -> out.add("lang/" + tag + ".properties#" + k));
         }
         for (String k : List.of("senders.BANK", "senders.PARCEL", "senders.OPERATOR", "senders.SHOP",
-                "senders.SHOP.online", "supermarkets", "holidays", "wifi", "amount", "mms.groups", "sites.LOCAL",
+                "senders.SHOP.online", "supermarkets", "wifi", "amount", "mms.groups", "sites.LOCAL",
                 "trips.domestic")) {
             out.add("country/NL.properties#" + k);
         }

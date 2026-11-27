@@ -85,7 +85,8 @@ class CalendarAndTravelTest {
                 }
                 boolean found = s.calendar().events().stream().anyMatch(e -> !e.yearly()
                         && e.start().equals(h.atStartOfDay(ZoneOffset.UTC).toInstant())
-                        && e.title().equals(nl().holidayName(h).orElseThrow()));
+                        && e.title().equals(org.oblivios.decoy.content.lang.LanguagePack.of("nl")
+                                .text(nl().holidayKey(h).orElseThrow())));
                 assertTrue(found, "no event for the holiday " + h);
             }
         }

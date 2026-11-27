@@ -31,10 +31,10 @@ public final class CalendarSurface {
 
     private CalendarSurface() {}
 
-    /** {@code lang} is the persona's language; a holiday without a name in the pack gets the generic title of the country's language. */
+    /** {@code lang} is the persona's language; a holiday without a sourced name in the country's language gets no entry. */
     public static CalendarPlan generate(People people, Timeline t, CountryPack c, LanguagePack lang, Draws s) {
         RandomGenerator r = s.stream("calendar");
-        String holiday = LanguagePack.forService(c, lang.tag()).text("holiday.generic");
+        LanguagePack names = LanguagePack.forService(c, lang.tag());
         ZoneId zone = t.zone();
         LocalDate nowDate = LocalDate.ofInstant(t.now(), ZoneOffset.UTC);
         LocalDate startDate = LocalDate.ofInstant(t.phoneStart(), zone);
@@ -49,8 +49,9 @@ public final class CalendarSurface {
         LocalDate horizonDate = nowDate.plusDays(HORIZON_DAYS);
         for (int year = startDate.getYear(); year <= horizonDate.getYear(); year++) {
             for (LocalDate h : c.publicHolidays(year)) {
-                if (!h.isBefore(startDate) && !h.isAfter(horizonDate)) {
-                    events.add(new CalEvent(c.holidayName(h).orElse(holiday), h.atStartOfDay(ZoneOffset.UTC).toInstant(), false));
+                String key = c.holidayKey(h).orElseThrow();
+                if (!h.isBefore(startDate) && !h.isAfter(horizonDate) && names.has(key)) {
+                    events.add(new CalEvent(names.text(key), h.atStartOfDay(ZoneOffset.UTC).toInstant(), false));
                 }
             }
         }

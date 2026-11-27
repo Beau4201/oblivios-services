@@ -190,10 +190,10 @@ public final class DataPack implements CountryPack {
     }
 
     @Override
-    public Optional<String> holidayName(LocalDate date) {
+    public Optional<String> holidayKey(LocalDate date) {
         for (HolidayRule h : holidays) {
-            if (h.on(date.getYear()).equals(date) && !h.name().isEmpty()) {
-                return Optional.of(h.name());
+            if (h.on(date.getYear()).equals(date)) {
+                return Optional.of(h.key());
             }
         }
         return Optional.empty();

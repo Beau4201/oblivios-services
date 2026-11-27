@@ -5,20 +5,24 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 
 /**
- * One public holiday of a country pack, parsed from a rule of its data file: {@code fixed MM-DD <name>},
- * {@code easter <offset> <name>} (days from Easter Sunday) or {@code fixed-sunday-back MM-DD <name>} (a fixed date
- * that moves to the Saturday before when it falls on a Sunday). The name may be empty.
+ * One public holiday of a country pack, parsed from a rule of its data file: {@code fixed MM-DD},
+ * {@code easter <offset>} (days from Easter Sunday) or {@code fixed-sunday-back MM-DD} (a fixed date that moves to
+ * the Saturday before when it falls on a Sunday). A rule carries no name: the language files give it by {@link #key}.
  */
-public record HolidayRule(Kind kind, int month, int day, int offset, String name) {
+public record HolidayRule(Kind kind, int month, int day, int offset) {
 
     public enum Kind { FIXED, EASTER, FIXED_SUNDAY_BACK }
 
+    /** The key of the holiday's name: {@code holiday.MM-DD}, or {@code holiday.easter.<offset>}. */
+    public String key() {
+        return kind == Kind.EASTER ? "holiday.easter." + offset : String.format("holiday.%02d-%02d", month, day);
+    }
+
     public static HolidayRule parse(String rule) {
-        String[] parts = rule.trim().split("\\s+", 3);
-        if (parts.length < 2) {
-            throw new IllegalStateException("holiday rule without a date: '" + rule + "'");
+        String[] parts = rule.trim().split("\\s+");
+        if (parts.length != 2) {
+            throw new IllegalStateException("holiday rule is not a kind and a date: '" + rule + "'");
         }
-        String name = parts.length == 3 ? parts[2].trim() : "";
         try {
             switch (parts[0]) {
                 case "fixed", "fixed-sunday-back" -> {
@@ -30,10 +34,10 @@ public record HolidayRule(Kind kind, int month, int day, int offset, String name
                     int day = Integer.parseInt(md[1]);
                     LocalDate.of(2000, month, day); // a leap year: validates the day of the month
                     Kind k = parts[0].equals("fixed") ? Kind.FIXED : Kind.FIXED_SUNDAY_BACK;
-                    return new HolidayRule(k, month, day, 0, name);
+                    return new HolidayRule(k, month, day, 0);
                 }
                 case "easter" -> {
-                    return new HolidayRule(Kind.EASTER, 0, 0, Integer.parseInt(parts[1]), name);
+                    return new HolidayRule(Kind.EASTER, 0, 0, Integer.parseInt(parts[1]));
                 }
                 default -> throw new IllegalStateException("unknown holiday rule '" + parts[0] + "' in '" + rule + "'");
             }

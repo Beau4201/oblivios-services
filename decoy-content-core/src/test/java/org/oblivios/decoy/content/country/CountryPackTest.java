@@ -109,9 +109,18 @@ class CountryPackTest {
     }
 
     @Test
-    void holidayNameIsEmptyForAnOrdinaryDay() {
-        assertTrue(nl().holidayName(LocalDate.of(2026, 3, 10)).isEmpty());
-        assertTrue(nl().holidayName(LocalDate.of(2026, 4, 27)).isPresent());
+    void aHolidayHasTheKeyOfItsDateRule() {
+        assertTrue(nl().holidayKey(LocalDate.of(2026, 3, 10)).isEmpty());
+        assertEquals("holiday.04-27", nl().holidayKey(LocalDate.of(2025, 4, 26)).orElseThrow(), "moved off the Sunday");
+        assertEquals("holiday.easter.1", nl().holidayKey(LocalDate.of(2026, 4, 6)).orElseThrow());
+    }
+
+    @Test
+    void everyHolidayOfThePackHasANameFromItsSourceInTheCountrysLanguage() {
+        for (LocalDate h : nl().publicHolidays(2026)) {
+            String key = nl().holidayKey(h).orElseThrow();
+            assertTrue(org.oblivios.decoy.content.lang.LanguagePack.of("nl").has(key), key);
+        }
     }
 
     @Test

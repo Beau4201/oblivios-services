@@ -31,8 +31,8 @@ public interface CountryPack {
 
     List<LocalDate> publicHolidays(int year);
 
-    /** The local name of a public holiday of {@link #publicHolidays}; empty for an ordinary day or a holiday without a name. */
-    Optional<String> holidayName(LocalDate date);
+    /** The key of the name of a public holiday of {@link #publicHolidays}; empty for an ordinary day. */
+    Optional<String> holidayKey(LocalDate date);
 
     /** Templates of home Wi-Fi names; a {@code #} stands for one random digit. */
     List<String> homeWifiPatterns();

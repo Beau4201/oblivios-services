@@ -62,10 +62,6 @@ public final class LanguagePack {
         }
     }
 
-    Set<String> keys() {
-        return values.stringPropertyNames();
-    }
-
     /**
      * The language of the texts a sender of the country writes (service SMS, mail): the country's language, and the
      * persona's language when the country pack has none.

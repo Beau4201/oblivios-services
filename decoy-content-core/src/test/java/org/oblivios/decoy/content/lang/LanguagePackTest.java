@@ -111,9 +111,10 @@ class LanguagePackTest {
     }
 
     @Test
-    void everyLanguageHasTheSameKeys() {
-        assertEquals(LanguagePack.of("nl").keys(), LanguagePack.of("en").keys());
-        assertTrue(LanguagePack.of("nl").keys().containsAll(Set.of("weekdays", "stopwords")));
+    void everyLanguageHasItsWeekdaysAndStopWords() {
+        for (String tag : LanguagePack.available()) {
+            assertTrue(LanguagePack.of(tag).has("weekdays") && LanguagePack.of(tag).has("stopwords"), tag);
+        }
     }
 
     @Test
