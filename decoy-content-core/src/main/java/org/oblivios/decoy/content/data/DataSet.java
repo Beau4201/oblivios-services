@@ -47,6 +47,12 @@ public final class DataSet {
         return data;
     }
 
+    public Spreads spreads() {
+        Spreads data = Spreads.load(pack.code());
+        versions.put("spreads/" + pack.code(), data.version());
+        return data;
+    }
+
     public PopulationData population() {
         PopulationData data = PopulationData.load(pack.code());
         versions.put("population/" + pack.code(), data.version());

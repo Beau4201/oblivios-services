@@ -455,7 +455,10 @@ class PersonaProfileTest {
             assertEquals(a.pets(), b.pets());
             assertEquals(a.circle(), b.circle());
             assertEquals(a.texting(), b.texting());
-            assertEquals(a.friendGroups(), b.friendGroups());
+            // the job is drawn by age and sex and the friend groups follow the job: with the job given, they stay
+            Persona c = derive(n, with(x -> x.job(a.job())));
+            Persona d = derive(n, with(x -> x.job(a.job()).gender(a.gender() == Gender.FEMALE ? Gender.MALE : Gender.FEMALE)));
+            assertEquals(c.friendGroups(), d.friendGroups(), "seed " + n);
         }
     }
 

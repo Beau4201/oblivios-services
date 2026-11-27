@@ -8,6 +8,7 @@ import java.time.Period;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +22,7 @@ import org.oblivios.decoy.content.data.CityRef;
 import org.oblivios.decoy.content.data.DataSet;
 import org.oblivios.decoy.content.data.NameData;
 import org.oblivios.decoy.content.data.PlaceData;
+import org.oblivios.decoy.content.data.Spreads;
 import org.oblivios.decoy.content.lang.LanguagePack;
 import org.oblivios.decoy.content.persona.ActivityAnswer;
 import org.oblivios.decoy.content.persona.ChildAnswer;
@@ -122,25 +124,31 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         CityRef city = PlaceData.require(pack.code(), in.city());
         data.places(); // records the version of the places the city was read from
         check(p, today, pack);
+        Spreads spreads = data.spreads();
 
-        int birthYear = p.birthYear() != null ? p.birthYear() : drawBirthYear(d.stream("persona.birthYear"), p, today.getYear());
+        Gender gender = p.gender() != null ? p.gender() : drawGender(d.stream("persona.gender"));
+        int birthYear = p.birthYear() != null ? p.birthYear()
+                : drawBirthYear(d.stream("persona.birthYear"), p, today.getYear(), spreads);
         LocalDate birthDate = drawBirthDate(d.stream("persona.birthDate"), p, birthYear, today);
         int age = Period.between(birthDate, today).getYears();
-        JobKind job = p.job() != null ? p.job() : drawJob(d.stream("persona.job"), age);
+        JobKind job = p.job() != null ? p.job()
+                : pick(d.stream("persona.job"), spreads.jobWeights(age, gender), JobKind.values());
         if (p.job() == null && p.work() != null && !works(job)) {
             job = JobKind.OFFICE; // a given work pattern says that the persona works or studies
         }
         WorkPattern work = work(d, p, job);
-        Relationship rel = p.relationship() != null ? p.relationship() : drawRelationship(d.stream("persona.relationship"), age, p);
+        Relationship rel = p.relationship() != null ? p.relationship()
+                : drawRelationship(d.stream("persona.relationship"), spreads.relationshipWeights(age, gender), p);
         boolean couple = rel == Relationship.PARTNER || rel == Relationship.MARRIED;
         if (Boolean.TRUE.equals(p.partnerAtHome()) && !couple) {
             throw new IllegalArgumentException("partnerAtHome: no partner to share the home, relationship " + rel);
         }
         boolean partnerAtHome = p.partnerAtHome() != null ? p.partnerAtHome()
                 : rel == Relationship.MARRIED || (rel == Relationship.PARTNER && (p.household() == null || p.household() > 1)
-                        && d.stream("persona.partnerAtHome").nextInt(100) < 60);
-        List<ChildAnswer> children = children(d, p, age);
-        Housing housing = p.housing() != null ? p.housing() : drawHousing(d.stream("persona.housing"), age, job, p);
+                        && d.stream("persona.partnerAtHome").nextInt(100) < spreads.partnerAtHomePercent(age, gender));
+        List<ChildAnswer> children = children(d, p, age, spreads.childPercent(age, gender));
+        Housing housing = p.housing() != null ? p.housing()
+                : drawHousing(d.stream("persona.housing"), spreads.housingWeights(age, gender), job, p);
         List<ParentAnswer> parents = parents(d, p, age, housing);
         boolean anyParent = parents.stream().anyMatch(ParentAnswer::alive);
         boolean bothParents = parents.size() == 2 && parents.stream().allMatch(ParentAnswer::alive);
@@ -162,7 +170,6 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
             throw new IllegalArgumentException("parentsTogether: parents together who are not both alive");
         }
 
-        Gender gender = p.gender() != null ? p.gender() : drawGender(d.stream("persona.gender"));
         String nationality = p.nationality() != null ? p.nationality().toUpperCase(Locale.ROOT) : in.countryCode().toUpperCase(Locale.ROOT);
         // an open background is one with name data, as the people of this age and sex in the city have them: a country
         // counts only as a whole package (ADR-348), so no open answer leads to a refusal
@@ -173,8 +180,9 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         String jobField = p.jobField() != null ? p.jobField() : "";
         List<PetAnswer> pets = p.pets() != null
                 ? p.pets().stream().map(a -> new PetAnswer(a.kind(), Objects.requireNonNullElse(a.name(), ""))).toList()
-                : drawPets(d.stream("persona.pets"));
-        Transport transport = p.transport() != null ? p.transport() : drawTransport(d.stream("persona.transport"), age);
+                : drawPets(d.stream("persona.pets"), spreads);
+        Transport transport = p.transport() != null ? p.transport()
+                : pick(d.stream("persona.transport"), spreads.transportWeights(age), Transport.values());
         List<SiblingAnswer> siblings = siblings(d, p, age);
         Set<FriendGroup> friends = p.friendGroups() != null ? p.friendGroups() : drawFriendGroups(d.stream("persona.friendGroups"), age, job);
         List<ActivityAnswer> activities = p.activities() != null ? p.activities() : drawActivities(d, friends);
@@ -336,11 +344,11 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         return new WorkPattern(days, start, start.plusHours(8).plusMinutes(30), r.nextBoolean());
     }
 
-    private static List<ChildAnswer> children(Draws d, PersonaProfile p, int age) {
+    private static List<ChildAnswer> children(Draws d, PersonaProfile p, int age, int chance) {
         List<ChildAnswer> out = new ArrayList<>();
         if (p.children() == null) {
             RandomGenerator genders = d.stream("persona.childGenders");
-            for (int c : drawChildAges(d.stream("persona.childAges"), age)) {
+            for (int c : drawChildAges(d.stream("persona.childAges"), age, chance)) {
                 out.add(new ChildAnswer(c, drawGender(genders), "", Custody.HOME, Set.of()));
             }
             return out;
@@ -413,7 +421,7 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         return out;
     }
 
-    private static int drawBirthYear(RandomGenerator r, PersonaProfile p, int currentYear) {
+    private static int drawBirthYear(RandomGenerator r, PersonaProfile p, int currentYear, Spreads spreads) {
         int lo = MIN_AGE;
         int hi = MAX_DRAWN_AGE;
         if (p.job() == JobKind.STUDENT) {
@@ -437,39 +445,10 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
             throw new IllegalArgumentException("children: the children need a persona of at least " + lo
                     + ", the job " + p.job() + " allows at most " + hi);
         }
-        return currentYear - (lo + r.nextInt(hi - lo + 1));
+        return currentYear - spreads.age(lo, hi, r);
     }
 
-    private static JobKind drawJob(RandomGenerator r, int age) {
-        if (age < 19) {
-            return r.nextInt(100) < 85 ? JobKind.PUPIL : JobKind.SHIFT;
-        }
-        if (age <= 24) {
-            return pick(r, new int[] {50, 25, 20, 5}, new JobKind[] {JobKind.STUDENT, JobKind.SHIFT, JobKind.OFFICE, JobKind.JOB_SEEKER});
-        }
-        if (age >= 67) {
-            return JobKind.RETIRED;
-        }
-        if (age >= 60) {
-            return pick(r, new int[] {45, 30, 10, 10, 5},
-                    new JobKind[] {JobKind.RETIRED, JobKind.OFFICE, JobKind.SHIFT, JobKind.SELF_EMPLOYED, JobKind.CARER});
-        }
-        int[] w = age <= 35 ? new int[] {48, 20, 10, 5, 5, 5, 4, 3} : new int[] {50, 20, 12, 0, 5, 5, 5, 3};
-        return pick(r, w, new JobKind[] {JobKind.OFFICE, JobKind.SHIFT, JobKind.SELF_EMPLOYED, JobKind.STUDENT, JobKind.JOB_SEEKER,
-                JobKind.CARER, JobKind.NONE, JobKind.OFFICE});
-    }
-
-    private static Relationship drawRelationship(RandomGenerator r, int age, PersonaProfile p) {
-        int[] w;
-        if (age < 20) {
-            w = new int[] {70, 30, 0, 0};
-        } else if (age < 30) {
-            w = new int[] {40, 45, 15, 0};
-        } else if (age < 50) {
-            w = new int[] {20, 25, 45, 10};
-        } else {
-            w = new int[] {15, 15, 50, 20};
-        }
+    private static Relationship drawRelationship(RandomGenerator r, int[] w, PersonaProfile p) {
         if (p.household() != null && p.household() < 2 && !Boolean.FALSE.equals(p.partnerAtHome())) {
             w[2] = 0; // a married persona lives with the partner
         }
@@ -483,10 +462,9 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         return pick(r, w, Relationship.values());
     }
 
-    private static List<Integer> drawChildAges(RandomGenerator r, int age) {
-        int chance = age < 22 ? 0 : age < 30 ? 25 : age < 45 ? 65 : 75;
+    private static List<Integer> drawChildAges(RandomGenerator r, int age, int chance) {
         List<Integer> out = new ArrayList<>();
-        if (r.nextInt(100) >= chance) {
+        if (age < 18 || r.nextInt(100) >= chance) {
             return out;
         }
         int oldest = Math.min(age - 18, 45);
@@ -498,16 +476,10 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         return out;
     }
 
-    private static Housing drawHousing(RandomGenerator r, int age, JobKind job, PersonaProfile p) {
-        int[] w; // RENT, OWN, WITH_PARENTS, HOUSE_SHARE
+    private static Housing drawHousing(RandomGenerator r, int[] w, JobKind job, PersonaProfile p) {
         if (job == JobKind.PUPIL) {
-            w = new int[] {0, 0, 100, 0};
-        } else if (age < 23 && job == JobKind.STUDENT) {
-            w = new int[] {10, 0, 60, 30};
-        } else if (age < 30) {
-            w = new int[] {50, 15, 15, 20};
-        } else {
-            w = new int[] {45, 55, 0, 0};
+            Arrays.fill(w, 0);
+            w[Housing.WITH_PARENTS.ordinal()] = 100;
         }
         if (p.household() != null && p.household() < 2) {
             w[2] = 0;
@@ -546,23 +518,14 @@ public record Persona(PersonaInputs inputs, Gender gender, LocalDate birthDate, 
         return pick(r, new int[] {50, 50}, Gender.values());
     }
 
-    private static List<PetAnswer> drawPets(RandomGenerator r) {
+    private static List<PetAnswer> drawPets(RandomGenerator r, Spreads spreads) {
         List<PetAnswer> out = new ArrayList<>();
-        if (r.nextInt(100) < 20) {
-            out.add(new PetAnswer(Pet.DOG, ""));
-        }
-        if (r.nextInt(100) < 20) {
-            out.add(new PetAnswer(Pet.CAT, ""));
-        }
-        if (r.nextInt(100) < 8) {
-            out.add(new PetAnswer(Pet.OTHER, ""));
+        for (Pet pet : Pet.values()) {
+            if (r.nextInt(100) < spreads.petPercent(pet)) {
+                out.add(new PetAnswer(pet, ""));
+            }
         }
         return out;
-    }
-
-    private static Transport drawTransport(RandomGenerator r, int age) {
-        int[] w = age < 18 ? new int[] {0, 60, 40} : new int[] {50, 30, 20};
-        return pick(r, w, Transport.values());
     }
 
     private static List<Integer> drawSiblingAges(RandomGenerator r, int age) {
